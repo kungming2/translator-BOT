@@ -1185,7 +1185,7 @@ def comment_info_parser(pbody, command):
     longer_search = False
     match = ""
 
-    if 'id:' in pbody:  # Legacy compatibility
+    if 'id:' in pbody:  # Allows for a synonym
         pbody = pbody.replace("id:", "identify:")
 
     if '\n' in pbody:  # Replace linebreaks
