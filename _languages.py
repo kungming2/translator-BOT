@@ -1271,7 +1271,7 @@ def replace_bad_english_typing(title):  # Function that will replace a misspelli
     for word in title_words:
         e_result = english_fuzz(word)
         if e_result is True:  # This word is a misspelling of "English"
-            title = title.replace(word, "English")  # Replace the offending word
+            title = title.replace(word, "English")  # Replace the offending word with the proper spelling.
 
     return title  # Return the title, now cleaned up.
 
@@ -1310,7 +1310,9 @@ def language_mention_search(search_paragraph):
 
 
 def bad_title_reformat(title_text):
-    """Function that takes a badly formatted title and makes it okay. Returns a proper one."""
+    """
+    Function that takes a badly formatted title and makes it okay. Returns a proper one.
+    """
 
     listed_languages = language_mention_search(title_text.title())
     if listed_languages is not None:  # We have some results.
@@ -1341,7 +1343,9 @@ def bad_title_reformat(title_text):
 
 
 def detect_languages_reformat(title_text):
-    """This function tries to salvage a badly formatted title and render it better for the title routine."""
+    """
+    This function tries to salvage a badly formatted title and render it better for the title routine.
+    """
 
     title_words_selected = {}  # Create a dictionary
     new_title_text = ""
@@ -1393,18 +1397,23 @@ def detect_languages_reformat(title_text):
 
 
 def app_multiple_definer(title_text):
-    """This function takes in a title text and returns a boolean as to whether it should be given the 'App' code"""
+    """
+    This function takes in a title text and returns a boolean as to whether it should be given the 'App' code.
+    This is only applicable for 'multiple' posts.
+    """
 
     title_text = title_text.lower()
     if any(keyword in title_text for keyword in APP_WORDS):
-        return True  # Yes, this should be an app.
+        return True  # Yes, this should be an app post.
     else:
         return False  # No it's not.
 
 
 def multiple_language_script_assessor(language_list):
-    """A function that takes a list of languages/scripts and determines if it is actually all multiple languages
-    Returns True if everything is Okay"""
+    """
+    A function that takes a list of languages/scripts and determines if it is actually all multiple languages.
+    Returns True if everything is Okay.
+    """
 
     multiple_status = True
     
@@ -1437,8 +1446,10 @@ def both_non_english_detector(source_language, target_language):
 
 
 def determine_title_direction(source_languages_list, target_languages_list):
-    """Function takes two language lists and determines what the direction of the request is.
-    Used in Ajos."""
+    """
+    Function takes two language lists and determines what the direction of the request is.
+    Used in Ajos and Wenyuan uses it for statistics as well..
+    """
 
     # Create local lists to avoid changing the main function's lists
     source_languages_local = list(source_languages_list)
@@ -1472,7 +1483,9 @@ def determine_title_direction(source_languages_list, target_languages_list):
 
 
 def final_title_salvager(d_source_languages, d_target_languages):
-    """This function takes two list of languages and tries to salvage SOMETHING out of them."""
+    """
+    This function takes two list of languages and tries to salvage SOMETHING out of them.
+    """
 
     all_languages = d_source_languages + d_target_languages  # Combine the two
     all_languages = [x for x in all_languages if x not in ["Generic", "English"]]  # Remove the generic ones.
@@ -1489,9 +1502,12 @@ def final_title_salvager(d_source_languages, d_target_languages):
 
 
 def title_format(title, display_process=False):
-    # Function to help format a title. It should return a tuple with lists: 
-    # Source languages, target languages, CSS class, CSS text, and title.
-    # display_process is a boolean that allows us to see the steps taken.
+    """
+    Function to help format a title. It should return a tuple with lists:
+    Source languages, target languages, CSS class, CSS text, and title.
+    :param: display_process is a boolean that allows us to see the steps taken.
+    :param: title is simply the title of the post to evaluate.
+    """
 
     source_language = target_language = country_suffix_code = ""  # Set defaults
     final_css = "generic"
