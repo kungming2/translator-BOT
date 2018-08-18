@@ -1958,8 +1958,6 @@ def title_format(title, display_process=False):
             final_css_text = d_source_languages[0]  # Just the name
             notify_languages = None  # Clear the notifications, we don't need them for this one.
 
-    # print(final_css_text)
-
     if final_css not in SUPPORTED_CODES and len(final_css) != 4:  # It's not a supported css and also not a language
         final_css = "generic"  # If we don't have link flair for it, give it a generic linkflair
     elif len(final_css) == 4:  # It's a script code
@@ -2007,8 +2005,12 @@ def title_format(title, display_process=False):
         actual_title, processed_title, notify_languages, language_country, direction
 
 
-def main_posts_filter(otitle):  # A functionized filter for title filtering.
-    # Decoupled from ziwen_posts in order to be more easily maintained
+def main_posts_filter(otitle):
+    """
+    A functionized filter for title filtering (removing posts that don't match the formatting guidelines).
+    This was decoupled from ziwen_posts in order to be more easily maintained and to allow Wenyuan to use it.
+    """
+
     post_okay = True
     filter_reason = None
 
