@@ -1,0 +1,16 @@
+bs4
+fuzzywuzzy
+google
+hangul_romanize
+itertools
+jieba==0.37
+lxml
+mafan
+Mecab
+pafy
+praw
+romkan
+tinysegmenter
+wikipedia
+wiktionaryparser
+youtube_dl
