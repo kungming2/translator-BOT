@@ -2018,13 +2018,15 @@ def main_posts_filter(otitle):
         # This is the same thing as AM's content_rule #1. The title does not contain any of our keywords.
         # But first, we'll try to salvage the title into something we can work with.
         otitle = replace_bad_english_typing(otitle)  # This replaces any bad words for "English"
-        # The function below would allow for a lot looser rules
+
+        # The function below would allow for a lot looser rules but is currently unused.
         '''
         otitle = bad_title_reformat(otitle)
         if "[Unknown > English]" in otitle:  # The title was too generic, we ain't doing it.
             print("> Filtered a post out due to incorrect title format. content_rule #1")
             post_okay = False
         '''
+
         if not any(keyword in otitle for keyword in REQUIRED_KEYWORDS):  # Try again
             filter_reason = '1'
             print("> Filtered a post out due to incorrect title format. Rule: #" + filter_reason)
