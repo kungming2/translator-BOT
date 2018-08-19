@@ -700,7 +700,7 @@ class Ajo:
         provisional_code = provisional_data[0]
         provisional_country = provisional_data[3]
 
-        if is_multiple is False:
+        if not is_multiple:
             self.type = "single"
             if len(provisional_code) == 2:  # ISO 639-1 language
                 self.language_code_1 = provisional_code
@@ -721,7 +721,7 @@ class Ajo:
                 self.is_script = True
                 self.script_code = provisional_code
                 self.script_name = lang_code_search(provisional_code, True)[0]
-        elif is_multiple is True:
+        elif is_multiple:
             # Resetting multiples here.
             self.type = "multiple"
             if title_format(original_title)[2] == 'multiple':
@@ -742,7 +742,7 @@ class Ajo:
 
         # Code here to determine the output data... CSS first.
         if self.type == "single":  # This includes checks to make sure the content are strings, not lists.
-            if self.is_supported is True and self.language_name != "Unknown" and self.language_name != "Generic" and self.language_name is not None:
+            if self.is_supported and self.language_name != "Unknown" and self.language_name != "Generic" and self.language_name is not None:
                 if self.language_code_1 is not None and isinstance(self.language_code_1, str):
                     code_tag = "[{}]".format(self.language_code_1.upper())
                     self.output_oflair_css = self.language_code_1
@@ -814,7 +814,7 @@ class Ajo:
                     if self.is_long:
                         self.output_oflair_text = "{} (Long)".format(self.output_oflair_text)
                 else:  # This is for Unknown posts
-                    if self.is_script is True:
+                    if self.is_script:
                         self.output_oflair_text = self.script_name + " (Script)"
         else:  # Flair text for multiple posts
             if code_tag is None:
@@ -1952,7 +1952,7 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_wl):
             permission_to_proceed = True
 
         # If it's detected that we may have sent notifications for this already, just end it with no new notifications.
-        if permission_to_proceed is False:
+        if not permission_to_proceed:
             return
 
     # First we need to do a test to see if it's a specific code or not.
@@ -2099,7 +2099,7 @@ def ziwen_messages():
                     # Here's some code to check if user already exists
                     # True if it's already there, False, if not.
                     is_there = notification_entry_checker(code, mauthor)
-                    if is_there is False:  # There isn't already an entry for it in there
+                    if not is_there:  # There isn't already an entry for it in there
                         cursor.execute("INSERT INTO notify_users VALUES ('" + code + "', '" + mauthor + "')")
                         conn.commit()
                         # Try to get a custom thank you.
@@ -2252,7 +2252,7 @@ def ziwen_messages():
 
             action_counter(1, "Status checks")
             message.reply(compilation + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
-        elif "add" in msubject and is_mod(mauthor) is True:  # Mod manually adding people
+        elif "add" in msubject and is_mod(mauthor):  # Mod manually adding people
             logger.info("[ZW] Messages: New username addition message from moderator u/{}.".format(mauthor))
             username = mbody.split("USERNAME:", 1)[1]
             username = username.split("LANGUAGES", 1)[0].strip()  # Get the username (no u/)
@@ -2275,7 +2275,7 @@ def ziwen_messages():
             final_match_codes_print = ", ".join(final_match_codes)
             addition_message = "Added the language codes **{}** for u/{} into the notifications database."
             message.reply(addition_message.format(final_match_codes_print, username))
-        elif "remove" in msubject and is_mod(mauthor) is True:  # Mod manually removing people (ability to do remotely)
+        elif "remove" in msubject and is_mod(mauthor):  # Mod manually removing people (ability to do remotely)
             logger.info("[ZW] Messages: New username removal message from moderator u/{}.".format(mauthor))
             username = mbody.split("USERNAME:", 1)[1].strip()
 
@@ -2367,7 +2367,7 @@ def verification_parser():
         if current_time - ocreated >= 300:  # Comment is old let's not do it.
             continue
 
-        if osave is True:  # Comment has been processed already. 
+        if osave:  # Comment has been processed already.
             continue
 
         c_body = c_body.replace('\n', '|')
@@ -4302,7 +4302,7 @@ def edit_finder():
 
         time_diff = current_time_com - ccreated
 
-        if time_diff > 3600 and cedited is False:  # The edit is older than an hour.
+        if time_diff > 3600 and not cedited:  # The edit is older than an hour.
             continue
 
         # Strip punctuation to allow for safe SQL storage.
@@ -4438,7 +4438,7 @@ def ziwen_posts():  # The main post filtering runtime for r/translator
         cur.execute('INSERT INTO oldposts VALUES(?)', [oid])
         sql.commit()
 
-        if css_check(oflair_css) is False and oflair_css is not None:
+        if not css_check(oflair_css) and oflair_css is not None:
             # If it's a Meta or Community post (that's what css_check does), just alert those signed up for it. 
             suggested_css_text = oflair_css
             logger.info("[ZW] Posts: New {} post.".format(suggested_css_text.title()))
@@ -5540,7 +5540,7 @@ while True:
         # Finally checks for posts that are in progress.
         progress_checker()
 
-        if TESTING_MODE is False:  # Disable other subreddit functions if testing on r/trntest
+        if not TESTING_MODE:  # Disable other subreddit functions if testing on r/trntest
             logger.debug("[ZW] Main: Searching other subreddits...")
             verification_parser()  # First the bot checks if there are any new requests for verification.
             cc_ref()  # Finally the bot runs searches on Chinese subreddits
