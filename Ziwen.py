@@ -2946,8 +2946,8 @@ def zh_word(word):  # Function to define Chinese words
 
     # Format the rest.
     lookup_line_1 += "\n\nLanguage | Pronunciation\n---------|--------------"
-    readings_line = ("\n**Mandarin (Pinyin)** | *{}*\n**Mandarin (Wade-Giles)** | *{}*"
-                     "\n**Mandarin (Yale)** | *{}*\n**Cantonese** | *{}*")
+    readings_line = ("\n**Mandarin** (Pinyin) | *{}*\n**Mandarin** (Wade-Giles) | *{}*"
+                     "\n**Mandarin** (Yale) | *{}*\n**Cantonese** | *{}*")
     readings_line = readings_line.format(cmn_pronunciation, alt_romanize[1], alt_romanize[0], yue_pronunciation)
     lookup_line_1 += readings_line
 
@@ -2955,16 +2955,16 @@ def zh_word(word):  # Function to define Chinese words
     min_hak_data = zh_min_hak_pronunciation(tradify(word))
     lookup_line_1 += min_hak_data
 
-    # Format the meaning line
+    # Format the meaning line.
     lookup_line_2 = str('\n\n**Meanings**: "' + meaning + '."')
 
     # Format the footer with the dictionary links.
-    lookup_line_3 = '\n\n\n^Information ^from '
-    lookup_line_3 += '[^CantoDict](http://www.cantonese.sheik.co.uk/dictionary/search/?searchtype=1&text={0}) ^| '
-    lookup_line_3 += '[^Jukuu](http://jukuu.com/search.php?q={0}) ^| '
-    lookup_line_3 += '[^MDBG](https://www.mdbg.net/chindict/chindict.php?page=worddict&wdrst=0&wdqb={0}) ^| '
-    lookup_line_3 += '[^Yellowbridge](https://yellowbridge.com/chinese/dictionary.php?word={0}) ^| '
-    lookup_line_3 += '[^Youdao](http://dict.youdao.com/w/eng/{0}/#keyfrom=dict2.index)'
+    lookup_line_3 = ('\n\n\n^Information ^from '
+                     '[^CantoDict](http://www.cantonese.sheik.co.uk/dictionary/search/?searchtype=1&text={0}) ^| '
+                     '[^Jukuu](http://jukuu.com/search.php?q={0}) ^| '
+                     '[^MDBG](https://www.mdbg.net/chindict/chindict.php?page=worddict&wdrst=0&wdqb={0}) ^| '
+                     '[^Yellowbridge](https://yellowbridge.com/chinese/dictionary.php?word={0}) ^| '
+                     '[^Youdao](http://dict.youdao.com/w/eng/{0}/#keyfrom=dict2.index)')
     lookup_line_3 = lookup_line_3.format(word)
 
     # Combine everything together.
@@ -4368,7 +4368,7 @@ def edit_finder():
                 main_keywords = first_part + second_part  # We want to omit crossposting ones
                 
                 for keyword in main_keywords:
-                    if keyword in cbody and keyword not in old_cbody or force_change is True:
+                    if keyword in cbody and keyword not in old_cbody or force_change:
                         # This means the keyword is a NEW component of the edit
                         delete_comment_command = "DELETE FROM oldcomments WHERE id = '{}'".format(cid)
                         cur.execute(delete_comment_command)
@@ -4675,7 +4675,7 @@ def ziwen_bot():  # The main runtime for r/translator
 
         '''AJO CREATION'''
         # Create an Ajo object.
-        if css_check(oflair_css) is True:
+        if css_check(oflair_css):
 
             # Check the database for the Ajo.
             oajo = ajo_loader(oid)
@@ -5261,7 +5261,7 @@ def ziwen_bot():  # The main runtime for r/translator
 
             komento_data = komento_analyzer(osubmission)
 
-            if oajo.is_bot_crosspost is True:  # This is a crosspost, lets work some magic.
+            if oajo.is_bot_crosspost:  # This is a crosspost, lets work some magic.
                 if 'bot_xp_original_comment' in komento_data:
                     logger.debug("[ZW] Bot: >> Fetching original crosspost comment...")
                     original_comment = reddit.comment(komento_data['bot_xp_original_comment'])
