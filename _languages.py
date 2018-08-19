@@ -7,7 +7,7 @@ import itertools
 
 from fuzzywuzzy import fuzz  # fuzzywuzzy[speedup]
 
-VERSION_NUMBER_LANGUAGES = "1.6.17"
+VERSION_NUMBER_LANGUAGES = "1.6.18"
 
 # Access the CSV with ISO 639-3 and ISO 15924 data.
 lang_script_directory = os.path.dirname(__file__)  # <-- absolute dir the script is in
@@ -149,7 +149,7 @@ SUPPORTED_ALTERNATE = {'am': ['Ethiopian', 'Ethiopia', 'Ethopian', 'Ethiopic', '
                        'grc': ['Koine', 'Doric', 'Attic', 'Byzantine Greek', 'Medieval Greek', 'Classic Greek',
                                'Classical Greek'], 'gu': ['Gujerathi', 'Gujerati', 'Gujrathi'],
                        'he': ['Israeli', 'Hebraic', 'Jewish'], 'hi': ['Hindustani', 'Hindī'],
-                       'hr': ['Croation', 'Serbo-Croatian'],
+                       'hr': ['Croation', 'Serbo-Croatian', 'Hrvatski'],
                        'ht': ['Haitian', 'Kreyòl Ayisyen', 'Western Caribbean Creole', 'Kreyol'],
                        'hu': ['Magyar', 'Hungary'],
                        'id': ['Indonesia', 'Indo'],

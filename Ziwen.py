@@ -6,7 +6,6 @@ import calendar
 import datetime
 import time
 import traceback  # For documenting errors
-import json  # Used in the Wiktionary parsing
 import sqlite3  # For processing the databases
 import praw  # simple interface to the reddit API, also handles rate limiting of requests
 import prawcore  # Base module for error logging.
@@ -31,7 +30,7 @@ from _responses import *
 from Data import _ko_romanizer
 
 BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.7.36'
+VERSION_NUMBER = '1.7.37'
 USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator.'
               ' Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
@@ -1550,9 +1549,12 @@ def months_elapsed():
 
 
 def language_frequency_wiki(language_name):
-    """Function to check how many messages a person can expect for a subscription request."""
+    """
+    Function to check how many messages a person can expect for a subscription request.
+    """
 
-    lang_wiki_name = language_name.lower()  # This is the language wiki page
+    # Format the language name in order to get the wiki page.
+    lang_wiki_name = language_name.lower()
     lang_wiki_name = lang_wiki_name.replace(" ", "_")
 
     reply_str = ("For your reference, our [statistics](https://www.reddit.com/r/translator/wiki/{})"
@@ -1578,26 +1580,23 @@ def language_frequency_wiki(language_name):
     for line in per_month_lines[5:]:  # We omit the header of the page.
         work_line = line.split("(", 1)[0]  # We only want the first part, with month|year|total
         # Strip the formatting.
-        work_line = work_line.replace("[", "")
-        work_line = work_line.replace("]", "")
-        work_line = work_line.replace(" ", "")
+        for character in ["[", "]", " "]:
+            work_line = work_line.replace(character, "")
         per_month_lines_edit.append(work_line)
 
-    for line in per_month_lines_edit:
-        year_exist = re.search('^\d{4}', line)  # Test for the presence of a year
-        if year_exist is not None:  # Just in case we have a header or blank line in this, let's strip it. Take only months.
-            month_posts = int(line.split("|")[2])  # We take the number of posts here.
-            total_posts.append(month_posts)  # add it to the list of post counts.
-        else:
-            per_month_lines_edit.remove(line)  # Take out this line that has no data
+    per_month_lines_edit = [x for x in per_month_lines_edit if "20" in x]  # Only get the ones that have a year in them
+
+    for row in per_month_lines_edit:
+        month_posts = int(row.split("|")[2])  # We take the number of posts here.
+        total_posts.append(month_posts)  # add it to the list of post counts.
 
     months_with_data = len(per_month_lines_edit)  # The number of months we have data for the language.
     months_since = months_elapsed()  # Get the number of months since we started statistic keeping
 
     if months_with_data == months_since:  # We have data for every single month for the language.
-        total_rate_posts = sum(total_posts[-6:])  # Add only the data for the last 6 months.
-        months_calculate = 6  # Change the time frame to 6 months
         # We want to take only the last 6 months.
+        months_calculate = 6  # Change the time frame to 6 months
+        total_rate_posts = sum(total_posts[-1 * months_calculate:])  # Add only the data for the last 6 months.
     else:
         total_rate_posts = sum(total_posts)
         months_calculate = months_since
@@ -1612,8 +1611,7 @@ def language_frequency_wiki(language_name):
     # A tuple that can be used by other programs.
     stats_package = (daily_rate, monthly_rate, yearly_rate, total_posts)
 
-    # Here we try to determine the comment we should return as a string.
-
+    # Here we try to determine which comment we should return as a string.
     if daily_rate >= 2:  # This is a pretty popular one, with a few requests a day.
         freq_string = reply_str.format(lang_wiki_name, str(daily_rate), "day", lang_name_original)
         return freq_string, stats_package

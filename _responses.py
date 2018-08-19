@@ -120,7 +120,7 @@ COMMENT_CLAIM = '''
 
 *The user above has indicated that they are working on a translation for this {language_name} request.*
 
-*If this post is not marked as translated within 8 hours, this post will revert to an unclaimed state.*
+*This post will revert to an unclaimed state if it is not marked as 'Needs Review' or 'Translated' within 8 hours.*
 '''
 COMMENT_CURRENTLY_CLAIMED = '''
 This post has already been claimed by u/{claimer_name}. Their in-progress claim will expire in {remaining_time}.
