@@ -30,7 +30,7 @@ from _responses import *
 from Data import _ko_romanizer
 
 BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.7.37'
+VERSION_NUMBER = '1.7.38'
 USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator.'
               ' Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
@@ -109,7 +109,11 @@ print('|========================================================================
 
 
 def blacklist_checker_run_once():
-    """A start-up function that runs once and gets blacklisted usernames from the wiki of r/translatorBOT."""
+    """
+    A start-up function that runs once and gets blacklisted usernames from the wiki of r/translatorBOT.
+    Blacklisted users are those who have abused the subreddit functions on r/translator but are not banned.
+    This is an anti-abuse system.
+    """
 
     # Retrieve the page.
     blacklist_page = reddit.subreddit("translatorBOT").wiki["blacklist"]
@@ -130,9 +134,11 @@ def blacklist_checker_run_once():
 
 
 def redesign_template_retriever():
-    """Function that retrieves the current flairs available on the subreddit and returns a dictionary.
+    """
+    Function that retrieves the current flairs available on the subreddit and returns a dictionary.
     Dictionary is keyed by the old css_class, with the long-form template ID as a value per key.
-    Example: 'cs': XXXXXXXX """
+    Example: 'cs': XXXXXXXX
+    """
 
     new_template_ids = {}
 
@@ -151,8 +157,10 @@ def redesign_template_retriever():
 
 
 def defined_multiple_flair_assessor(flairtext):
-    """A routine that evaluates a defined multiple flairtext and its statuses as a dictionary.
-    It can make sense of the symbols that are associated with various states of a post."""
+    """
+    A routine that evaluates a defined multiple flairtext and its statuses as a dictionary.
+    It can make sense of the symbols that are associated with various states of a post.
+    """
 
     final_language_codes = {}
     flairtext = flairtext.lower()
@@ -175,8 +183,10 @@ def defined_multiple_flair_assessor(flairtext):
 
 
 def defined_multiple_flair_former(flairdict):
-    """Takes a dictionary of defined multiple statuses and returns a string.
-    To be used with the defined_multiple_flair_assessor() function above."""
+    """
+    Takes a dictionary of defined multiple statuses and returns a string.
+    To be used with the defined_multiple_flair_assessor() function above.
+    """
 
     output_text = []
 
@@ -207,7 +217,8 @@ def defined_multiple_flair_former(flairdict):
 
 
 def defined_multiple_comment_parser(pbody, language_names_list):
-    """Takes a comment and a list of languages and looks for commands and language names.
+    """
+    Takes a comment and a list of languages and looks for commands and language names.
     This allows for defined multiple posts to have separate statuses for each language.
     We don't keep English though.
     """
@@ -250,7 +261,9 @@ def defined_multiple_comment_parser(pbody, language_names_list):
 
 
 def retrieve_script_code(script_name):
-    """This function takes the name of a script, outputs its ISO 15925 Code and the name as a tuple if valid."""
+    """
+    This function takes the name of a script, outputs its ISO 15925 Code and the name as a tuple if valid.
+    """
 
     codes_list = []
     names_list = []
@@ -274,7 +287,8 @@ def retrieve_script_code(script_name):
 
 
 class Ajo:
-    """A post on r/translator. Used as an object for the bot to work with for consistency with languages.
+    """
+    A post on r/translator. Used as an object for the bot to work with for consistency with languages.
 
     The process is: Submission > Ajo (changes made to it) > Ajo.update()
 
@@ -286,9 +300,9 @@ class Ajo:
 
         type: single, multiple
 
-        country_code: The ISO 3166-2 code of a country associated with the language. None normally.
+        country_code: The ISO 3166-2 code of a country associated with the language. None by default.
         language_name: The English name of the post's language, rendered as a string
-                       (Note: Unknown, Nonlanguage, and Conlang posts count as a language_name)
+                       (Note: Unknown, Nonlanguage, and Conlang posts, etc. count as a language_name)
         language_code_1: The ISO 639-1 code of a post's language, rendered as a string. None if non-existent.
         language_code_3: The ISO 639-3 code of a post's language, rendered as a string.
         language_history: The different names the post has been classified as, stored as a list (in sequence)
@@ -315,6 +329,8 @@ class Ajo:
 
         parent_crosspost: If it's a crosspost, what's the original one.
 
+        time_delta:  The time between the initial submission time and it being marked. This is a dictionary.
+
         Example of an output for flair is German (Identified/Script) (Long)
     """
 
@@ -330,8 +346,9 @@ class Ajo:
             self.id = reddit_submission.id  # The base Reddit submission ID.
             self.created_utc = int(reddit_submission.created_utc)
 
-            # If there is no
+            # Create some empty variables that can be used later.
             self.recorded_translators = []
+            self.time_delta = {}
 
             # try:
             title_data = title_format(reddit_submission.title)
@@ -675,6 +692,23 @@ class Ajo:
         except (AttributeError, IndexError):  # There was no language_history defined... Let's create it.
             self.language_history = [old_language_name, "Multiple Languages"]
 
+    def set_time(self, state, moment):  # Function creates or updates a dictionary marking times.
+        # Moment is the Unix UTC time when the action was taken. It should be an integer.
+        # State is the state that it was changed to. Translated, for example.
+
+        try:
+            # We check here to make sure the dictionary exists.
+            working_dictionary = self.time_delta
+        except NameError:  # There was no time_delta defined... Let's create it.
+            working_dictionary = {}
+
+        if state not in working_dictionary:  # This state hasn't been recorded. We create it as a key in the dictioanry.
+            working_dictionary[state] = int(moment)
+        else:
+            pass
+
+        self.time_delta = working_dictionary
+
     def add_translators(self, translator_name):  # A function to add who translated what to the Ajo (append to list).
 
         try:
@@ -688,6 +722,7 @@ class Ajo:
         # A function that will completely reset it to the original specifications. Not intended to be used often.
         self.language_name = title_format(original_title)[3]
         self.status = "untranslated"
+        self.time_delta = {}  # Clear this dictionary.
         self.is_identified = False
 
         if title_format(original_title)[2] in ['multiple', 'app']:
@@ -837,7 +872,9 @@ class Ajo:
 
 
 def ajo_writer(new_ajo):
-    """Function takes an Ajo Object, saves it to a DB."""
+    """
+    Function takes an Ajo Object, saves it to a local DB.
+    """
 
     ajo_id = str(new_ajo.id)
     created_time = new_ajo.created_utc
@@ -862,22 +899,28 @@ def ajo_writer(new_ajo):
         ajo_to_store = (ajo_id, created_time, representation)
         cursor_ajo.execute("INSERT INTO local_database VALUES (?, ?, ?)", ajo_to_store)
         conn_ajo.commit()
-    logger.debug("[ZW] === Wrote Ajo to local database. ===\n|")
+    logger.debug("[ZW] ajo_writer: Wrote Ajo to local database.")
+
+    return
 
 
 def ajo_loader(ajo_id):
-    """Function takes an id string and returns an Ajo object from a local database that matches that string.
-    Returns None if there is no stored Ajo."""
+    """
+    Function takes an id string and returns an Ajo object from a local database that matches that string.
+    Returns None if there is no stored Ajo.
+    """
 
     # Checks the database
     cursor_ajo.execute("SELECT * FROM local_database WHERE id = '{}'".format(ajo_id))
     new_ajo = cursor_ajo.fetchone()
 
     if new_ajo is None:  # We couldn't find a stored dict for it.
+        logger.debug("[ZW] ajo_loader: No local Ajo stored.")
         return None
     else:  # We do have stored data.
         new_ajo_dict = eval(new_ajo[2])  # We only want the stored dict here.
         new_ajo = Ajo(new_ajo_dict)
+        logger.debug("[ZW] ajo_loader: Loaded Ajo from local database.")
         return new_ajo  # Note: the Ajo class can build itself from this dict.
 
 
@@ -885,8 +928,10 @@ def ajo_loader(ajo_id):
 
 
 def ziwen_points_retreiver(username):
-    """Fetches the total number of points earned by a user in the current month.
-    This is used with the messages routine to tell people how many points they have earned."""
+    """
+    Fetches the total number of points earned by a user in the current month.
+    This is used with the messages routine to tell people how many points they have earned.
+    """
 
     month_points = 0
     all_points = 0
@@ -903,8 +948,6 @@ def ziwen_points_retreiver(username):
     sql_un = "SELECT * FROM total_points WHERE username = '{}'".format(username)
     cursor_p.execute(sql_un)
     username_all_points_data = cursor_p.fetchall()
-
-    # print(username_all_points_data)
 
     for data in username_month_points_data:  # Compile the monthly number of points the user has earned.
         month_points += data[3]
@@ -945,7 +988,9 @@ def ziwen_points_retreiver(username):
 
 
 def point_worth_determiner(language_name):
-    """This function takes a language name and determines the points worth for a translation for it. (the cap is 20)"""
+    """
+    This function takes a language name and determines the points worth for a translation for it. (the cap is 20)
+    """
 
     if " " in language_name:  # Wiki links need underscores instead of spaces.
         language_name = language_name.replace(" ", "_")
@@ -1003,7 +1048,9 @@ def point_worth_determiner(language_name):
 
 
 def point_worth_cacher():
-    """Simple routine that caches the most frequently used languages' points worth in a local database."""
+    """
+    Simple routine that caches the most frequently used languages' points worth in a local database.
+    """
 
     # These are the most common languages on the subreddit. Also in our sidebar.
     check_languages = ["Arabic", "Chinese", "French", "German", "Hebrew", "Hindi", "Italian", "Japanese",
@@ -1050,7 +1097,8 @@ def point_worth_cacher():
 
 
 def ziwen_points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
-    """Function to save the points, given a post submission's stuff and comment.
+    """
+    Function to save the points, given a post submission's stuff and comment.
     This is intended to be able to assess the points at the point of the comment's writing.
     The function is different from other points systems where points are calculated much later.
     """
@@ -1352,7 +1400,9 @@ def user_statistics_loader(username):
 
 
 def is_mod(user):
-    """A function that can tell us if a user is a moderator of the operating subreddit or not."""
+    """
+    A function that can tell us if a user is a moderator of the operating subreddit or not.
+    """
 
     moderators = []
     for moderator in r.moderator():  # Get list of subreddit mods from r/translator.
@@ -1379,7 +1429,9 @@ def css_check(css_class):
 
 
 def last_post_comment():
-    """A simple function to get the last post/comment on r/translator for reference storage when there's an error."""
+    """
+    A simple function to get the last post/comment on r/translator for reference storage when there's an error.
+    """
 
     # Some default values just in case.
     nowutc = time.time()
@@ -1408,18 +1460,28 @@ def last_post_comment():
 
 
 def filter_log_writer(filtered_title, ocreated, filter_type):
-    """Simple function to write the titles of removed posts to a text file."""
+    """
+    Simple function to write the titles of removed posts to an external text file.
+    """
 
+    # Access the file.
     f = open(FILE_ADDRESS_FILTER, 'a+', encoding='utf-8')  # File address for the filter log, cumulative.
+
+    # Format the new line.
     filter_line_template = '\n{} | {} | {}'
     timestamp_utc = str(datetime.datetime.fromtimestamp(ocreated).strftime("%Y-%m-%d"))
     filter_line = filter_line_template.format(timestamp_utc, filtered_title, filter_type)
+
+    # Write the new line.
     f.write(filter_line)
     f.close()
 
+    return
+
 
 def error_log(error_save_entry):
-    """A function to SAVE errors to a log for later examination.
+    """
+    A function to SAVE errors to a log for later examination.
     This is more advanced than the basic version kept in _config, as it includes data about last post/comment.
     """
 
@@ -1442,7 +1504,8 @@ def error_log(error_save_entry):
 
 
 def retrieve_error_log():
-    """A simple routine to GET the last two errors and counters and include them in a ping reply.
+    """
+    A simple routine to GET the last two errors and counters and include them in a ping reply.
     Returns a string.
     """
 
@@ -1521,7 +1584,9 @@ def save_wiki(odate, otitle, oid, oflair_text, s_or_i, oflair_new):
 
 
 def database_processed_cleaner():
-    """Function that cleans up the database of processed comments and posts."""
+    """
+    Function that cleans up the database of processed comments, but not posts yet.
+    """
 
     pruning_command = 'DELETE FROM oldcomments WHERE id NOT IN (SELECT id FROM oldcomments ORDER BY id DESC LIMIT ?)'
     cur.execute(pruning_command, [MAXPOSTS * 10])
@@ -1532,8 +1597,10 @@ def database_processed_cleaner():
 
 
 def months_elapsed():
-    """Simple function that tells us how many months of statistics we should have
-    This is used for assessing the average number of posts are for a given language and can be expected for notificatio
+    """
+    Simple function that tells us how many months of statistics we should have, since May 2016 when the redesign started
+    This is used for assessing the average number of posts are for a given language and can be expected for
+    notifications.
     """
 
     month_beginning = 24198  # This is the May 2016 month, when the redesign was implemented. No archive data before.
@@ -1625,7 +1692,10 @@ def language_frequency_wiki(language_name):
 
 # noinspection PyUnusedLocal
 def is_valid_user(username):
-    """Simple function that tests if a Redditor is valid. Will return False if non-existent or shadowbanned."""
+    """
+    Simple function that tests if a Redditor is a valid user.
+    Will return False if non-existent or shadowbanned. Used to keep the notifications database clean.
+    """
 
     exists = True
     try:
@@ -1636,7 +1706,8 @@ def is_valid_user(username):
 
 
 def notify_list_pruner(username):
-    """Function that removes deleted users from the notifications database.
+    """
+    Function that removes deleted users from the notifications database.
     It performs a test, and if they don't exist, it will delete their entries from the SQLite database.
     """
 
@@ -1656,6 +1727,7 @@ def notify_list_pruner(username):
             final_codes.append(subscription[0])  # We only want the language codes (don't need the username).
         to_post = ", ".join(final_codes)  # Gather a list of the languages user WAS subscribed to
 
+        # Remove the user from the database.
         sql_command = "DELETE FROM notify_users WHERE username = '{}'".format(username)
         cursor.execute(sql_command)
         conn.commit()
@@ -1665,7 +1737,8 @@ def notify_list_pruner(username):
 
 
 def translated_message(oauthor, opermalink):
-    """Function to message requesters (OPs) that their post has been translated.
+    """
+    Function to message requesters (OPs) that their post has been translated.
     This function does not return anything.
     """
 
@@ -1680,7 +1753,8 @@ def translated_message(oauthor, opermalink):
 
 
 def regional_language_fetcher(targeted_language):
-    """ Takes a code like "ar-LB" or ISO 639-3, fetches users for their equivalents too.
+    """
+    Takes a code like "ar-LB" or ISO 639-3, fetches users for their equivalents too.
     Returns a list of usernames that match both criteria. This will also remove people who are on the broader list.
     This should also be able to work with unknown-specific notifications.
     """
@@ -1733,7 +1807,8 @@ def regional_language_fetcher(targeted_language):
 
 
 def notification_entry_checker(language_code, username):
-    """Function that checks to see if there is a duplicate in the notifications database
+    """
+    Function that checks to see if there is a duplicate in the notifications database
     Returns TRUE if entry pair is in there, FALSE if not.
     """
 
@@ -1750,7 +1825,8 @@ def notification_entry_checker(language_code, username):
 
 
 def title_cleaner(otitle):
-    """Simple function to replace problematic Markdown characters
+    """
+    Simple function to replace problematic Markdown characters
     These characters can interfere with the display of Markdown links in notifications.
     """
 
@@ -1765,7 +1841,8 @@ def title_cleaner(otitle):
 
 
 def notifier_history_checker(thing_to_send, majo_history):
-    """Function checks against the language history of an ajo.
+    """
+    Function checks against the language history of an Ajo.
     This is to prevent people from getting more than one notification for the same post.
     """
 
@@ -1782,7 +1859,8 @@ def notifier_history_checker(thing_to_send, majo_history):
 
 
 def ziwen_notifier_most_recent():
-    """ A function that grabs the usernames of people who have submitted to r/translator in the last 24 hours.
+    """
+    A function that grabs the usernames of people who have submitted to r/translator in the last 24 hours.
     Another function can check against this to make sure people aren't submitting too many.
     """
 
@@ -1815,7 +1893,8 @@ def ziwen_notifier_most_recent():
 
 
 def ziwen_notifier_over_frequency_checker(username):
-    """ This function checks the username against a list of OPs from the last 24 hours.
+    """
+    This function checks the username against a list of OPs from the last 24 hours.
     If the OP has posted more than the limit it will return True
     """
 
@@ -1866,7 +1945,8 @@ def ziwen_notifier_limit_writer(username):
 
 
 def ziwen_notifier_limit_over_checker(username, monthly_limit):
-    """ Function that takes a username and checks if they're above the monthly limit.
+    """
+    Function that takes a username and checks if they're above the monthly limit.
     True if they're over the limit, False otherwise.
     """
 
@@ -1886,7 +1966,8 @@ def ziwen_notifier_limit_over_checker(username, monthly_limit):
 
 
 def ziwen_notifier_equalizer(notify_users_list, language_name, monthly_limit):
-    """Function that equalizes out notifications for popular languages so that people can get fewer.
+    """
+    Function that equalizes out notifications for popular languages so that people can get fewer.
     No more than the monthly_limit on average.
     users_to_contact = (users_number * monthly_limit) / monthly_number_notifications
     This is primarily intended for languages which get a lot of monthly requests.
@@ -1929,7 +2010,8 @@ def ziwen_notifier_equalizer(notify_users_list, language_name, monthly_limit):
     
 
 def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_wl):
-    """This notifies people about posts they're subscribed to.
+    """
+    This notifies people about posts they're subscribed to.
     is_wl is a boolean for whether it's a wronglanguage (now !identify) command.
     """
 
@@ -2317,7 +2399,8 @@ def ziwen_messages():
 
 
 def get_latest_verified_thread():
-    """Function to quickly get the Reddit ID of the latest verification thread on startup.
+    """
+    Function to quickly get the Reddit ID of the latest verification thread on startup.
     This way, the ID of the thread does not need to be hardcoded into Ziwen.
     """
 
@@ -2337,7 +2420,10 @@ def get_latest_verified_thread():
 
 
 def verification_parser():
-    """Function to collect requests for verified flairs."""
+    """
+    Function to collect requests for verified flairs. Ziwen will write their information into a log and also report
+    their comment to the moderators for inspection and verification.
+    """
 
     submission = reddit.submission(id=VERIFIED_POST_ID)
     submission.comments.replace_more(limit=None)
@@ -2389,20 +2475,31 @@ def verification_parser():
             notes = components[4]
         except IndexError:  # No notes were listed.
             notes = ""
+
+        # Form the entry for the verification log.
         entry = "| {} | {} | [1]({}), [2]({}), [3]({}) | {} |"
         entry = entry.format(c_author_string, language_name, url_1, url_2, url_3, notes)
         page_content = reddit.subreddit(SUBREDDIT).wiki["verification_log"]
         page_content_new = str(page_content.content_md) + '\n' + entry
+
+        # Update the verification log.
         page_content.edit(content=page_content_new,
-                          reason='updating the verification log with a new request from u/' + c_author)
+                          reason='Updating the verification log with a new request from u/' + c_author)
+
+        # Reply to the commenter, report so that moderators can take a look.
         comment.reply(COMMENT_VERIFICATION_RESPONSE.format(c_author) + BOT_DISCLAIMER)
+        comment.report('Ziwen: Please check verification request from u/{}.'.format(c_author))
         logger.info('[ZW] Updated the verification log with a new request from u/' + c_author)
+
+        return
 
 
 def page_translators(language_code, language_name, pauthor, otitle, opermalink, oauthor, is_nsfw):
-    """ A function (the original one!) to page up to three users for a post's language.
+    """
+    A function (the original one!) to page up to three users for a post's language.
     True for paging, False for doublecheck (deprecated as of May 2017)
-    Paging now uses the same notification service. The CSV is deprecated."""
+    Paging now uses the same database as the notification service. The CSV is deprecated.
+    """
 
     sql_lc = "SELECT * FROM notify_users WHERE language_code = '{}'".format(language_code)
     cursor.execute(sql_lc)
@@ -2443,9 +2540,11 @@ def page_translators(language_code, language_name, pauthor, otitle, opermalink, 
 
 
 def page_multiple_detector(pbody):
-    """Function that checks to see if there are multiple page commands in a comment.
+    """
+    Function that checks to see if there are multiple page commands in a comment.
     This will return False if there's 0 or 1 !page results.
-    Will return True if there's more than 1."""
+    Will return True if there's more than 1.
+    """
 
     # Returns a number of pages detected in a single comment.
     num_count_pages = pbody.count("!page:")
@@ -2483,7 +2582,9 @@ def page_multiple_detector(pbody):
 
 
 def ctext_search(character):
-    """A simple seal script search from CTEXT that returns an image URL."""
+    """
+    A simple seal script search from CTEXT that returns an image URL.
+    """
 
     ctext_url = str("http://ctext.org/dictionary.pl?if=en&char=" + character)
     ctext_page = requests.get(ctext_url, headers=ZW_USERAGENT)
@@ -2499,7 +2600,10 @@ def ctext_search(character):
 
 
 def oc_search(character):
-    """A simple routine that retrieves data from a CSV of Baxter-Sagart's reconstruction of Old Chinese"""
+    """
+    A simple routine that retrieves data from a CSV of Baxter-Sagart's reconstruction of Old Chinese.
+    For more information, visit: http://ocbaxtersagart.lsait.lsa.umich.edu/
+    """
 
     # Main dictionary for readings
     mc_oc_readings = {}
@@ -2527,8 +2631,11 @@ def oc_search(character):
 
 
 def zh_min_hak_pronunciation(character):
-    """Function to get the Hokkien and Hakka (Sixian) pronunciations from the Taiwan MoE dictionary.
-    This actually will accept either single-characters or multi-character words."""
+    """
+    Function to get the Hokkien and Hakka (Sixian) pronunciations from the Taiwan Ministry of Education dictionary.
+    This actually will accept either single-characters or multi-character words.
+    For more information, visit: https://www.moedict.tw/
+    """
 
     # Fetch Hokkien results
     min_page = requests.get("https://www.moedict.tw/'{}".format(character), headers=ZW_USERAGENT)
@@ -2568,7 +2675,9 @@ def zh_min_hak_pronunciation(character):
 
 
 def calligraphy_search(character):
-    """A function to get an overall image of Chinese calligraphic search
+    """
+    A function to get an overall image of Chinese calligraphic search containing different styles from various time
+    periods.
     """
 
     character = simplify(character)
@@ -2632,7 +2741,13 @@ def calligraphy_search(character):
         return image_string
 
 
-def ja_calligraphy_search(character):  # Japanese calligraphic search
+def ja_calligraphy_search(character):
+    """
+    A function to return a Japanese calligraphic image with three types of form (standard, running, cursive)
+    :param character: Any Japanese *kanji*
+    :return: None if none available, otherwise, a formatted string containing the URL.
+    """
+
     try:
         eth_page = requests.get('http://www013.upp.so-net.ne.jp/santai/santai.htm', headers=ZW_USERAGENT)
         tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
@@ -2651,11 +2766,19 @@ def ja_calligraphy_search(character):  # Japanese calligraphic search
     return to_post
 
 
-def zh_character_other_readings(character):  # A function to get non-Chinese pronunciations of characters
+def zh_character_other_readings(character):
+    """
+    A function to get non-Chinese pronunciations of characters (Sino-Xenic readings) from the Chinese Character API
+    at http://ccdb.hemiola.com/.
+    We use the Korean, Vietnamese, and Japanese readings.
+    This information is attached to single-character lookups for Chinese and integrated into a table.
+    :param character: Any Chinese character.
+    :return: None or several table lines with the readings formatted in Markdown.
+    """
 
     to_post = []
 
-    # Access the Chinese Character API at http://ccdb.hemiola.com/
+    # Access the API
     data_get = 'http://ccdb.hemiola.com/characters/string/{}?fields=kHangul,kKorean,kJapaneseKun,kJapaneseOn,kVietnamese'
     unicode_rep = requests.get(data_get.format(character))
     unicode_rep_json = unicode_rep.json()
@@ -2710,7 +2833,10 @@ def zh_character_other_readings(character):  # A function to get non-Chinese pro
 
 
 def zh_character(character):
-    """This function looks up a Chinese character's pronunciations and meanings."""
+    """
+    This function looks up a Chinese character's pronunciations and meanings.
+    It also ties together a lot of the other reference functions above.
+    """
     
     multi_mode = False
     multi_character_dict = {}
@@ -2726,8 +2852,8 @@ def zh_character(character):
     cmn_pronunciation, yue_pronunciation = pronunciation[::2], pronunciation[1::2]
     
     if len(pronunciation) == 0:  # Check to not return anything if the entry is invalid
-        to_post = "**There were no results for " + character + "**. Please check to make sure it is a valid Chinese "
-        to_post += "character. Alternatively, it may be an uncommon variant that is not in online dictionaries."
+        to_post = ("**There were no results for " + character + "**. Please check to make sure it is a valid Chinese "
+                   "character. Alternatively, it may be an uncommon variant that is not in online dictionaries.")
         logger.info("[ZW] ZH-Character: No results for {}".format(character))
         return to_post
     
@@ -2855,10 +2981,12 @@ def zh_character(character):
 
 
 def zh_word_alt_romanization(pinyin_string):
-    """ Takes a pinyin with number item and returns Wade Giles and Yale romanization schemes.
-    Example: ri4 guang1 becomes jih^4 kuang^1
+    """
+    Takes a pinyin with number item and returns Wade Giles and Yale romanization schemes.
+    Example: ri4 guang1, becomes, jih^4 kuang^1
     This is only used for zh_word at the moment. We don't deal with diacritics for this. Too complicated.
     """
+
     yale_list = []
     wadegiles_list = []
 
@@ -2894,7 +3022,13 @@ def zh_word_alt_romanization(pinyin_string):
     return yale_post, wadegiles_post
 
 
-def zh_word(word):  # Function to define Chinese words
+def zh_word(word):
+    """
+    Function to define Chinese words and return their readings and meanings.
+    :param word: Any Chinese word.
+    :return: Word data.
+    """
+
     eth_page = requests.get('https://www.mdbg.net/chindict/chindict.php?page=worddict&wdrst=0&wdqb=c:' + word,
                             headers=ZW_USERAGENT)
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
@@ -2973,8 +3107,13 @@ def zh_word(word):  # Function to define Chinese words
     return to_post
 
 
-def zh_chengyu(chengyu):  # Function to get Chinese information for Chinese chengyu.
-    # Note: this is the second version. This version just adds supplementary Chinese information.
+def zh_chengyu(chengyu):
+    """
+    Function to get Chinese information for Chinese chengyu.
+    Note: this is the second version. This version just adds supplementary Chinese information to zh_word.
+    :param chengyu: Any Chinese idiom (usually four characters)
+    :return:
+    """
 
     headers = {'Content-Type': "text/html; charset=gb2312", 'f-type': 'chengyu'}
     chengyu = simplify(chengyu)  # This website only takes simplified chinese
@@ -3039,7 +3178,10 @@ def zh_chengyu(chengyu):  # Function to get Chinese information for Chinese chen
         return cy_to_post
 
 
-def ja_character(character):  # This function looks up a Japanese kanji's pronunciations and meanings
+def ja_character(character):
+    """
+    This function looks up a Japanese kanji's pronunciations and meanings
+    """
 
     is_kana = False
     multi_mode = False
@@ -3184,7 +3326,13 @@ def ja_character(character):  # This function looks up a Japanese kanji's pronun
     return to_post
 
 
-def ja_name(name):  # Function to get a Japanese surname (backup if a word search fails)
+def ja_name(name):
+    """
+    Function to get a Japanese surname (backup if a word search fails)
+    :param name: Any Japanese surname (usually two kanji)
+    :return:
+    """
+
     eth_page = requests.get('https://myoji-yurai.net/searchResult.htm?myojiKanji=' + name, headers=ZW_USERAGENT)
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
     ja_reading = tree.xpath('//div[contains(@class,"post")]/p/text()')
@@ -3215,6 +3363,7 @@ def ja_word(japanese_word):
     See here for more information: https://jisho.org/forum/54fefc1f6e73340b1f160000-is-there-any-kind-of-search-api
     Keep in mind that the API is in many ways more limited than the actual search stack (e.g. no kanji results)
     """
+
     y_data = None
 
     # Fetch data from the API
@@ -3309,10 +3458,12 @@ def ja_chengyu(yojijukugo):
 
 
 def cjk_matcher(content_text):
-    """A simple function to allow for compatibility with a greater number of CJK characters.
+    """
+    A simple function to allow for compatibility with a greater number of CJK characters.
     This function can be expanded in the future to support more languages and be more robust.
     normal_returned_matches = re.findall('`([\u2E80-\u9FFF]+)`', content_text, re.DOTALL)
-    Old routine, Normally will output a list with breakdowns."""
+    Old routine, Normally will output a list with breakdowns.
+    """
 
     # Making sure we only have stuff between the graves. 
     try:
@@ -3338,55 +3489,6 @@ def cjk_matcher(content_text):
         return matches
     else:
         return []
-
-
-def c_or_j_detector(word_list):
-    """Takes a list of C/J words and outputs True if all are Chinese, False, if any are Japanese."""
-
-    # A list that will store any Japanese characters we find.
-    total_japanese = []
-
-    # Iterate through the words to see if any are in hiragana or katakana.
-    for word in word_list:
-
-        hg_matches = re.findall('([\u3041-\u309f]+)', word, re.DOTALL)  # Hiragana
-        if len(hg_matches) != 0:
-            total_japanese.append(hg_matches[0])
-        kk_matches = re.findall('([\u30a0-\u30ff]+)', word, re.DOTALL)  # Katakana
-        if len(kk_matches) != 0:
-            total_japanese.append(kk_matches[0])
-
-    if len(total_japanese) == 0:  # There are no Japanese characters here.
-        return True
-    else:  # There are Japanese characters.
-        return False
-
-
-def other_language_matcher(content_text):
-    """Looks for Korean or other text, returns it as a list."""
-
-    try:
-        content_text = content_text.split("`", 1)[1]  # Delete stuff before
-        content_text = content_text.rsplit('`', 1)[0]  # Delete stuff after
-        content_text = "`{}`".format(content_text)  # Re-add the graves.
-    except IndexError:
-        return []
-
-    content_text = content_text.replace("\\", "")  # Delete slashes, since the redesign may introduce them.
-
-    ko_matches = re.findall('`([\uac00-\ud7af]+)`', content_text, re.DOTALL)  # Checks if there's hangul there
-    
-    if len(ko_matches) == 0:  # No Korean matches found.
-        # print("Conducting general regex.")
-        no_ko_matches = re.findall('`([\w]+)`', content_text, re.DOTALL)
-        # no_ko_matches += re.findall('`([\u0400-\u052f]+)`', content_text)
-        # print(no_ko_matches)
-        matches = no_ko_matches
-    else:
-        # print(ko_matches)
-        matches = ko_matches
-
-    return matches
 
 
 def lookup_matcher(content_text, language_name):
@@ -4078,11 +4180,6 @@ def komento_analyzer(reddit_submission):
                 if len(parent_body) != 0 and "[deleted]" not in parent_body:
                     # Now we want to create a list/dict linking the specific searches with their data.
                     lookup_results = lookup_matcher(parent_body, None)
-                    '''
-                    lookup_results = cjk_matcher(parent_body)
-                    if len(lookup_results) == 0:  # There wasn't a CJ search. Maybe other?
-                        lookup_results = other_language_matcher(parent_body)
-                    '''
                     lookup_comments[cid] = lookup_results  # We add what specific things were searched
                     corresponding_comments[parent_lookup_comment.id] = lookup_results
                     parent_replies = parent_lookup_comment.replies
@@ -4203,7 +4300,6 @@ def edit_finder():
                 
                 if '`' in cbody:  # We detected a lookup change.
                     # First thing is compare the data in the two against what we have.
-                    # total_matches = cjk_matcher(old_cbody) + other_language_matcher(old_cbody)
                     # Here we use the function to get a LIST of everything that's in between graves.
                     total_matches = lookup_matcher(old_cbody, None)
                     new_vars = komento_analyzer(get_submission_from_comment(cid))
@@ -4490,7 +4586,12 @@ def ziwen_posts():  # The main post filtering runtime for r/translator
                 ajo_writer(pajo)  # Save it to the local database
 
 
-def ziwen_bot():  # The main runtime for r/translator
+def ziwen_bot():
+    """
+    This is the main runtime for r/translator that checks for keywords and commands.
+    :return: Nothing.
+    """
+
     logger.debug('Fetching new r/%s comments...' % SUBREDDIT)
     posts = []
     posts += list(r.comments(limit=MAXPOSTS))
@@ -4523,6 +4624,8 @@ def ziwen_bot():  # The main runtime for r/translator
         ocreated = post.created_utc  # Unix time when this post was created.
         osaved = post.saved  # We save verification requests so we don't work on them.
         requester = "Zamenhof"  # Dummy thing just to have data
+        current_time = int(time.time())  # This is the current time.
+
         try:
             oauthor = osubmission.author.name  # Check to see if the author deleted their post already
         except AttributeError:  # No author found.
@@ -4569,7 +4672,6 @@ def ziwen_bot():  # The main runtime for r/translator
             continue
 
         if TESTING_MODE:  # This is a function to help stop the incessant commenting on older posts when testing
-            current_time = int(time.time())  # This is the current time.
             if current_time - ocreated >= 3600:  # If the comment is older than an hour, ignore
                 continue
 
@@ -4580,7 +4682,7 @@ def ziwen_bot():  # The main runtime for r/translator
 
         '''REFERENCE COMMANDS (!identify, !page, !reference, !search, `lookup`)'''
 
-        if KEYWORDS[4] in pbody or KEYWORDS[10] in pbody:  # This is the general !identify command
+        if KEYWORDS[4] in pbody or KEYWORDS[10] in pbody:  # This is the general !identify command (synonym: !id)
 
             determined_data = comment_info_parser(pbody, "!identify:")
             # This should return what was actually identified. Normally will be a Tuple or None
@@ -4796,18 +4898,6 @@ def ziwen_bot():  # The main runtime for r/translator
                                 earlier_comment.delete()
                                 logger.debug("[ZW] Bot: >>> Previous response deleted")
                                 # We delete the earlier versions. 
-            """
-            # Manual MENTION override.
-            # Note that the c_or_j_detector function will return FALSE if it detects any kana, kicking search to JA
-            if c_or_j_detector(cj_matches) and 'chinese' in pbody or 'cantonese' in pbody or ':zh' in pbody:
-                # Here we are making so you can call the command f/ other posts with keywords in the body of the comment
-                search_language = "Chinese"
-            elif 'japanese' in pbody or ':ja' in pbody:
-                search_language = "Japanese"
-            elif not c_or_j_detector(cj_matches):  # The detector found kana, so let's do Japanese.
-                search_language = "Japanese"
-            elif 'korean' in pbody or ':ko' in pbody:
-                search_language = "Korean";"""
 
             if len(total_matches.keys()) == 0:
                 # Checks to see if there's actually anything in between those two graves. 
@@ -4998,6 +5088,7 @@ def ziwen_bot():  # The main runtime for r/translator
                 continue
             else:
                 oajo.set_status("doublecheck")
+                oajo.set_time('doublecheck', current_time)
                 logger.info("[ZW] Bot: > Marked post as 'Needs Review.'")
 
             # Delete any claimed comment.
@@ -5020,6 +5111,7 @@ def ziwen_bot():  # The main runtime for r/translator
             # Send a message to the OP about their post missing content.
 
             oajo.set_status("missing")
+            oajo.set_time('missing', current_time)
             logger.info("[ZW] Bot: > Marked a post by u/{} as missing assets and messaged them about it.".format(oauthor))
 
         if any(keyword in pbody for keyword in THANKS_KEYWORDS) and KEYWORDS[3] not in pbody and len(pbody) <= 20:
@@ -5046,6 +5138,7 @@ def ziwen_bot():  # The main runtime for r/translator
             else:  # Okay, it really is a short thanks
                 logger.info("[ZW] Bot: COMMAND: Short thanks from u/{}. Sending user a message...".format(pauthor))
                 oajo.set_status("translated")
+                oajo.set_time('translated', current_time)
                 reddit.redditor(oauthor).message('[Notification] A message regarding your translation request',
                                                  MSG_SHORT_THANKS_TRANSLATED.format(oauthor, opermalink) + BOT_DISCLAIMER)
 
@@ -5084,6 +5177,7 @@ def ziwen_bot():  # The main runtime for r/translator
 
             if not claimed_already:  # This has not yet been claimed. We can claim it for the user.
                 oajo.set_status("inprogress")
+                oajo.set_time('inprogress', current_time)
                 claim_note = osubmission.reply(COMMENT_CLAIM.format(claimer=pauthor, time=utc_timestamp,
                                                                     language_name=oajo.language_name) + BOT_DISCLAIMER)
                 claim_note.mod.distinguish(sticky=True)  # Distinguish the bot's comment
@@ -5126,6 +5220,7 @@ def ziwen_bot():  # The main runtime for r/translator
             elif oflair_css not in ["meta", "community", "translated"]:
                 # Make sure we're not altering certain flairs.
                 oajo.set_status("translated")
+                oajo.set_time('translated', current_time)
                 logger.info("[ZW] Bot: > Marked post as translated.")
 
             komento_data = komento_analyzer(osubmission)
