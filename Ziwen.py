@@ -5236,64 +5236,54 @@ def ziwen_bot():  # The main runtime for r/translator
             logger.debug("[ZW] Bot: Recorded user commands in database.")
 
 
-def progress_checker():  # This is to make sure in-progress posts don't linger.
+def progress_checker():
+    """
+    This is an independent function that checks to see what posts are still marked as "In Progress."
+    It checks to see if they have expired (that is, the claim period is past a defined time).
+    If they are expired, this function resets them to the 'Untranslated' state.
+    :return: Nothing.
+    """
+
+    # Conduct a search on Reddit.
     search_query = 'flair:"in progress"'  # Get the posts that are still marked as in progress
-    search_results = r.search(search_query, time_filter='week', sort='new')
+    search_results = r.search(search_query, time_filter='month', sort='new')
+
     for post in search_results:  # Now we process the ones that are stil marked as in progress to reset them.
 
+        # Variable Creation
+        oid = post.id
         oflair_css = post.link_flair_css_class
         opermalink = post.permalink
 
-        if oflair_css != 'inprogress':  # If it's not actually an inprogress one, let's skip it.
+        if oflair_css is None:
             continue
-        else:
-            suggested_css_text = post.link_flair_text.split(" ")[2]  # Will include brackets [KA]
+        elif oflair_css != 'inprogress':  # If it's not actually an in progress one, let's skip it.
+            continue
 
-        # Expand all the comments.
-        post.comments.replace_more(limit=0)
-        comments = post.comments
+        # Load its Ajo.
+        oajo = ajo_loader(oid)  # First check the local database for the Ajo.
+        if oajo is None:  # We couldn't find a stored dict, so we will generate it from the submission.
+            logger.debug("[ZW] progress_checker: Couldn't find an Ajo in the local database. Loading from Reddit.")
+            oajo = Ajo(post)
 
-        for comment in comments:  # First we try to identify the claimer and time of claiming.
-            if comment.author is None:  # Skip it if it's none.
-                continue
+        # Process the post and get some data out of it.
+        komento_data = komento_analyzer(post)
+        time_difference = komento_data['claim_time_diff']  # Get the time difference between its claimed time and now.
+        if time_difference > CLAIM_PERIOD:  # This means the post is older than the claim time period.
 
-            pbody = comment.body
+            # Delete my advisory notice.
+            claim_notice = reddit.comment(id=komento_data['bot_claim_comment'])
+            claim_notice.delete()  # Delete the notice comment.
+            logger.info("[ZW] progress_checker: This post exceeded the claim time period. Reset. {}".format(opermalink))
 
-            if '**Claimer:** u/' in pbody and comment.author.name == 'translator-BOT':
-                # This is a claimed comment on a post that is still outstanding.
-                current_time = time.time()
-                claimed_time = pbody.split(" at ")[1]
-                claimed_time = claimed_time.split(" UTC")[0]
-                claimed_date = claimed_time.split(" ")[0]
-                claimed_time = claimed_time.split(" ")[1]
+            # Update the Ajo.
+            oajo.set_status('untranslated')
+            oajo.update_reddit()  # Push all changes to the server
+            ajo_writer(oajo)  # Write the Ajo to the local database
+        else:  # This post is still under the time limit. Do nothing.
+            continue
 
-                num_year = int(claimed_date.split("-")[0])
-                num_month = int(claimed_date.split("-")[1])
-                num_day = int(claimed_date.split("-")[2])
-
-                num_hour = int(claimed_time.split(":")[0])
-                num_min = int(claimed_time.split(":")[1])
-                num_sec = int(claimed_time.split(":")[2])
-
-                comment_datetime = datetime.datetime(num_year, num_month, num_day, num_hour, num_min, num_sec)
-                utc_timestamp = calendar.timegm(comment_datetime.timetuple())  # Returns the time in UTC.
-                time_difference = int(current_time - utc_timestamp)
-
-                if time_difference > CLAIM_PERIOD:  # we want to switch this to determining time from the comment !claim.
-                    comment.delete()  # Delete the claim comment of the bot
-                    simple_css = suggested_css_text.lower()[1:-1]  # convert this into a simple css code
-                    simple_css_tuple = converter(simple_css)  # Returns a tuple with Code, Name, Supported (boolean).
-                    new_text = simple_css_tuple[1]
-                    if not simple_css_tuple[2]:  # If this is not a supported language...
-                        # post.mod.flair(text=new_text, css_class='generic')
-                        output_template = POST_TEMPLATES["generic"]
-                    else:  # This is a supported language. We use the flair template for it.
-                        # post.mod.flair(text=new_text, css_class=simple_css)
-                        output_template = POST_TEMPLATES[simple_css]
-
-                    post.flair.select(output_template, new_text)
-                    logger.info("[ZW] Progress Checker: >> Reset the flair of "
-                                "{} due to the claim's expiration.".format(opermalink))
+    return
 
 
 '''LESSER COMMANDS RUNTIMES'''
