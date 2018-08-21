@@ -980,7 +980,7 @@ def ziwen_points_retreiver(username):
         recorded_month_points = 0
         scratchpad_posts = []
 
-        command = "SELECT * FROM total_points  WHERE username = '{}' AND month_year = '{}'".format(username, month)
+        command = "SELECT * FROM total_points WHERE username = '{}' AND month_year = '{}'".format(username, month)
         cursor_p.execute(command)
         month_data = cursor_p.fetchall()
         for data in month_data:
@@ -2006,10 +2006,12 @@ def ziwen_notifier_equalizer(notify_users_list, language_name, monthly_limit):
     if users_to_contact < users_number:
         notify_users_list = random.sample(notify_users_list, users_to_contact)
 
-    # If there are more than fifty for a language...  Cut it down.
-    if users_number > 50:
-        notify_users_list = random.sample(notify_users_list, 50)  # Pick fifty people at random. Cut the list down.
-        logger.info("[ZW] Notifier Equalizer: Over fifty people listed for {} notifications. Randomized.".format(language_name))
+    limit_number = 30
+    # If there are more than limit_number for a language...  Cut it down.
+    if users_number > limit_number:
+        notify_users_list = random.sample(notify_users_list, limit_number)  # Pick X people at random. Cut the list down
+        logger.info("[ZW] Notifier Equalizer: {}+ people for {} notifications. Randomized.".format(limit_number,
+                                                                                                   language_name))
 
     # Alphabetize
     notify_users_list = sorted(notify_users_list, key=str.lower)
@@ -5520,6 +5522,13 @@ def ziwen_bot():
                 logger.info("[ZW] Bot: > Reset everything for the designated post.")
             else:
                 continue
+
+        if KEYWORDS[16] in pbody:  # !long command, for mods to mark a post as long for translators.
+
+            if is_mod(pauthor):  # Check if is a mod.
+                logger.info("[ZW] Bot: COMMAND: !long, from mod u/{}.".format(pauthor))
+                oajo.set_long(True)
+                logger.info("[ZW] Bot: Marked the designated post as long.")
 
         if KEYWORDS[6] in pbody:
             # the !note command saves posts which are not CSS/template supported so they can be used as reference
