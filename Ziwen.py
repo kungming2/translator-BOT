@@ -15,7 +15,7 @@ import youtube_dl  # Needed for some except logging, used by pafy
 import romkan  # Needed to include automatic romaji conversion
 import jieba  # Segmenter for Chinese
 import tinysegmenter  # Segmenter for Japanese
-# import MeCab  # Japanese tokenizer
+import MeCab  # Japanese tokenizer
 import wikipedia  # Needed to include Wikipedia content in the !reference command
 
 from bs4 import BeautifulSoup as Bs
@@ -30,10 +30,11 @@ from _responses import *
 from Data import _ko_romanizer
 
 BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.7.39'
+VERSION_NUMBER = '1.7.40'
 USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator.'
               ' Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
+'''UNIVERSAL VARIABLES'''
 # This is how many posts Ziwen will retrieve all at once. PRAW can download 100 at a time.
 MAXPOSTS = 100
 # This is how many seconds I will wait between cycles. The bot is completely inactive during this time.
@@ -3257,7 +3258,7 @@ def zh_word(word):
         # If both have nothing, we kick it down to the character search.
         if search_results_buddhist is None and search_results_tea is None and search_results_cccanto is None:
             to_post = zh_character(word)
-            logger.debug("[ZW] ZH-Word: No results found. Getting individual characters instead.")
+            logger.info("[ZW] ZH-Word: No results found. Getting individual characters instead.")
             return to_post
         else:  # Otherwise, let's try to format the data nicely.
 
@@ -3334,6 +3335,13 @@ def zh_word(word):
         # Format the regular results we have.
         lookup_line_2 = str('\n\n**Meanings**: "' + meaning + '."')
 
+        # Append chengyu data if the string is four characters.
+        if len(word) == 4:
+            chengyu_data = zh_chengyu(word)
+            if chengyu_data is not None:
+                logger.info("[ZW] ZH-Word: >> Added additional chengyu data.")
+                lookup_line_2 += chengyu_data
+
         # We append Buddhist results if we have them.
         mainline_search_results_buddhist = zh_word_buddhist_dictionary_search(tradify(word))
         if mainline_search_results_buddhist is not None:
@@ -3359,42 +3367,44 @@ def zh_word(word):
 
 def zh_chengyu(chengyu):
     """
-    Function to get Chinese information for Chinese chengyu.
+    Function to get Chinese information for Chinese chengyu, including literary sources and explanations.
     Note: this is the second version. This version just adds supplementary Chinese information to zh_word.
+
     :param chengyu: Any Chinese idiom (usually four characters)
-    :return:
+    :return: None if no results, otherwise a formatted string.
     """
 
-    headers = {'Content-Type': "text/html; charset=gb2312", 'f-type': 'chengyu'}
+    headers = {'Content-Type': "text/html; charset=gb2312", 'f-type': 'chengyu', "accept-encoding": "gb2312"}
     chengyu = simplify(chengyu)  # This website only takes simplified chinese
-    r_tree = None  # Placeholder...
+    r_tree = None  # Placeholder.
 
-    # Convert unicode into a string for the URL
+    # Convert Unicode into a string for the URL, which uses GB2312 encoding.
+    chengyu_gb = str(chengyu.encode('gb2312'))
+    chengyu_gb = chengyu_gb.replace('\\x', "%").upper()[2:-1]
+
+    # Format the search link.
+    search_link = 'http://www.51bc.net/cy/serach.php?f_type=chengyu&f_type2=&f_key={}'  # Note: 'serach' is intentional.
+    search_link = search_link.format(chengyu_gb)
+    logger.debug(search_link)
+
     try:
-        chengyu_gb = str(chengyu.encode('gb2312'))
-        chengyu_gb = chengyu_gb.replace('\\x', "%").upper()[2:-1]
-
-        search_link = 'http://cy.5156edu.com/serach.php?f_key={}&f_type=chengyu'
-        search_link = search_link.format(chengyu_gb)
-        # print(search_link)
-
         # We run a search on the site and see if there are results.
         results = requests.get(search_link.format(chengyu), headers=headers)
         results.encoding = "gb2312"
         r_tree = html.fromstring(results.text)  # now contains the whole HTML page
         chengyu_exists = r_tree.xpath('//td[contains(@bgcolor,"#B4D8F5")]/text()')
     except (UnicodeEncodeError, UnicodeDecodeError):  # There may be an issue with the conversion.
+        logger.error("[ZW] ZH-Chengyu: Unicode encoding error.")
         chengyu_exists = ["", '找到 0 个成语']  # Tell it to exit later.
 
     if '找到 0 个成语' in chengyu_exists[1]:  # There are no results...
-        to_post = zh_word(chengyu)
         logger.info("[ZW] ZH-Chengyu: No chengyu results found for {}.".format(chengyu))
-        return to_post
+        return None
     elif r_tree is not None:  # There are results.
         # Look through the results page.
         link_results = r_tree.xpath('//td[contains(@width,"20%")]/a')
         actual_link = link_results[0].attrib['href']
-        actual_link = "http://cy.5156edu.com/" + actual_link
+        logger.info("[ZW] > ZH-Chengyu: Found a chengyu. Actual link at: {}".format(actual_link))
 
         # Get the data from the actual link
         eth_page = requests.get(actual_link)
@@ -3402,28 +3412,18 @@ def zh_chengyu(chengyu):
         tree = html.fromstring(eth_page.text)  # now contains the whole HTML page
 
         # Grab the data from the table.
-        zh_data = tree.xpath('//td[contains(@colspan,"5")]/text()')
+        zh_data = tree.xpath('//td[contains(@colspan, "5")]/text()')
 
+        # Assign them to variables.
         chengyu_meaning = zh_data[1]
         chengyu_source = zh_data[2]
 
         # Format the data nicely to add to the zh_word output.
         cy_to_post = "\n\n**Chinese Meaning**: {}\n\n**Literary Source**: {}"
         cy_to_post = cy_to_post.format(chengyu_meaning, chengyu_source)
+        cy_to_post += " ([5156edu]({}), [18Dao](https://tw.18dao.net/成語詞典/{}))".format(actual_link, tradify(chengyu))
 
-        # Now get zh_word info (we want to trash the last links though)
-        zh_word_data = zh_word(chengyu)
-        zh_word_data = zh_word_data.split("\n\n^Information", 1)[0].strip()
-        cy_to_post = zh_word_data + cy_to_post
-
-        # Form external links
-        lookup_line_3 = '\n\n\n^Information ^from [^5156edu]({}) '.format(actual_link)
-        lookup_line_3 += '^| [^18Dao](https://tw.18dao.net/成語詞典/{}) '.format(tradify(chengyu))
-        lookup_line_3 += '^| [^MDBG](https://www.mdbg.net/chindict/chindict.php?page=worddict&wdqb={}) '.format(chengyu)
-        lookup_line_3 += '^| [^Wiktionary](https://en.wiktionary.org/w/index.php?search={})'.format(tradify(chengyu))
-        cy_to_post += lookup_line_3
-
-        logger.info(">> Received a lookup command for the chengyu {} in Chinese. Returned search results.".format(chengyu))
+        logger.info("[ZW] > ZH-Chengyu: Looked up the chengyu {} in Chinese. Returned search results.".format(chengyu))
 
         return cy_to_post
 
@@ -5158,28 +5158,21 @@ def ziwen_bot():
 
             for key, value in total_matches.items():
                 if key in ['Chinese', 'Cantonese', 'Unknown', 'Classical Chinese', 'Han Characters', "Simplified Han",
-                           "Traditional Han"]:
+                           "Traditional Han", "Min Dong Chinese", "Hakka Chinese", "Late Middle Chinese",
+                           "Min Nan Chinese", "Min Bei Chinese"]:
                     for match in total_matches[key]:
                         match_length = len(match)
-                        if match_length not in (2, 3, 5, 6) and (match_length % 4) != 0:
+                        if match_length == 1:  # Single-character
                             to_post = zh_character(match)
                             post_content.append(to_post)
-                        elif match_length in (2, 3, 5, 6):
+                        elif match_length >= 2:  # A word or a phrase
                             find_word = str(match)
                             post_content.append(zh_word(find_word))
-                        elif (match_length % 4) == 0:  # Has to be 8 (4 characters) because of Unicode?
-                            find_chengyu = str(match)
-                            search_term = simplify(
-                                str(find_chengyu))  # Convert to simplify first because our dictionary uses simplified
-                            try:
-                                post_content.append(zh_chengyu(search_term))
-                            except ConnectionRefusedError:  # If we have issues getting Chengyu
-                                post_content.append(zh_word(search_term))  # Switch to just the term from zh_word
 
                         # Create a randomized wait time between requests.
                         wait_sec = random.randint(3, 12)
                         time.sleep(wait_sec)
-                elif key in ['Japanese']:
+                elif key in ['Japanese', 'Central Okinawan', 'Old Japanese']:
                     for match in total_matches[key]:
                         match_length = len(str(match))
                         if match_length == 1:
@@ -5188,7 +5181,7 @@ def ziwen_bot():
                         elif match_length > 1:
                             find_word = str(match)
                             post_content.append(ja_word(find_word))
-                elif key in ['Korean']:
+                elif key in ['Korean', 'Jejueo', 'Old Korean']:
                     for match in total_matches[key]:
                         find_word = str(match)
                         post_content.append(ko_word(find_word))
@@ -5217,7 +5210,7 @@ def ziwen_bot():
                 logger.debug("[ZW] Bot: >> Previous comment was deleted.")
 
         if KEYWORDS[7] in pbody:
-            # the !reference command gets information from Ethnologue and other sources
+            # the !reference command gets information from Ethnologue, Wikipedia, and other sources
             # to post as a reference
             determined_data = comment_info_parser(pbody, "!reference:")
             # This should return what was actually identified. Normally will be a Tuple or None
@@ -5516,7 +5509,7 @@ def ziwen_bot():
 
         if KEYWORDS[15] in pbody:  # !reset command, to revert a post back to as if it were freshly processed
 
-            if is_mod(pauthor) or pauthor == oauthor:  # Check if is a mod or the OP
+            if is_mod(pauthor) or pauthor == oauthor:  # Check if user is a mod or the OP.
                 logger.info("[ZW] Bot: COMMAND: !reset, from user u/{}.".format(pauthor))
                 oajo.reset(otitle)
                 logger.info("[ZW] Bot: > Reset everything for the designated post.")
@@ -5525,10 +5518,16 @@ def ziwen_bot():
 
         if KEYWORDS[16] in pbody:  # !long command, for mods to mark a post as long for translators.
 
-            if is_mod(pauthor):  # Check if is a mod.
+            if is_mod(pauthor):  # Check if user is a mod.
                 logger.info("[ZW] Bot: COMMAND: !long, from mod u/{}.".format(pauthor))
-                oajo.set_long(True)
-                logger.info("[ZW] Bot: Marked the designated post as long.")
+
+                # This command works as a flip switch. It changes the state to the opposite.
+                current_status = oajo.is_long
+                new_status = not current_status
+
+                # Set the status
+                oajo.set_long(new_status)
+                logger.info("[ZW] Bot: Changed the designated post's long state to '{}.'".format(new_status))
 
         if KEYWORDS[6] in pbody:
             # the !note command saves posts which are not CSS/template supported so they can be used as reference
