@@ -15,7 +15,7 @@ import youtube_dl  # Needed for some except logging, used by pafy
 import romkan  # Needed to include automatic romaji conversion
 import jieba  # Segmenter for Chinese
 import tinysegmenter  # Segmenter for Japanese
-import MeCab  # Japanese tokenizer
+# import MeCab  # Japanese tokenizer
 import wikipedia  # Needed to include Wikipedia content in the !reference command
 
 from bs4 import BeautifulSoup as Bs
@@ -30,7 +30,7 @@ from _responses import *
 from Data import _ko_romanizer
 
 BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.7.38'
+VERSION_NUMBER = '1.7.39'
 USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator.'
               ' Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
@@ -51,7 +51,7 @@ NOTIFICATIONS_LIMIT = 140
 '''KEYWORDS LISTS'''
 # These are the words we are looking for (the commands on r/translator).
 KEYWORDS = ["!page:", "`", "!missing", "!translated", "!id:", "!set:", "!note:", "!reference:", "!search:",
-            "!doublecheck", "!identify:", '!translate', '!translator', '!delete', '!claim', '!reset']
+            "!doublecheck", "!identify:", '!translate', '!translator', '!delete', '!claim', '!reset', '!long']
 # These are the words that count as a 'thanks' from the OP.
 # If a message includes them, the bot won't message them asking them to thank the translator.
 THANKS_KEYWORDS = ["thank", "thanks", "tyvm", "thx", "danke", "arigato", "gracias", "appreciate", "solved"]
@@ -699,7 +699,7 @@ class Ajo:
         try:
             # We check here to make sure the dictionary exists.
             working_dictionary = self.time_delta
-        except NameError:  # There was no time_delta defined... Let's create it.
+        except (AttributeError, NameError):  # There was no time_delta defined... Let's create it.
             working_dictionary = {}
 
         if state not in working_dictionary:  # This state hasn't been recorded. We create it as a key in the dictioanry.
@@ -936,6 +936,7 @@ def ziwen_points_retreiver(username):
     month_points = 0
     all_points = 0
     recorded_months = []
+    recorded_posts = []
     to_post = ""
 
     current_time = time.time()
@@ -952,6 +953,12 @@ def ziwen_points_retreiver(username):
     for data in username_month_points_data:  # Compile the monthly number of points the user has earned.
         month_points += data[3]
 
+    for data in username_all_points_data:  # Compile the total number of posts participated.
+        post_id = data[4]
+        recorded_posts.append(post_id)
+    recorded_posts = list(set(recorded_posts))
+    recorded_posts_count = len(recorded_posts)  # This is the number of posts the user has participated in.
+
     for data in username_all_points_data:  # Compile the total number of points the user has earned.
         all_points += data[3]
 
@@ -961,8 +968,8 @@ def ziwen_points_retreiver(username):
 
     if all_points != 0:  # The user has points listed.
         first_line = ("You've earned **{} points** on r/translator this month.\n\n"
-                      "You've earned **{} points** in total.\n\n")
-        to_post += first_line.format(month_points, all_points)
+                      "You've earned **{} points** in total and participated in **{} posts**.\n\n")
+        to_post += first_line.format(month_points, all_points, recorded_posts_count)
         to_post += "Year/Month | Points | Number of Posts Participated\n-----------|--------|------------------"
     else:  # User has no points listed.
         to_post = ("You haven't earned any points on r/translator yet. "
@@ -983,6 +990,7 @@ def ziwen_points_retreiver(username):
         recorded_posts = len(list(set(scratchpad_posts)))
 
         to_post += "\n{} | {} | {}".format(month, recorded_month_points, recorded_posts)
+    to_post += "\n*Total* | {} | {}".format(all_points, recorded_posts_count)  # Add a summary row for the totals.
 
     return to_post
 
@@ -2383,7 +2391,7 @@ def ziwen_messages():
             logger.info("[ZW] Messages: New points status request from u/{}.".format(mauthor))
 
             # Get the user's points
-            user_points_output = "### Points on r/translator" + ziwen_points_retreiver(mauthor)
+            user_points_output = "### Points on r/translator\n\n" + ziwen_points_retreiver(mauthor)
 
             # Get the commands the user may have used before.
             user_commands_statistics_data = user_statistics_loader(mauthor)
@@ -3038,7 +3046,7 @@ def zh_word_buddhist_dictionary_search(chinese_word):
     Since the dictionary is saved in the CC-CEDICT format, this also serves as a template for entry conversion.
 
     :param: chinese_word - any Chinese word. This should be in its *traditional* form.
-    :return: None if there is nothing that matches, a formatted string with meaning otherwise.
+    :return: None if there is nothing that matches, a dictionary with content otherwise.
     """
     general_dictionary = {}
 
@@ -3073,6 +3081,7 @@ def zh_word_buddhist_dictionary_search(chinese_word):
         # Format the data nicely.
         if len(keywords['meanings']) > 2:  # Truncate if too long.
             keywords['meanings'] = keywords['meanings'][:2]
+            keywords['meanings'][-1] += "."  # Add a period.
         formatted_line = '\n\n**Buddhist Meanings**: "{}"'.format("; ".join(keywords['meanings']))
         formatted_line += (" ([Soothill-Hodous]"
                            "(https://mahajana.net/en/library/texts/a-dictionary-of-chinese-buddhist-terms))")
@@ -3082,6 +3091,60 @@ def zh_word_buddhist_dictionary_search(chinese_word):
 
         return general_dictionary
     else:  # Nothing found.
+        return None
+
+
+def zh_word_cccanto_search(cantonese_word):
+    """
+    Function that parses and returns data from the CC-Canto database, which uses CC-CEDICT's format.
+    More information can be found here: http://cantonese.org/download.html
+
+    :param cantonese_word: Any Cantonese word. This should be in its *traditional* form.
+    :return: None if there is nothing that matches, a dictionary with content otherwise.
+    """
+    general_dictionary = {}
+
+    # We open the file.
+    f = open(FILE_ADDRESS_ZH_CCCANTO, 'r', encoding='utf-8')
+    existing_data = f.read()
+    existing_data = existing_data.split('\n')
+    f.close()
+
+    relevant_line = None
+
+    # Look for the relevant word (should not take long.)
+    for entry in existing_data:
+        traditional_headword = entry.split(" ", 1)[0]
+        if cantonese_word == traditional_headword:
+            relevant_line = entry
+            break
+        else:
+            continue
+
+    if relevant_line is not None:
+        # Parse the entry (based on code from Marcanuy at https://github.com/marcanuy/cedict_utils, MIT license)
+        hanzis = relevant_line.partition('[')[0].split(' ', 1)
+        keywords = dict(
+            meanings=relevant_line.partition('/')[2].replace("\"", "'").rstrip("/").strip().split("/"),
+            traditional=hanzis[0].strip(" "),
+            simplified=hanzis[1].strip(" "),
+            # Take the content in between the two brackets
+            pinyin=relevant_line.partition('[')[2].partition(']')[0],
+            jyutping=relevant_line.partition('{')[2].partition('}')[0],
+            raw_line=relevant_line)
+
+        formatted_line = '\n\n**Cantonese Meanings**: "{}."'.format("; ".join(keywords['meanings']))
+        formatted_line += (" ([CC-Canto](http://cantonese.org/search.php?q={}))".format(cantonese_word))
+        for i in range(0, 9):
+            keywords['jyutping'] = keywords['jyutping'].replace(str(i), "^%s " % str(i))  # Adds syntax for tones
+        keywords['jyutping'] = keywords['jyutping'].replace("  ", " ").strip()  # Replace double spaces
+
+        general_dictionary['meaning'] = formatted_line
+        general_dictionary['pinyin'] = keywords['pinyin']
+        general_dictionary['jyutping'] = keywords['jyutping']
+
+        return general_dictionary
+    else:
         return None
 
 
@@ -3171,6 +3234,7 @@ def zh_word(word):
     """
     alternate_meanings = []
     alternate_pinyin = ()
+    alternate_jyutping = None
 
     eth_page = requests.get('https://www.mdbg.net/chindict/chindict.php?page=worddict&wdrst=0&wdqb=c:' + word,
                             headers=ZW_USERAGENT)
@@ -3186,9 +3250,10 @@ def zh_word(word):
         # First we try to check our specialty dictionaries. Buddhist dictionary first. Then the tea dictionary.
         search_results_buddhist = zh_word_buddhist_dictionary_search(tradify(word))
         search_results_tea = zh_word_tea_dictionary_search(simplify(word))
+        search_results_cccanto = zh_word_cccanto_search(tradify(word))
 
         # If both have nothing, we kick it down to the character search.
-        if search_results_buddhist is None and search_results_tea is None:
+        if search_results_buddhist is None and search_results_tea is None and search_results_cccanto is None:
             to_post = zh_character(word)
             logger.debug("[ZW] ZH-Word: No results found. Getting individual characters instead.")
             return to_post
@@ -3200,7 +3265,11 @@ def zh_word(word):
             if search_results_tea is not None:
                 alternate_meanings.append(search_results_tea['meaning'])
                 alternate_pinyin = search_results_tea['pinyin']
-            logger.info("[ZW] ZH-Word: No results for the word {}, but results were found in specialty dictionaries.".format(word))
+            if search_results_cccanto is not None:
+                alternate_meanings.append(search_results_cccanto['meaning'])
+                alternate_pinyin = search_results_cccanto['pinyin']
+                alternate_jyutping = search_results_cccanto['jyutping']
+            logger.info("[ZW] ZH-Word: No results for word {}, but results are in specialty dictionaries.".format(word))
 
     if len(alternate_meanings) == 0:  # The standard search function for regular words.
         # Get alternate pinyin from a separate function. We get Wade Giles and Yale. Like 'Guan1 yin1 Pu2 sa4'
@@ -3222,7 +3291,7 @@ def zh_word(word):
         yue_page = requests.get('http://cantonese.org/search.php?q=' + word, headers=ZW_USERAGENT)
         yue_tree = html.fromstring(yue_page.content)  # now contains the whole HTML page
         yue_pronunciation = yue_tree.xpath('//h3[contains(@class,"resulthead")]/small/strong//text()')
-        yue_pronunciation = yue_pronunciation[0:(len(word) * 2)]  # This Len needs to be double because of the damn numbers
+        yue_pronunciation = yue_pronunciation[0:(len(word) * 2)]  # This Len needs to be double because of the numbers
         yue_pronunciation = iter(yue_pronunciation)
         yue_pronunciation = [c + next(yue_pronunciation, '') for c in yue_pronunciation]
 
@@ -3234,7 +3303,10 @@ def zh_word(word):
     else:  # This is for the alternate search with the specialty dictionaries.
         cmn_pronunciation = decode_pinyin(alternate_pinyin)
         alt_romanize = zh_word_alt_romanization(alternate_pinyin)
-        yue_pronunciation = "---"  # The specialty dictionaries do not include Jyutping pronunciation.
+        if alternate_jyutping is not None:
+            yue_pronunciation = alternate_jyutping
+        else:
+            yue_pronunciation = "---"  # The non-Canto specialty dictionaries do not include Jyutping pronunciation.
         meaning = "\n".join(alternate_meanings)
 
     # Format the header appropriately.

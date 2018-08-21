@@ -39,6 +39,7 @@ FILE_ADDRESS_REFERENCE = os.path.join(script_directory, "_database_reference.db"
 FILE_ADDRESS_OLD_CHINESE = os.path.join(script_directory, "_database_old_chinese.csv")
 FILE_ADDRESS_ZH_ROMANIZATION = os.path.join(script_directory, "_database_romanization_chinese.csv")
 FILE_ADDRESS_ZH_BUDDHIST = os.path.join(script_directory, "_database_buddhist_chinese.md")
+FILE_ADDRESS_ZH_CCCANTO = os.path.join(script_directory, "_database_cccanto.md")
 FILE_ADDRESS_MECAB = os.path.join(script_directory, "mecab-ipadic-neologd")  # Folder where MeCab dict files are
 
 # Ziwen SQLite3 cache files

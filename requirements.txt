@@ -9,10 +9,10 @@ mafan
 Mecab
 pafy
 praw
+prawcore
+requests
 romkan
 tinysegmenter
 wikipedia
 wiktionaryparser
 youtube_dl
-requests
-prawcore
