@@ -2766,6 +2766,57 @@ def ja_calligraphy_search(character):
     return to_post
 
 
+def decode_pinyin(s):
+    """
+    Function to convert numbered pin1 yin1 into proper tone marks. CC-CEDICT's format uses numerical pinyin.
+    This code is courtesy of Greg Hewgill on StackOverflow.
+    https://stackoverflow.com/questions/8200349/convert-numbered-pinyin-to-pinyin-with-tone-marks
+    """
+
+    pinyintonemark = {0: "aoeiuv\u00fc",
+                      1: "\u0101\u014d\u0113\u012b\u016b\u01d6\u01d6",
+                      2: "\u00e1\u00f3\u00e9\u00ed\u00fa\u01d8\u01d8",
+                      3: "\u01ce\u01d2\u011b\u01d0\u01d4\u01da\u01da",
+                      4: "\u00e0\u00f2\u00e8\u00ec\u00f9\u01dc\u01dc", }
+
+    s = s.lower()
+    result = ""
+    t = ""
+    for c in s:
+        if 'a' <= c <= 'z':
+            t += c
+        elif c == ':':
+            assert t[-1] == 'u'
+            t = t[:-1] + "\u00fc"
+        else:
+            if '0' <= c <= '5':
+                tone = int(c) % 5
+                if tone != 0:
+                    m = re.search("[aoeiuv\u00fc]+", t)
+                    if m is None:
+                        t += c
+                    elif len(m.group(0)) == 1:
+                        t = t[:m.start(0)] + pinyintonemark[tone][pinyintonemark[0].index(m.group(0))] + t[m.end(0):]
+                    else:
+                        if 'a' in t:
+                            t = t.replace("a", pinyintonemark[tone][0])
+                        elif 'o' in t:
+                            t = t.replace("o", pinyintonemark[tone][1])
+                        elif 'e' in t:
+                            t = t.replace("e", pinyintonemark[tone][2])
+                        elif t.endswith("ui"):
+                            t = t.replace("i", pinyintonemark[tone][3])
+                        elif t.endswith("iu"):
+                            t = t.replace("u", pinyintonemark[tone][4])
+                        else:
+                            t += "!"
+            result += t
+            t = ""
+    result += t
+
+    return result
+
+
 def zh_character_other_readings(character):
     """
     A function to get non-Chinese pronunciations of characters (Sino-Xenic readings) from the Chinese Character API
@@ -2980,6 +3031,96 @@ def zh_character(character):
     return to_post
 
 
+def zh_word_buddhist_dictionary_search(chinese_word):
+    """
+    Function that allows us to consult the Soothill-Hodous 'Dictionary of Chinese Buddhist Terms.'
+    For more information, please visit: http://mahajana.net/texts/soothill-hodous.html
+    Since the dictionary is saved in the CC-CEDICT format, this also serves as a template for entry conversion.
+
+    :param: chinese_word - any Chinese word. This should be in its *traditional* form.
+    :return: None if there is nothing that matches, a formatted string with meaning otherwise.
+    """
+    general_dictionary = {}
+
+    # We open the file.
+    f = open(FILE_ADDRESS_ZH_BUDDHIST, 'r', encoding='utf-8')
+    existing_data = f.read()
+    existing_data = existing_data.split('\n')
+    f.close()
+
+    relevant_line = None
+
+    # Look for the relevant word (should not take long.)
+    for entry in existing_data:
+        traditional_headword = entry.split(" ", 1)[0]
+        if chinese_word == traditional_headword:
+            relevant_line = entry
+            break
+        else:
+            continue
+
+    if relevant_line is not None:
+        # Parse the entry (code courtesy Marcanuy at https://github.com/marcanuy/cedict_utils, MIT license)
+        hanzis = relevant_line.partition('[')[0].split(' ', 1)
+        keywords = dict(
+            meanings=relevant_line.partition('/')[2].replace("\"", "'").rstrip("/").strip().split("/"),
+            traditional=hanzis[0].strip(" "),
+            simplified=hanzis[1].strip(" "),
+            # Take the content in between the two brackets
+            pinyin=relevant_line.partition('[')[2].partition(']')[0],
+            raw_line=relevant_line)
+
+        # Format the data nicely.
+        if len(keywords['meanings']) > 2:  # Truncate if too long.
+            keywords['meanings'] = keywords['meanings'][:2]
+        formatted_line = '\n\n**Buddhist Meanings**: "{}"'.format("; ".join(keywords['meanings']))
+        formatted_line += (" ([Soothill-Hodous]"
+                           "(https://mahajana.net/en/library/texts/a-dictionary-of-chinese-buddhist-terms))")
+
+        general_dictionary['meaning'] = formatted_line
+        general_dictionary['pinyin'] = keywords['pinyin']
+
+        return general_dictionary
+    else:  # Nothing found.
+        return None
+
+
+def zh_word_tea_dictionary_search(chinese_word):
+    """
+    Function that searches the Babelcarp Chinese Tea Lexicon for tea terms.
+
+    :param: Any Chinese word in *simplified* form.
+    :return: None if there is nothing that matches, a formatted string with meaning otherwise.
+    """
+    general_dictionary = {}
+
+    # Conduct a search
+    web_search = "http://babelcarp.org/babelcarp/babelcarp.cgi?phrase={}&define=1".format(chinese_word)
+    eth_page = requests.get(web_search, headers=ZW_USERAGENT)
+    tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
+    word_content = tree.xpath('//fieldset[contains(@id,"translation")]//text()')
+
+    # Get the headword of the entry.
+    head_word = word_content[2].strip()
+    if chinese_word not in head_word:  # If the characters don't match: Exit. This includes null searches.
+        return None
+    else:  # It exists.
+        pinyin = re.search(r'\((.*?)\)', word_content[2]).group(1).lower()
+        meaning = word_content[3:]
+        meaning = [item.strip() for item in meaning]
+
+        # Format the entry to return
+        formatted_line = '\n\n**Tea Meanings**: "{}."'.format(" ".join(meaning))
+        formatted_line = formatted_line.replace(' )', ' ')
+        formatted_line = formatted_line.replace('  ', ' ')
+        formatted_line += " ([Babelcarp]({}))".format(web_search)  # Append source
+
+        general_dictionary['meaning'] = formatted_line
+        general_dictionary['pinyin'] = pinyin
+
+        return general_dictionary
+
+
 def zh_word_alt_romanization(pinyin_string):
     """
     Takes a pinyin with number item and returns Wade Giles and Yale romanization schemes.
@@ -3025,9 +3166,11 @@ def zh_word_alt_romanization(pinyin_string):
 def zh_word(word):
     """
     Function to define Chinese words and return their readings and meanings.
-    :param word: Any Chinese word.
+    :param word: Any Chinese word. This function is used for words longer than one character, generally.
     :return: Word data.
     """
+    alternate_meanings = []
+    alternate_pinyin = ()
 
     eth_page = requests.get('https://www.mdbg.net/chindict/chindict.php?page=worddict&wdrst=0&wdqb=c:' + word,
                             headers=ZW_USERAGENT)
@@ -3035,41 +3178,64 @@ def zh_word(word):
     word_exists = str(tree.xpath('//p[contains(@class,"nonprintable")]/strong/text()'))
     cmn_pronunciation = tree.xpath('//div[contains(@class,"pinyin")]/a/span/text()')
     cmn_pronunciation = cmn_pronunciation[0:len(word)]  # We only want the pronunciations to be as long as the input
-    cmn_pronunciation = ''.join(
-        cmn_pronunciation)  # We don't need a dividing character because pinyin says that words should be joined
+    cmn_pronunciation = ''.join(cmn_pronunciation)  # We don't need a dividing character per pinyin standards
 
     # Check to not return anything if the entry is invalid
     if 'No results found' in word_exists:
-        to_post = zh_character(word)
-        logger.debug("[ZW] ZH-Word: No results found for a multisyllabic word. Getting individual characters instead.")
-        return to_post
 
-    # Get alternate pinyin from a separate function. We get Wade Giles and Yale. Like 'Guan1 yin1 Pu2 sa4'
-    try:
-        py_split_pronunciation = tree.xpath('//div[contains(@class,"pinyin")]/a/@onclick')
-        py_split_pronunciation = re.search(r"\|(...+)\'\)", py_split_pronunciation[0]).group(0)
-        py_split_pronunciation = py_split_pronunciation.split("'", 1)[0][1:].strip()  # Format it nicely.
-        alt_romanize = zh_word_alt_romanization(py_split_pronunciation)
-    except IndexError:  # This likely means that the page does not contain that information.
-        alt_romanize = ("---", "---")
+        # First we try to check our specialty dictionaries. Buddhist dictionary first. Then the tea dictionary.
+        search_results_buddhist = zh_word_buddhist_dictionary_search(tradify(word))
+        search_results_tea = zh_word_tea_dictionary_search(simplify(word))
 
-    meaning = [div.text_content() for div in tree.xpath('//div[contains(@class,"defs")]')]
-    meaning = [x for x in meaning if x != ' ']  # This removes any empty spaces that are in the list.
-    meaning = [x for x in meaning if x != ', ']  # This removes any extraneous commas that are in the list
-    meaning = '/ '.join(meaning)
-    meaning = meaning.strip()
-    yue_page = requests.get('http://cantonese.org/search.php?q=' + word, headers=ZW_USERAGENT)
-    yue_tree = html.fromstring(yue_page.content)  # now contains the whole HTML page
-    yue_pronunciation = yue_tree.xpath('//h3[contains(@class,"resulthead")]/small/strong//text()')
-    yue_pronunciation = yue_pronunciation[0:(len(word) * 2)]  # This Len needs to be double because of the damn numbers
-    yue_pronunciation = iter(yue_pronunciation)
-    yue_pronunciation = [c + next(yue_pronunciation, '') for c in yue_pronunciation]
+        # If both have nothing, we kick it down to the character search.
+        if search_results_buddhist is None and search_results_tea is None:
+            to_post = zh_character(word)
+            logger.debug("[ZW] ZH-Word: No results found. Getting individual characters instead.")
+            return to_post
+        else:  # Otherwise, let's try to format the data nicely.
 
-    # Combines the tones and the syllables together
-    yue_pronunciation = ' '.join(yue_pronunciation)
-    for i in range(0, 9):
-        yue_pronunciation = yue_pronunciation.replace(str(i), "^%s " % str(i))  # Adds Markdown syntax
-    yue_pronunciation = yue_pronunciation.strip()
+            if search_results_buddhist is not None:
+                alternate_meanings.append(search_results_buddhist['meaning'])
+                alternate_pinyin = search_results_buddhist['pinyin']
+            if search_results_tea is not None:
+                alternate_meanings.append(search_results_tea['meaning'])
+                alternate_pinyin = search_results_tea['pinyin']
+            logger.info("[ZW] ZH-Word: No results for the word {}, but results were found in specialty dictionaries.".format(word))
+
+    if len(alternate_meanings) == 0:  # The standard search function for regular words.
+        # Get alternate pinyin from a separate function. We get Wade Giles and Yale. Like 'Guan1 yin1 Pu2 sa4'
+        try:
+            py_split_pronunciation = tree.xpath('//div[contains(@class,"pinyin")]/a/@onclick')
+            py_split_pronunciation = re.search(r"\|(...+)\'\)", py_split_pronunciation[0]).group(0)
+            py_split_pronunciation = py_split_pronunciation.split("'", 1)[0][1:].strip()  # Format it nicely.
+            alt_romanize = zh_word_alt_romanization(py_split_pronunciation)
+        except IndexError:  # This likely means that the page does not contain that information.
+            alt_romanize = ("---", "---")
+
+        meaning = [div.text_content() for div in tree.xpath('//div[contains(@class,"defs")]')]
+        meaning = [x for x in meaning if x != ' ']  # This removes any empty spaces that are in the list.
+        meaning = [x for x in meaning if x != ', ']  # This removes any extraneous commas that are in the list
+        meaning = '/ '.join(meaning)
+        meaning = meaning.strip()
+
+        # Obtain the Cantonese information.
+        yue_page = requests.get('http://cantonese.org/search.php?q=' + word, headers=ZW_USERAGENT)
+        yue_tree = html.fromstring(yue_page.content)  # now contains the whole HTML page
+        yue_pronunciation = yue_tree.xpath('//h3[contains(@class,"resulthead")]/small/strong//text()')
+        yue_pronunciation = yue_pronunciation[0:(len(word) * 2)]  # This Len needs to be double because of the damn numbers
+        yue_pronunciation = iter(yue_pronunciation)
+        yue_pronunciation = [c + next(yue_pronunciation, '') for c in yue_pronunciation]
+
+        # Combines the tones and the syllables together
+        yue_pronunciation = ' '.join(yue_pronunciation)
+        for i in range(0, 9):
+            yue_pronunciation = yue_pronunciation.replace(str(i), "^%s " % str(i))  # Adds Markdown syntax
+        yue_pronunciation = yue_pronunciation.strip()
+    else:  # This is for the alternate search with the specialty dictionaries.
+        cmn_pronunciation = decode_pinyin(alternate_pinyin)
+        alt_romanize = zh_word_alt_romanization(alternate_pinyin)
+        yue_pronunciation = "---"  # The specialty dictionaries do not include Jyutping pronunciation.
+        meaning = "\n".join(alternate_meanings)
 
     # Format the header appropriately.
     if tradify(word) == simplify(word):
@@ -3090,7 +3256,17 @@ def zh_word(word):
     lookup_line_1 += min_hak_data
 
     # Format the meaning line.
-    lookup_line_2 = str('\n\n**Meanings**: "' + meaning + '."')
+    if len(alternate_meanings) == 0:
+        # Format the regular results we have.
+        lookup_line_2 = str('\n\n**Meanings**: "' + meaning + '."')
+
+        # We append Buddhist results if we have them.
+        mainline_search_results_buddhist = zh_word_buddhist_dictionary_search(tradify(word))
+        if mainline_search_results_buddhist is not None:
+            lookup_line_2 += mainline_search_results_buddhist['meaning']
+
+    else:  # This is for the alternate dictionaries only.
+        lookup_line_2 = '\n' + meaning
 
     # Format the footer with the dictionary links.
     lookup_line_3 = ('\n\n\n^Information ^from '
