@@ -3,7 +3,7 @@ fuzzywuzzy
 google
 hangul_romanize
 itertools
-jieba==0.37
+jieba==0.38
 lxml
 mafan
 Mecab
