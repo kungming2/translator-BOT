@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
-# Universal Information for r/translator bots to use
+
+"""Universal functions and variables for r/translator bots to use."""
 
 import os
 import sys
@@ -28,7 +29,7 @@ script_directory = os.path.dirname(__file__)  # Fetch the absolute directory the
 script_directory += "/Data/"  # Where the main files are kept.
 SOURCE_FOLDER = script_directory
     
-# Ziwen database files
+# Ziwen database files (either static files or files that will be written to)
 FILE_ADDRESS_CREDENTIALS = os.path.join(script_directory, "_login.json")
 FILE_ADDRESS_UA = os.path.join(script_directory, "_ua.json")
 FILE_ADDRESS_PROCESSED = os.path.join(script_directory, "_database_processed.db")
@@ -42,17 +43,17 @@ FILE_ADDRESS_ZH_BUDDHIST = os.path.join(script_directory, "_database_buddhist_ch
 FILE_ADDRESS_ZH_CCCANTO = os.path.join(script_directory, "_database_cccanto.md")
 FILE_ADDRESS_MECAB = os.path.join(script_directory, "mecab-ipadic-neologd")  # Folder where MeCab dict files are
 
-# Ziwen SQLite3 cache files
+# Ziwen SQLite3 cache files (cache files are generated as the bot runs and have volatile data)
 FILE_ADDRESS_COMMENT_CACHE = os.path.join(script_directory, "_cache_comment.db")
 FILE_ADDRESS_MULTIPLIER_CACHE = os.path.join(script_directory, "_cache_multiplier.db")
 
-# Ziwen Markdown output files
+# Ziwen Markdown output files (text files for saving information)
 FILE_ADDRESS_ERROR = os.path.join(script_directory, "_log_error.md")
 FILE_ADDRESS_COUNTER = os.path.join(script_directory, "_log_counter.md")
 FILE_ADDRESS_FILTER = os.path.join(script_directory, "_log_filter.md")
 FILE_ADDRESS_EVENTS = os.path.join(script_directory, "_log_events.md")
 
-# Wenyuan Markdown output files
+# Wenyuan Markdown output files (text files for saving information)
 FILE_ADDRESS_STATISTICS = os.path.join(script_directory, "wy_statistics_output.md")
 FILE_ADDRESS_TITLE_LOG = os.path.join(script_directory, "wy_title_test_output.md")
 FILE_ADDRESS_WEEKLY_CHALLENGE = os.path.join(script_directory, "wy_weekly_challenge.md")
@@ -66,7 +67,8 @@ CONNECTION_KEYWORDS = ["socket.timeout", "ssl.SSLError", "ServerError", "400 HTT
                        "Errno 113", "CertificateError", "Error 503", "ProtocolError", "ConnectionRefusedError",
                        "503 HTTP response", ' 404 HTTP response', '504 HTTP response', '200 HTTP response',
                        '403 HTTP response', '401 HTTP response', "500", "502 HTTP response"]
-# Testing subreddits for the bot. (mostly for Ziwen Streamer)
+
+# Testing subreddits for the bot. (mostly to test Ziwen Streamer's crossposting function)
 TESTING_SUBREDDITS = ["r/testingground4bots", "r/test", "r/andom"]
 
 # Footers for the comments that the bots make.

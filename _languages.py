@@ -1,13 +1,17 @@
+#!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+
+"""A collection of database sets and language functions that all r/translator bots use."""
+
 import csv
 import re
 import os
 import string
 import itertools
 
-from fuzzywuzzy import fuzz  # fuzzywuzzy[speedup]
+from fuzzywuzzy import fuzz  # When installing, use fuzzywuzzy[speedup]
 
-VERSION_NUMBER_LANGUAGES = "1.6.18"
+VERSION_NUMBER_LANGUAGES = "1.6.19"
 
 # Access the CSV with ISO 639-3 and ISO 15924 data.
 lang_script_directory = os.path.dirname(__file__)  # <-- absolute dir the script is in
@@ -372,6 +376,14 @@ ISO_MACROLANGUAGES = {
                     "zyg", "zyj", "zyn", "zzj"]),
     "zho": ("cmn", ["cdo", "cjy", "cmn", "cpx", "czh", "czo", "gan", "hak", "hsn", "lzh", "mnp", "nan", "wuu", "yue"]),
     "zza": ("kiu", ["diq", "kiu"])}
+CJK_LANGUAGES = {"Chinese": ['Chinese', 'Min Dong Chinese', 'Classical Chinese', 'Jinyu Chinese', 'Mandarin Chinese',
+                             'Pu-Xian Chinese', 'Huizhou Chinese', 'Min Zhong Chinese', 'Gan Chinese', 'Hakka Chinese',
+                             'Xiang Chinese', 'Min Bei Chinese', 'Min Nan Chinese', 'Wu Chinese', 'Yue Chinese',
+                             'Cantonese', 'Late Middle Chinese', 'Old Chinese'],
+                "Japanese": ['Japanese', 'Old Japanese', 'Northern Amami-Oshima', 'Southern Amami-Oshima', 'Kikai',
+                             'Toku-No-Shima', 'Kunigami', 'Oki-No-Erabu', 'Central Okinawan', 'Yoron', 'Miyako',
+                             'Yaeyama', 'Yonaguni'],
+                "Korean": ['Korean', 'Middle Korean', 'Old Korean', 'Jejueo']}
 
 # These are lists of language learning or country subreddits associated with a specific language.
 # The language learning one should be the FIRST one in the list. The rest can be country or cultural ones.
@@ -760,14 +772,29 @@ MISTAKE_ABBREVIATIONS = {'jp': 'ja', 'cz': 'cs', 'cn': 'zh', 'dk': 'da', 'gr': '
                          'kh': 'km', 'tj': 'tg', 'ua': 'uk', 'vn': 'vi'}
 
 
-def fuzzy_text(word):  # A quick function that assesses misspellings of supported languages
+def fuzzy_text(word):
+    """
+    A quick function that assesses misspellings of supported languages. For example, 'Chinnsse' will be returned as
+    'Chinese." The closeness ratio can be adjusted to make this more or less sensitive.
+
+    :param word: Any word.
+    :return: If the word seems to be close to a supported language, return the likely match.
+    """
+
     for language in SUPPORTED_LANGUAGES:
         closeness = fuzz.ratio(language, word)
         if closeness > 75:
             return str(language)
 
 
-def alternate_search(searchfor, is_supported):  # Values should be a dictionary
+def alternate_search(searchfor, is_supported):
+    """
+    Values should be a dictionary. This allows us to look for alternate names of a language.
+    :param searchfor: language name that we are interested in.
+    :param is_supported: Whether or not it's a supported language on r/translator.
+    :return:
+    """
+
     if is_supported:
         for k in SUPPORTED_ALTERNATE:
             for v in SUPPORTED_ALTERNATE[k]:
@@ -784,7 +811,12 @@ def alternate_search(searchfor, is_supported):  # Values should be a dictionary
     return ""
 
 
-def transbrackets_new(title):  # a simple function that takes a bracketed tag, moves it to the front
+def transbrackets_new(title):
+    """
+    A simple function that takes a bracketed tag, moves the bracketed component to the front.
+    :param title: A title which has the bracketed tag at the end, or in the middle.
+    :return: The transposed title, with the tag properly at the front.
+    """
 
     if ']' in title:  # There is a defined end to this tag.
         bracketed_tag = re.search('\[(.+)\]', title)
@@ -796,14 +828,19 @@ def transbrackets_new(title):  # a simple function that takes a bracketed tag, m
         title_remainder = title_remainder[:-1]
         bracketed_tag = "[" + bracketed_tag + "]"  # enclose it
 
-    # print(bracketed_tag)
     reformed_title = "{} {}".format(bracketed_tag, title_remainder)
 
     return reformed_title
 
 
 def lang_code_search(search_term, script_search):
-    # Returns a tuple: name of a code or a script, is it a script? (that's a boolean)
+    """
+    Returns a tuple: name of a code or a script, is it a script? (that's a boolean)
+    :param search_term: The term we're looking for.
+    :param script_search: A boolean that can narrow down our search to just ISO 15925 script codes.
+    :return:
+    """
+
     codes_list = []
     names_list = []
     alternate_names_list = []  # List of alternate names for languages in ISO 639-3
@@ -864,8 +901,13 @@ def lang_code_search(search_term, script_search):
                 return "", False
 
 
-def country_converter(text_input, abbreviations_okay=True):  # Function that detects a country name in a word given.
-    # abbreviations_okay means it's okay to check the list for abbreviations.
+def country_converter(text_input, abbreviations_okay=True):
+    """
+    Function that detects a country name in a given word.
+    :param text_input: Any string.
+    :param abbreviations_okay: means it's okay to check the list for abbreviations, like MX or GB.
+    :return:
+    """
 
     # Set default values
     country_code = ""
@@ -876,14 +918,12 @@ def country_converter(text_input, abbreviations_okay=True):  # Function that det
     elif len(text_input) == 2 and abbreviations_okay is True:  # This is only two letters long
         text_input = text_input.upper()  # Convert to upper case
         for country in COUNTRY_LIST:
-            # print(country[1])
             if text_input == country[1]:  # Matches exactly
                 country_code = text_input
                 country_name = country[0]
     elif len(text_input) == 3 and abbreviations_okay is True:  # three letters long code
         text_input = text_input.upper()  # Convert to upper case
         for country in COUNTRY_LIST:
-            # print(country[1])
             if text_input == country[2]:  # Matches exactly
                 country_code = country[1]
                 country_name = country[0]
@@ -919,9 +959,11 @@ def country_converter(text_input, abbreviations_okay=True):  # Function that det
 
 
 def converter(language):
-    """A function that can tell us if a language is supported.
+    """
+    A function that can convert between language names and codes, and also parse additional data.
+    This is one of the most crucial components of Ziwen and is very commonly used.
     Returns a tuple with Code, Name, Supported (boolean), country (if present).
-    This is one of the most commonly used functions."""
+    """
 
     # Set default values
     supported = False
@@ -1115,9 +1157,11 @@ def converter(language):
 
 
 def country_validator(word_list, language_list):
-    """Takes a list of words, check for a country and a matching language.
+    """
+    Takes a list of words, check for a country and a matching language.
     If nothing is found it just returns None.
-    If something is found, returns tuple (lang-COUNTRY, ISO 639-3 code)"""
+    If something is found, returns tuple (lang-COUNTRY, ISO 639-3 code).
+    """
 
     # Set default values
     detected_word = {}
@@ -1178,8 +1222,11 @@ def country_validator(word_list, language_list):
 
 
 def comment_info_parser(pbody, command):
-    """A function that takes a comment and looks for actable information like languages or words to lookup
-    IMPORTANT: The command part MUST include the colon (:), or else it will fail."""
+    """
+    A function that takes a comment and looks for actable information like languages or words to lookup.
+    This drives commands that take a language variable, like !identify: or !translate:.
+    IMPORTANT: The command part MUST include the colon (:), or else it will fail.
+    """
 
     advanced_mode = False
     longer_search = False
@@ -1249,7 +1296,13 @@ def comment_info_parser(pbody, command):
         return match, advanced_mode
 
 
-def english_fuzz(word):  # A quick function that detects if a word is likely to be "English"
+def english_fuzz(word):
+    """
+    A quick function that detects if a word is likely to be "English." Used in replace_bad_english_typing below.
+    :param word: Any word.
+    :return: A boolean. True if it's likely to be a misspelling of the word 'English', false otherwise.
+    """
+
     word = word.title()
     closeness = fuzz.ratio("English", word)
     if closeness > 70:  # Very likely
@@ -1258,7 +1311,13 @@ def english_fuzz(word):  # A quick function that detects if a word is likely to 
         return False
 
 
-def replace_bad_english_typing(title):  # Function that will replace a misspelling for English
+def replace_bad_english_typing(title):
+    """
+    Function that will replace a misspelling for English
+    :param title: a post title on r/translator, presumably one with a misspelling
+    :return: The post title but with any words that were mispellings of 'English' replaced.
+    """
+
     title = re.sub(r"""
                    [,.;@#?!&$()“”’"•]+  # Accept one or more copies of punctuation
                    \ *           # plus zero or more copies of a space,
@@ -1277,7 +1336,9 @@ def replace_bad_english_typing(title):  # Function that will replace a misspelli
 
 
 def language_mention_search(search_paragraph):
-    """Returns a list of identified language names from a text. Useful for Wiktionary search and title formatting."""
+    """
+    Returns a list of identified language names from a text. Useful for Wiktionary search and title formatting.
+    """
 
     matches = re.findall(r'\b[A-Z][a-z]+', search_paragraph)
     language_name_matches = []
@@ -1432,7 +1493,9 @@ def multiple_language_script_assessor(language_list):
 
 
 def both_non_english_detector(source_language, target_language):
-    """Takes two lists and returns the languages for notifying or None if there's nothing to return."""
+    """
+    Takes two lists and returns the languages for notifying or None if there's nothing to return.
+    """
 
     all_languages = list(set(source_language + target_language))
 
@@ -2029,14 +2092,14 @@ def main_posts_filter(otitle):
 
         if not any(keyword in otitle for keyword in REQUIRED_KEYWORDS):  # Try again
             filter_reason = '1'
-            print("> Filtered a post out due to incorrect title format. Rule: #" + filter_reason)
+            print("[L] Main_Posts_Filter: > Filtered a post out due to incorrect title format. Rule: #" + filter_reason)
             post_okay = False
     elif ">" not in otitle:  # Try to take out titles that bury the lede.
         if POSTS_KEYWORDS[2] in otitle.lower() or POSTS_KEYWORDS[3] in otitle.lower():
             if POSTS_KEYWORDS[2] not in otitle.lower()[0:30] and POSTS_KEYWORDS[3] not in otitle.lower()[0:30]:
                 # This means the "to english" part is probably all the way at the end. Take it out.
                 filter_reason = '1A'
-                print("> Filtered a post out due to incorrect title format. Rule: #" + filter_reason)
+                print("[L] Main_Posts_Filter: > Filtered a post out due to incorrect title format. Rule: #" + filter_reason)
                 post_okay = False  # Since it's a bad post title, we don't need to process it anymore.
 
             # Added a rule 1B, basically this checks for super short things like 'Translation to English'
@@ -2054,11 +2117,11 @@ def main_posts_filter(otitle):
                 if listed_languages is None or len(listed_languages) == 0:
                     filter_reason = '1B'
                     post_okay = False
-                    print("> Filtered a post out due to not including a valid language. Rule: #" + filter_reason)
+                    print("[L] Main_Posts_Filter: > Filtered a post out that had no valid language. Rule: #" + filter_reason)
     if ">" in otitle and "]" not in otitle and ">" not in otitle[0:50]:
         # If people tack on the languages as an afterthought, it can be hard to process.
         filter_reason = '2'
-        print("> Filtered a post out due to incorrect title format. Rule: #" + filter_reason)
+        print("[L] Main_Posts_Filter: > Filtered a post out due to incorrect title format. Rule: #" + filter_reason)
         post_okay = False
 
     if post_okay is True:

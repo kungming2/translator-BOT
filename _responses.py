@@ -1,7 +1,10 @@
+#!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
-# A Python file containing most of the long-form comments and messages that Ziwen, Ziwen Streamer, and Wenyuan use.
 
-# Ziwen Responses
+"""A Python file containing most of the long-form comments and messages that all r/translator bots use."""
+
+'''ZIWEN RESPONSES'''
+
 # An addition to the bot footer that contains a link to check status and to unsubscribe from notifications.
 MSG_UNSUBSCRIBE_BUTTON = (" ^| ^[Points](https://www.reddit.com/message/compose?to=translator-BOT&subject=Points"
                           "&message=%23%23+How+many+points+have+I+earned?) ^| ^[Status](https://www.reddit.com/message/"
@@ -15,6 +18,13 @@ MSG_UNSUBSCRIBE_BUTTON = (" ^| ^[Points](https://www.reddit.com/message/compose?
 MSG_NSFW_WARNING = "\n\n(Just FYI, this *is* an NSFW post.)"
 MSG_SUBSCRIBE_LINK = 'https://www.reddit.com/message/compose?to=translator-BOT&subject=Subscribe&message=%23%23+Sign+up+for+notifications+about+new+requests+for+your+language%21%0A%23%23+List+language+codes+or+names+after+the+colon+below+and+separate+languages+with+commas.%0A%23%23+You+can+sign+up+for+one+language+or+as+many+as+you%27d+like.%0ALANGUAGES%3A+'
 MSG_REMOVAL_LINK = "https://www.reddit.com/message/compose?to=translator-BOT&subject=Unsubscribe&message=%23%23+Please+unsubscribe+me+from+the+following+languages.%0ALANGUAGES%3A+{language_name}"
+MSG_NO_SUBSCRIPTIONS = ("Sorry, you're not currently subscribed to notifications for any [language posts]"
+                        "(https://www.reddit.com/r/translatorBOT/wiki/ziwen#wiki_language_codes.2Fnames_syntax) on r/translator. "
+                        "Would you like to [sign up]({})?")
+MSG_CANNOT_PROCESS = ("Sorry, but I couldn't process the [language/language codes]"
+                      "(https://www.reddit.com/r/translatorBOT/wiki/ziwen#wiki_language_codes.2Fnames_syntax) "
+                      "in your message. Please double-check your message to make sure they're accurate and "
+                      "[try again]({}).")
 MSG_PAGE = '''
 Hey there u/{username},
 
@@ -163,13 +173,13 @@ COMMENT_INVALID_REFERENCE = ("Sorry, but that doesn't look like anything to me. 
                              "Please enter a valid ISO 639-1 code, ISO 639-3 code, or language name to look up.")
 COMMENT_INVALID_CODE = ("Sorry, but `{0}` doesn't look like anything to me. Would you like to [send my creator a "
                         "message about it?](https://www.reddit.com/message/compose?to=%2Fr%2FtranslatorBOT&subject="
-                        "Identification+for+'{0}'&message=[Please+check+this+out]({1})!)")
+                        "Identification+for+'{0}'&message=%5BPlease+check+this+out+%5D%28{1}%29%21)")
 COMMENT_INVALID_SCRIPT = ("Sorry, but the script code `{}` doesn't look like anything to me. Please "
                           "[see here](https://en.wikipedia.org/wiki/ISO_15924#List_of_codes) for a list of "
                           "valid ISO 15924 codes.")
 
 
-# WENYUAN RESPONSES
+'''WENYUAN RESPONSES'''
 
 WY_THREAD_BODY = '''
 Here are the posts from the last week still marked as "Unknown." Please help identify them if you can!
@@ -178,7 +188,7 @@ Date | Title         | Author
 :----|---------------|--------
 {unknown_content}
 
-*Please make any identifications on the individual request's page.*
+*Please make any identifications on the individual request pages.*
 '''
 WY_MOD_NOTIFICATION_MESSAGE = '''
 ##### Routine Tasks
@@ -189,11 +199,17 @@ WY_MOD_NOTIFICATION_MESSAGE = '''
 [Status Update](https://www.reddit.com/r/translatorBOT/wiki/status) | {}
 File Backup | {}
 
-{}
+##### Operations
 
 {}
 
 {}
+
+##### Status Summary
+
+{}
+
+---
 
 ###### Completed in {}.
 '''
@@ -202,8 +218,8 @@ WY_NEW_HEADER = '''
 *[Statistics](https://www.reddit.com/r/translator/wiki/statistics) for r/translator \
 provided by [Wenyuan](https://www.reddit.com/r/translatorBOT/wiki/wenyuan)*
 
-Month | Year | Total Requests | Percent of All Requests | Untranslated Requests | Translation Percentage | RI | View Translated Requests
-------|------|------|------|------|------|----|------'''
+Year | Month | Total Requests | Percent of All Requests | Untranslated Requests | Translation Percentage | RI | View Translated Requests
+-----|-------|------|------|------|------|----|------'''
 WY_STATUS_UPDATE = '''
 ### Due to {reason}, the bot will be down until around:
 
@@ -228,7 +244,7 @@ Total elapsed time                      | {} seconds
 '''
 
 
-# ZIWEN STREAMER COMMENT
+'''ZIWEN STREAMER RESPONSES'''
 
 ZWS_COMMENT_XPOST = '''
 **OP:** u/{original_author} at {subreddit} ([Link]({cpermalink}))
