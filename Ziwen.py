@@ -56,7 +56,7 @@ MESSAGES_OKAY = True
 NOTIFICATIONS_LIMIT = 100
 
 '''KEYWORDS LISTS'''
-# These are the words we are looking for (the commands on r/translator).
+# These are the the commands on r/translator.
 KEYWORDS = ["!page:", "`", "!missing", "!translated", "!id:", "!set:", "!note:", "!reference:", "!search:",
             "!doublecheck", "!identify:", '!translate', '!translator', '!delete', '!claim', '!reset', '!long']
 # These are the words that count as a 'thanks' from the OP.
@@ -85,11 +85,11 @@ cursor_processed = conn_processed.cursor()
 conn_notify = sqlite3.connect(FILE_ADDRESS_NOTIFY)
 cursor_notify = conn_notify.cursor()
 
-# This is the main points database
-conn_points = sqlite3.connect(FILE_ADDRESS_POINTS)  # This connects the bot with the database of points
+# This is the main points database.
+conn_points = sqlite3.connect(FILE_ADDRESS_POINTS)
 cursor_points = conn_points.cursor()
 
-# We store language data here for the run_reference command as a cache.
+# We store language reference data here.
 conn_reference = sqlite3.connect(FILE_ADDRESS_REFERENCE)
 cursor_reference = conn_reference.cursor()
 
@@ -978,7 +978,7 @@ def ajo_writer(new_ajo):
 
     ajo_id = str(new_ajo.id)
     created_time = new_ajo.created_utc
-    cursor_ajo.execute("SELECT * FROM local_database WHERE id = '{}'".format(ajo_id))
+    cursor_ajo.execute("SELECT * FROM local_database WHERE id = ?", (ajo_id,))
     stored_ajo = cursor_ajo.fetchone()
 
     if stored_ajo is not None:  # There's already a stored entry
@@ -1015,7 +1015,7 @@ def ajo_loader(ajo_id):
     """
 
     # Checks the database
-    cursor_ajo.execute("SELECT * FROM local_database WHERE id = '{}'".format(ajo_id))
+    cursor_ajo.execute("SELECT * FROM local_database WHERE id = ?", (ajo_id,))
     new_ajo = cursor_ajo.fetchone()
 
     if new_ajo is None:  # We couldn't find a stored dict for it.
@@ -1211,12 +1211,12 @@ def points_retreiver(username):
     current_time = time.time()
     month_string = datetime.datetime.fromtimestamp(current_time).strftime('%Y-%m')
 
-    sql_s = "SELECT * FROM total_points WHERE username = '{}' AND month_year = '{}'".format(username, month_string)
-    cursor_points.execute(sql_s)
+    sql_s = "SELECT * FROM total_points WHERE username = ? AND month_year = ?"
+    cursor_points.execute(sql_s, (username, month_string))
     username_month_points_data = cursor_points.fetchall()  # Returns a list of lists.
 
-    sql_un = "SELECT * FROM total_points WHERE username = '{}'".format(username)
-    cursor_points.execute(sql_un)
+    sql_un = "SELECT * FROM total_points WHERE username = ?"
+    cursor_points.execute(sql_un, (username,))
     username_all_points_data = cursor_points.fetchall()
 
     for data in username_month_points_data:  # Compile the monthly number of points the user has earned.
@@ -1249,8 +1249,8 @@ def points_retreiver(username):
         recorded_month_points = 0
         scratchpad_posts = []
 
-        command = "SELECT * FROM total_points WHERE username = '{}' AND month_year = '{}'".format(username, month)
-        cursor_points.execute(command)
+        command = "SELECT * FROM total_points WHERE username = ? AND month_year = ?"
+        cursor_points.execute(command, (username, month))
         month_data = cursor_points.fetchall()
         for data in month_data:
             recorded_month_points += data[3]
@@ -1341,10 +1341,8 @@ def points_worth_cacher():
     month_string = datetime.datetime.fromtimestamp(current_zeit).strftime('%Y-%m')
     
     # Select from the database the current months data if it exists.
-    multiplier_command = "SELECT * from multiplier_cache WHERE month_year = '{}'"
-    multiplier_command = multiplier_command.format(month_string)
-    
-    cursor_multiplier.execute(multiplier_command)
+    multiplier_command = "SELECT * from multiplier_cache WHERE month_year = ?"
+    cursor_multiplier.execute(multiplier_command, (month_string,))
     multiplier_entries = cursor_multiplier.fetchall()
     # If not current, fetch new data and save it.
 
@@ -1528,8 +1526,8 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
             logger.debug("[ZW] Points tabulator: Actual translator: u/{} for {}".format(final_translator, parent_post))
             # Code here to check in the database if the person already got points.
             final_translator_points += 1 + (1 * language_multiplier)
-            command_selection = "SELECT * FROM total_points WHERE username = '{}' AND oid = '{}'"
-            cursor_points.execute(command_selection.format(final_translator, oid))
+            command_selection = "SELECT * FROM total_points WHERE username = ? AND oid = ?"
+            cursor_points.execute(command_selection, (final_translator, oid))
             obtained_points = cursor_points.fetchall()
             # [('2017-09', 'dn9u1g0', 'davayrino', 2, '71bfh4'), ('2017-09', 'dn9u1g0', 'davayrino', 21, '71bfh4')
 
@@ -1571,9 +1569,9 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
         logger.debug("[ZW] Points tabulator: Saved: {}".format(entry))
         # Need code to NOT write it if the points are 0
         if entry[1] != 0:
-            cursor_points.execute(
-                "INSERT INTO total_points VALUES ('" + month_string + "', '" + pid + "', '" + entry[0] + "', '" + str(
-                    entry[1]) + "', '" + oid + "')")
+            addition_command = "INSERT INTO total_points VALUES (?, ?, ?, ?, ?)"
+            addition_tuple = (month_string, pid, entry[0], str(entry[1]), oid)
+            cursor_points.execute(addition_command, addition_tuple)
             conn_points.commit()
 
     return points_status
@@ -1784,8 +1782,8 @@ def messaging_user_statistics_writer(body_text, username):
         body_text = body_text.replace(recorded_keywords[4], recorded_keywords[10])
 
     # Let's try and load any saved record of this
-    sql_us = "SELECT * FROM total_commands WHERE username = '{}'".format(username)
-    cursor_points.execute(sql_us)
+    sql_us = "SELECT * FROM total_commands WHERE username = ?"
+    cursor_points.execute(sql_us, (username,))
     username_commands_data = cursor_points.fetchall()
 
     if len(username_commands_data) == 0:  # Not saved, create a new one
@@ -1836,8 +1834,8 @@ def messaging_user_statistics_loader(username):
     lines_to_post = []
     header = "Command | Times \n--------|------\n"
 
-    sql_us = "SELECT * FROM total_commands WHERE username = '{}'".format(username)
-    cursor_points.execute(sql_us)
+    sql_us = "SELECT * FROM total_commands WHERE username = ?"
+    cursor_points.execute(sql_us, (username,))
     username_commands_data = cursor_points.fetchall()
 
     if len(username_commands_data) == 0:  # There is no data for this user.
@@ -1993,10 +1991,10 @@ def notifier_list_pruner(username):
         final_codes = []
 
         # Fetch a list of what this user WAS subscribed to. (For the final error message)
-        sql_cn = "SELECT * FROM notify_users WHERE username = '{}'".format(username)
+        sql_cn = "SELECT * FROM notify_users WHERE username = ?"
 
         # We try to retrieve the languages the user is subscribed to.
-        cursor_notify.execute(sql_cn)
+        cursor_notify.execute(sql_cn, (username,))
         all_subscriptions = cursor_notify.fetchall()
 
         for subscription in all_subscriptions:
@@ -2004,8 +2002,8 @@ def notifier_list_pruner(username):
         to_post = ", ".join(final_codes)  # Gather a list of the languages user WAS subscribed to
 
         # Remove the user from the database.
-        sql_command = "DELETE FROM notify_users WHERE username = '{}'".format(username)
-        cursor_notify.execute(sql_command)
+        sql_command = "DELETE FROM notify_users WHERE username = ?"
+        cursor_notify.execute(sql_command, (username,))
         conn_notify.commit()
         logger.info("[ZW] notifier_list_pruner: Deleted subscription information for u/{}.".format(username))
 
@@ -2033,8 +2031,8 @@ def notifier_regional_language_fetcher(targeted_language):
             if language_code == relevant_iso_code:
                 targeted_language = lang_country
 
-    sql_lc = "SELECT * FROM notify_users WHERE language_code = '{}'".format(targeted_language)
-    cursor_notify.execute(sql_lc)
+    sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
+    cursor_notify.execute(sql_lc, (targeted_language,))
     notify_targets = cursor_notify.fetchall()
 
     if relevant_iso_code is not None:  # There is an equvalent code. Let's get the users from that too.
@@ -2050,8 +2048,8 @@ def notifier_regional_language_fetcher(targeted_language):
 
     # Now we need to find the overall list's user names for the broader langauge (e.g. ar)
     broader_code = targeted_language.split("-")[0]  # Take only the language part (ar).
-    sql_lc = "SELECT * FROM notify_users WHERE language_code = '{}'".format(broader_code)
-    cursor_notify.execute(sql_lc)
+    sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
+    cursor_notify.execute(sql_lc, (broader_code,))
     all_notify_targets = cursor_notify.fetchall()
 
     for target in all_notify_targets:
@@ -2069,9 +2067,9 @@ def notifier_duplicate_checker(language_code, username):
     Returns TRUE if entry pair is in there, FALSE if not.
     """
 
-    sql_nc = "SELECT * FROM notify_users WHERE language_code = '{}' and username = '{}'"
-    sql_nc = sql_nc.format(language_code, username)
-    cursor_notify.execute(sql_nc)
+    sql_nc = "SELECT * FROM notify_users WHERE language_code = ? and username = ?"
+    sql_nc_tuple = (language_code, username)
+    cursor_notify.execute(sql_nc, sql_nc_tuple)
     specific_entries = cursor_notify.fetchall()
 
     if len(specific_entries) > 0:  # There already is an entry.
@@ -2149,8 +2147,8 @@ def notifier_limit_writer(username):
     """
 
     # Fetch the data
-    sql_lw = "SELECT * FROM notify_monthly_limit WHERE username = '{}'".format(username)
-    cursor_notify.execute(sql_lw)
+    sql_lw = "SELECT * FROM notify_monthly_limit WHERE username = ?"
+    cursor_notify.execute(sql_lw, (username,))
     user_data = cursor_notify.fetchall()
 
     # Parse it
@@ -2166,8 +2164,8 @@ def notifier_limit_writer(username):
         to_store = (username, current_notifications)
         cursor_notify.execute("INSERT INTO notify_monthly_limit VALUES (?, ?)", to_store)
     else:  # Update an existing one.
-        to_store = (current_notifications,)
-        update_command = "UPDATE notify_monthly_limit SET received = (?) WHERE username = '{}'".format(username)
+        update_command = "UPDATE notify_monthly_limit SET received = ? WHERE username = ?"
+        to_store = (current_notifications, username)
         cursor_notify.execute(update_command, to_store)
 
     conn_notify.commit()
@@ -2182,8 +2180,8 @@ def notifier_limit_over_checker(username, monthly_limit):
     """
 
     # Fetch the data
-    sql_lw = "SELECT * FROM notify_monthly_limit WHERE username = '{}'".format(username)
-    cursor_notify.execute(sql_lw)
+    sql_lw = "SELECT * FROM notify_monthly_limit WHERE username = ?"
+    cursor_notify.execute(sql_lw, (username,))
     user_data = cursor_notify.fetchall()
 
     if len(user_data) == 0:  # No record, so it's okay to send.
@@ -2249,8 +2247,8 @@ def notifier_page_translators(language_code, language_name, pauthor, otitle, ope
     Paging now uses the same database as the notification service. The CSV is deprecated.
     """
 
-    sql_lc = "SELECT * FROM notify_users WHERE language_code = '{}'".format(language_code)
-    cursor_notify.execute(sql_lc)
+    sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
+    cursor_notify.execute(sql_lc, (language_code,))
     page_targets = cursor_notify.fetchall()
 
     page_users_list = []
@@ -2375,8 +2373,8 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_wl):
         if len(regional_data) != 0:
             notify_users_list += regional_data  # add the additional people to the notifications list.
 
-    sql_lc = "SELECT * FROM notify_users WHERE language_code = '{}'".format(language_code)
-    cursor_notify.execute(sql_lc)
+    sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
+    cursor_notify.execute(sql_lc, (language_code,))
     notify_targets = cursor_notify.fetchall()
 
     if len(notify_targets) == 0 and len(notify_users_list) == 0:  # If there's no one on the list, just continue
@@ -2492,7 +2490,8 @@ def ziwen_messages():
                     # True if it's already there, False, if not.
                     is_there = notifier_duplicate_checker(code, mauthor)
                     if not is_there:  # There isn't already an entry for it in there
-                        cursor_notify.execute("INSERT INTO notify_users VALUES ('" + code + "', '" + mauthor + "')")
+                        to_commit = (code, mauthor)
+                        cursor_notify.execute("INSERT INTO notify_users VALUES (? , ?)", to_commit)
                         conn_notify.commit()
                         # Try to get a custom thank you.
                 if converter(final_match_codes[0])[1] in THANKS_WORDS:  # Do we have a thank you word for this lang?
@@ -2530,13 +2529,13 @@ def ziwen_messages():
                 for subscription in all_subscriptions:
                     final_match_codes.append(subscription[0])  # We only want the language codes (no need the username).
                 '''
-                sql_del = "DELETE FROM notify_users WHERE username = '{}'".format(mauthor)
-                cursor_notify.execute(sql_del)
+                sql_del = "DELETE FROM notify_users WHERE username = ?"
+                cursor_notify.execute(sql_del, (mauthor,))
                 conn_notify.commit()
                 
                 # Format the all unsubscribe message
-                all_unsub_msg = "You have been completely unsubscribed from all notifications on r/translator. "
-                all_unsub_msg += "To resubscribe, please [click here]({}).".format(MSG_SUBSCRIBE_LINK)
+                all_unsub_msg = ("You have been completely unsubscribed from all notifications on r/translator. "
+                                 "To resubscribe, please [click here]({}).".format(MSG_SUBSCRIBE_LINK))
                 
                 message.reply(all_unsub_msg + BOT_DISCLAIMER)
             else:  # Should return a list of specific languages the person doesn't want.
@@ -2595,10 +2594,10 @@ def ziwen_messages():
             logger.info("[ZW] Messages: New status request from u/" + mauthor + ".")
             final_match_codes = []
             final_match_names = []
-            sql_stat = "SELECT * FROM notify_users WHERE username = '{}'".format(mauthor)
+            sql_stat = "SELECT * FROM notify_users WHERE username = ?"
 
             # We try to retrieve the languages the user is subscribed to.
-            cursor_notify.execute(sql_stat)
+            cursor_notify.execute(sql_stat, (mauthor,))
             all_subscriptions = cursor_notify.fetchall()  # Returns a list of lists w/ the language code & the username
             for subscription in all_subscriptions:
                 final_match_codes.append(subscription[0])  # We only want the language codes (don't need the username).
@@ -2654,7 +2653,8 @@ def ziwen_messages():
                 match_code = converted_result[0]  # Get just the code
                 final_match_codes.append(match_code)
             for code in final_match_codes:  # Actually add the codes into the database
-                cursor_notify.execute("INSERT INTO notify_users VALUES ('" + code + "', '" + username + "')")
+                to_commit = (code, username)
+                cursor_notify.execute("INSERT INTO notify_users VALUES (?, ?)", to_commit)
                 conn_notify.commit()
         
             final_match_codes_print = ", ".join(final_match_codes)
@@ -2666,16 +2666,16 @@ def ziwen_messages():
 
             final_match_codes = []
 
-            sql_stat = "SELECT * FROM notify_users WHERE username = '{}'".format(username)
+            sql_stat = "SELECT * FROM notify_users WHERE username = ?"
 
             # We try to retrieve the languages the user is subscribed to.
-            cursor_notify.execute(sql_stat)
+            cursor_notify.execute(sql_stat, (username,))
             all_subscriptions = cursor_notify.fetchall()  # Returns a list of lists with both the code and the username.
             for subscription in all_subscriptions:
                 final_match_codes.append(subscription[0])  # We only want the language codes (no need the username).
 
             # Actually delete from database
-            cursor_notify.execute("DELETE FROM notify_users WHERE username = '{}'".format(username))
+            cursor_notify.execute("DELETE FROM notify_users WHERE username = ?", (username,))
             conn_notify.commit()
 
             # Send a message back to the moderator confirming this.
@@ -4355,9 +4355,9 @@ def reference_search(language_match):  # Function to look up reference languages
 
     if len(check_code) != 0:   # There is actually a code from our converter for this.
         logger.debug("[ZW] Run_Reference Code: {}".format(check_code))
-        sql_command = "SELECT * FROM language_cache WHERE language_code = '{}'".format(check_code)
+        sql_command = "SELECT * FROM language_cache WHERE language_code = ?"
         # We try to retrieve the language in question.
-        cursor_reference.execute(sql_command)
+        cursor_reference.execute(sql_command, (check_code,))
         reference_results = cursor_reference.fetchall()
 
         if len(reference_results) != 0:  # We could find a cached value for this language
@@ -4602,8 +4602,8 @@ def edit_finder():
         '''
 
         # Let's retrieve any matching comment text in the cache.
-        get_old_sql = "SELECT * FROM comment_cache WHERE id = '{}'".format(cid)  # Look for previous data for comment ID
-        cursor_cache.execute(get_old_sql)
+        get_old_sql = "SELECT * FROM comment_cache WHERE id = ?"  # Look for previous data for comment ID
+        cursor_cache.execute(get_old_sql, (cid,))
         old_matching_data = cursor_cache.fetchall()  # Returns a list that contains a tuple (comment ID, comment text).
 
         if len(old_matching_data) != 0:  # This comment has previously been stored. Let's check it.
@@ -4645,8 +4645,8 @@ def edit_finder():
                                 force_change = True
 
                 # Code to swap out the stored comment text with the new text. This does NOT force a reprocess.
-                delete_command = "DELETE FROM comment_cache WHERE id = '{}'".format(cid)
-                cursor_cache.execute(delete_command)
+                delete_command = "DELETE FROM comment_cache WHERE id = ?"
+                cursor_cache.execute(delete_command, (cid,))
                 cache_command = "INSERT INTO comment_cache VALUES (?, ?)"
                 insertion_tuple = (cid, cbody)
                 cursor_cache.execute(cache_command, insertion_tuple)
@@ -4665,8 +4665,8 @@ def edit_finder():
                         force_change = True
 
                 if force_change:  # Delete the comment from the processed database to force it to update and reprocess.
-                    delete_comment_command = "DELETE FROM oldcomments WHERE id = '{}'".format(cid)
-                    cursor_processed.execute(delete_comment_command)
+                    delete_comment_command = "DELETE FROM oldcomments WHERE id = ?"
+                    cursor_processed.execute(delete_comment_command, (cid,))
                     conn_processed.commit()
                     logger.info("[ZW] Edit Finder: Removed edited comment `{}` from processed database.".format(cid))
 
@@ -4686,7 +4686,7 @@ def edit_finder():
 
     if cleanup_database:  # There's a need to clean it up.
         cleanup = 'DELETE FROM comment_cache WHERE id NOT IN (SELECT id FROM comment_cache ORDER BY id DESC LIMIT {})'
-        cursor_cache.execute(cleanup.format(comment_limit))
+        cursor_cache.execute(cleanup, (comment_limit,))
 
         # Delete all but the last comment_limit comments.
         conn_cache.commit()
@@ -4972,6 +4972,8 @@ def ziwen_posts():
                 pajo = Ajo(reddit.submission(id=post.id))  # Create an Ajo object, reload the post.
                 ajo_writer(pajo)  # Save it to the local database
                 logger.debug("[ZW] Posts: Created Ajo for new post and saved to local database.")
+
+    return
 
 
 '''
