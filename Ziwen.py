@@ -30,9 +30,9 @@ from _responses import *
 from Data import _ko_romanizer
 
 BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.7.42'
-USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator.'
-              ' Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
+VERSION_NUMBER = '1.7.43'
+USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator. '
+              'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
 '''UNIVERSAL VARIABLES'''
 # This is how many posts Ziwen will retrieve all at once. PRAW can download 100 at a time.
@@ -44,7 +44,7 @@ WAIT = 30
 CLEANCYCLES = 90
 # How long do we allow people to claim a post? (in seconds)
 CLAIM_PERIOD = 28800
-# A boolean that enables the bot to send messages or not. Good for testing.
+# A boolean that enables the bot to send messages or not. Used for testing.
 MESSAGES_OKAY = True
 # A number that defines the soft number of notifications an individual will get in a month *per language*.
 NOTIFICATIONS_LIMIT = 100
@@ -113,7 +113,9 @@ def blacklist_checker_run_once():
     """
     A start-up function that runs once and gets blacklisted usernames from the wiki of r/translatorBOT.
     Blacklisted users are those who have abused the subreddit functions on r/translator but are not banned.
-    This is an anti-abuse system.
+    This is an anti-abuse system, and it also disallows them from crossposting with Ziwen Streamer.
+
+    :return blacklist_usernames: A list of usernames on the blacklist, all in lowercase.
     """
 
     # Retrieve the page.
@@ -128,7 +130,7 @@ def blacklist_checker_run_once():
     # Convert the usernames to lowercase.
     blacklist_usernames = [item.lower() for item in blacklist_usernames]
 
-    # Exclude AutoModerator
+    # Exclude AutoModerator from the blacklist.
     blacklist_usernames.remove("automoderator")
 
     return blacklist_usernames
@@ -139,10 +141,14 @@ def redesign_template_retriever():
     Function that retrieves the current flairs available on the subreddit and returns a dictionary.
     Dictionary is keyed by the old css_class, with the long-form template ID as a value per key.
     Example: 'cs': XXXXXXXX
+
+    :return new_template_ids: A dictionary containing all the templates on r/translator.
+    :return: An empty dictionary if it cannot find the templates for some reason.
     """
 
     new_template_ids = {}
 
+    # Access the templates on the subreddit.
     for template in r.flair.link_templates:
         css_associated_code = template["css_class"]
         new_template_ids[css_associated_code] = template['id']

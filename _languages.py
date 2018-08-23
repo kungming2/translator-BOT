@@ -380,10 +380,10 @@ CJK_LANGUAGES = {"Chinese": ['Chinese', 'Min Dong Chinese', 'Classical Chinese',
                              'Pu-Xian Chinese', 'Huizhou Chinese', 'Min Zhong Chinese', 'Gan Chinese', 'Hakka Chinese',
                              'Xiang Chinese', 'Min Bei Chinese', 'Min Nan Chinese', 'Wu Chinese', 'Yue Chinese',
                              'Cantonese', 'Late Middle Chinese', 'Old Chinese'],
-                "Japanese": ['Japanese', 'Old Japanese', 'Northern Amami-Oshima', 'Southern Amami-Oshima', 'Kikai',
-                             'Toku-No-Shima', 'Kunigami', 'Oki-No-Erabu', 'Central Okinawan', 'Yoron', 'Miyako',
-                             'Yaeyama', 'Yonaguni'],
-                "Korean": ['Korean', 'Middle Korean', 'Old Korean', 'Jejueo']}
+                 "Japanese": ['Japanese', 'Old Japanese', 'Northern Amami-Oshima', 'Southern Amami-Oshima', 'Kikai',
+                              'Toku-No-Shima', 'Kunigami', 'Oki-No-Erabu', 'Central Okinawan', 'Yoron', 'Miyako',
+                              'Yaeyama', 'Yonaguni'],
+                 "Korean": ['Korean', 'Middle Korean', 'Old Korean', 'Jejueo']}
 
 # These are lists of language learning or country subreddits associated with a specific language.
 # The language learning one should be the FIRST one in the list. The rest can be country or cultural ones.
@@ -790,6 +790,7 @@ def fuzzy_text(word):
 def alternate_search(searchfor, is_supported):
     """
     Values should be a dictionary. This allows us to look for alternate names of a language.
+
     :param searchfor: language name that we are interested in.
     :param is_supported: Whether or not it's a supported language on r/translator.
     :return:
@@ -813,7 +814,9 @@ def alternate_search(searchfor, is_supported):
 
 def transbrackets_new(title):
     """
-    A simple function that takes a bracketed tag, moves the bracketed component to the front.
+    A simple function that takes a bracketed tag and moves the bracketed component to the front.
+    It will also work if the bracketed section is in the middle of the sentence.
+
     :param title: A title which has the bracketed tag at the end, or in the middle.
     :return: The transposed title, with the tag properly at the front.
     """
@@ -836,6 +839,7 @@ def transbrackets_new(title):
 def lang_code_search(search_term, script_search):
     """
     Returns a tuple: name of a code or a script, is it a script? (that's a boolean)
+
     :param search_term: The term we're looking for.
     :param script_search: A boolean that can narrow down our search to just ISO 15925 script codes.
     :return:
@@ -904,6 +908,7 @@ def lang_code_search(search_term, script_search):
 def country_converter(text_input, abbreviations_okay=True):
     """
     Function that detects a country name in a given word.
+
     :param text_input: Any string.
     :param abbreviations_okay: means it's okay to check the list for abbreviations, like MX or GB.
     :return:
@@ -962,7 +967,9 @@ def converter(language):
     """
     A function that can convert between language names and codes, and also parse additional data.
     This is one of the most crucial components of Ziwen and is very commonly used.
-    Returns a tuple with Code, Name, Supported (boolean), country (if present).
+
+    :param language: Any string that may be a language name or code.
+    :return: A tuple with Code, Name, Supported (boolean), country (if present).
     """
 
     # Set default values
@@ -1158,9 +1165,13 @@ def converter(language):
 
 def country_validator(word_list, language_list):
     """
-    Takes a list of words, check for a country and a matching language.
-    If nothing is found it just returns None.
-    If something is found, returns tuple (lang-COUNTRY, ISO 639-3 code).
+    Takes a list of words, check for a country and a matching language. This allows us to find combinations like de-AO.
+
+    :param word_list: A list of words that may contain a country name.
+    :param language_list: A list of words that may contain a language name.
+
+    :return: If nothing is found it just returns None.
+    :return: If something is found, returns tuple (lang-COUNTRY, ISO 639-3 code).
     """
 
     # Set default values
@@ -1193,7 +1204,6 @@ def country_validator(word_list, language_list):
         for language in language_list:
 
             language_code = converter(language)[0]
-            # print("Language code: {}".format(language_code))
 
             if language_code in LANGUAGE_COUNTRY_ASSOCIATED:  # There's a language assoc. 
                 check_countries = LANGUAGE_COUNTRY_ASSOCIATED.get(language_code)
@@ -1224,8 +1234,14 @@ def country_validator(word_list, language_list):
 def comment_info_parser(pbody, command):
     """
     A function that takes a comment and looks for actable information like languages or words to lookup.
-    This drives commands that take a language variable, like !identify: or !translate:.
+    This drives commands that take a language variable, like `!identify:` or `!translate:`.
     IMPORTANT: The command part MUST include the colon (:), or else it will fail.
+
+    :param pbody: Any text that contains a Ziwen command.
+    :param command: The command we want to parse. For example, `!identify:`.
+    :return: Returns a tuple. The first part is the string that the command should act on. The second part is whether or
+             not it qualifies for "advanced mode" as part of `!identify`. This means it has an additional `!` after
+             the language name or code.
     """
 
     advanced_mode = False
@@ -1299,6 +1315,7 @@ def comment_info_parser(pbody, command):
 def english_fuzz(word):
     """
     A quick function that detects if a word is likely to be "English." Used in replace_bad_english_typing below.
+
     :param word: Any word.
     :return: A boolean. True if it's likely to be a misspelling of the word 'English', false otherwise.
     """
@@ -1313,8 +1330,9 @@ def english_fuzz(word):
 
 def replace_bad_english_typing(title):
     """
-    Function that will replace a misspelling for English
-    :param title: a post title on r/translator, presumably one with a misspelling
+    Function that will replace a misspelling for English, so that it can still pass the title filter routine.
+
+    :param title: A post title on r/translator, presumably one with a misspelling.
     :return: The post title but with any words that were mispellings of 'English' replaced.
     """
 
@@ -1338,6 +1356,11 @@ def replace_bad_english_typing(title):
 def language_mention_search(search_paragraph):
     """
     Returns a list of identified language names from a text. Useful for Wiktionary search and title formatting.
+    This function only looks for more common languages; there are too many ISO 639-3 languages (about 7800 of them),
+    many of which have names that match English words.
+
+    :param search_paragraph: The text that we're going to look for a language name in.
+    :return to_post: None if nothing found; a list of language names found otherwise.
     """
 
     matches = re.findall(r'\b[A-Z][a-z]+', search_paragraph)
@@ -1372,7 +1395,14 @@ def language_mention_search(search_paragraph):
 
 def bad_title_reformat(title_text):
     """
-    Function that takes a badly formatted title and makes it okay. Returns a proper one.
+    Function that takes a badly formatted title and makes it okay. It searches for a language name in the title text.
+    If it finds a language name, then it creates a language tag to it and adds it to the original title.
+    If no language name is found, then the default of "Unknown" is added to the title.
+    This function is used when filtering out posts that violate the guidelines; the user is given this reformatted title
+    as an option they can use to resubmit.
+
+    :param title_text: A problematic Reddit post title that does not match the formatting guidelines.
+    :return new_title: A reformatted title that adheres to the community's guidelines.
     """
 
     listed_languages = language_mention_search(title_text.title())
@@ -1397,7 +1427,7 @@ def bad_title_reformat(title_text):
         new_tag = "[{} > English] ".format(new_language)
     new_title = new_tag + title_text.strip()
 
-    if len(new_title) >= 300:  # There is a hard limit on reddit title lengths
+    if len(new_title) >= 300:  # There is a hard limit on Reddit title lengths
         new_title = new_title[0:299]  # Shorten it.
 
     return new_title
@@ -1406,6 +1436,11 @@ def bad_title_reformat(title_text):
 def detect_languages_reformat(title_text):
     """
     This function tries to salvage a badly formatted title and render it better for the title routine.
+    For example, the title may be: `English to Chinese Lorem Ipsum`. This function can take that and reformat it to
+    make more sense: `[English > Chinese] Lorem Ipsum`
+
+    :param title_text: The title to evaluate and reformat.
+    :return: None if it is unable to make sense of it, a reformatted title otherwise.
     """
 
     title_words_selected = {}  # Create a dictionary
@@ -1422,7 +1457,6 @@ def detect_languages_reformat(title_text):
 
         language_check = language_mention_search(word.title())
         if language_check is not None:
-            # print(word)
             title_words_selected[word] = language_check[0]
 
     for word in title_words_reversed[-7:]:
@@ -1440,9 +1474,7 @@ def detect_languages_reformat(title_text):
             new_title_text = title_text.replace(key, "[" + title_words_selected[key])
 
     for key in sorted(title_words_selected.keys()):
-        # print(title_words_selected[key])
         if title_words_selected[key] == last_language:
-            # print("yes")
             new_title_text = new_title_text.replace(key, title_words_selected[
                 key] + "] ")  # add a bracket to the last found language
 
@@ -1461,6 +1493,9 @@ def app_multiple_definer(title_text):
     """
     This function takes in a title text and returns a boolean as to whether it should be given the 'App' code.
     This is only applicable for 'multiple' posts.
+
+    :param title_text: A title of a Reddit post to evaluate. This will one that would otherwise be a "Multiple" post.
+    :return: True if it *should* be given the 'App' code, False otherwise.
     """
 
     title_text = title_text.lower()
@@ -1473,7 +1508,9 @@ def app_multiple_definer(title_text):
 def multiple_language_script_assessor(language_list):
     """
     A function that takes a list of languages/scripts and determines if it is actually all multiple languages.
-    Returns True if everything is Okay.
+
+    :param language_list: A list of languages and possibly scripts.
+    :return: True if everything is on the list is a language, False if there are in fact script codes in the list.
     """
 
     multiple_status = True
@@ -1494,7 +1531,15 @@ def multiple_language_script_assessor(language_list):
 
 def both_non_english_detector(source_language, target_language):
     """
-    Takes two lists and returns the languages for notifying or None if there's nothing to return.
+    This function evaluates two lists of languages: One list is source languages, one list is target languages.
+    Its purpose is to evaluate if it is a true request for two non-English requests (e.g. [French > Catalan])
+    If it detects "English" in both lists, though, then it's not a true non-English request since the user can accept
+    English as one of their options.
+    The importance of this is because Ziwen will send notifications to both languages if the request is non-English.
+
+    :param source_language: A list of source language names for a post.
+    :param target_language: A list of target language names for a post.
+    :return: A list of the languages for notifying, or None if there's nothing to return.
     """
 
     all_languages = list(set(source_language + target_language))
@@ -1511,15 +1556,17 @@ def both_non_english_detector(source_language, target_language):
 def determine_title_direction(source_languages_list, target_languages_list):
     """
     Function takes two language lists and determines what the direction of the request is.
-    Used in Ajos and Wenyuan uses it for statistics as well..
+    This statistic is stored in Ajos and Wenyuan uses it for statistics as well.
+
+    :param source_languages_list: A list of languages that are determined to be the source.
+    :param target_languages_list: A list of languages that are determined to be the target.
+    :return: One of four variables: (english_from, english_to, english_both, english_none)
     """
 
     # Create local lists to avoid changing the main function's lists
     source_languages_local = list(source_languages_list)
     target_languages_local = list(target_languages_list)
 
-    # Quick function to determine the direction of a title.
-    # Expected output as strings: english_to, english_from, english_both, english_none
     # Exception to be made for languages with 'English' in their name like "Middle English"
     # Otherwise it will always return 'english_both'
     if all('English' in item for item in source_languages_local) and len(source_languages_local) > 1:
@@ -1547,7 +1594,12 @@ def determine_title_direction(source_languages_list, target_languages_list):
 
 def final_title_salvager(d_source_languages, d_target_languages):
     """
-    This function takes two list of languages and tries to salvage SOMETHING out of them.
+    This function takes two list of languages and tries to salvage SOMETHING out of them. This is used for titles
+    that are just plain incomprehensible and is a last-ditch function by title_format() below.
+
+    :param d_source_languages: A list of languages that are determined to be the source.
+    :param d_target_languages: A list of languages that are determined to be the target.
+    :return: None if it's unable to comprehend the list of languages. A tuple with a CSS code and text otherwise.
     """
 
     all_languages = d_source_languages + d_target_languages  # Combine the two
@@ -1566,10 +1618,24 @@ def final_title_salvager(d_source_languages, d_target_languages):
 
 def title_format(title, display_process=False):
     """
-    Function to help format a title. It should return a tuple with lists:
-    Source languages, target languages, CSS class, CSS text, and title.
-    :param: display_process is a boolean that allows us to see the steps taken.
-    :param: title is simply the title of the post to evaluate.
+    This is the main function to help format a title and to determine information from it.
+    The creation of Ajos relies on this process, and the flair and flair text that's assigned to an incoming post is
+    also determined by this central function.
+
+    This is also a rather unruly function because it's probably the function that been added to and extended the most.
+
+    :param display_process: is a boolean that allows us to see the steps taken (a sort of debug mode, Wenyuan uses it).
+    :param title: The title of the r/translator post to evaluate.
+    :return: d_source_languages: A list of languages that the function determines are the source.
+             d_target_languages: A list of languages that the function determines are the target.
+             final_css: The determination of what CSS code the title should get (usually the language's code).
+             final_css_text: The determination of what CSS text the title should get (usually the language name).
+             actual_title: The title of the post minus its language tag.
+             processed_title: The title of the post as processed by the routine (including modifications by other
+                              functions listed above).
+             notify_languages: (optional) If there are more languages to notify for than just the main one.
+             language_country: (optional) A country specified for the language, e.g. Brazil for Portuguese.
+             direction: What translation direction (relative to English) the post is for.
     """
 
     source_language = target_language = country_suffix_code = ""  # Set defaults
@@ -1607,13 +1673,6 @@ def title_format(title, display_process=False):
         title = title.replace(" TO ", " to ")
         title = title.replace(" tO ", " to ")
 
-    # if "(" in title and "[" not in title: # Replacing parantheses with brackets
-    #    title = title.split('(', 1)[-1]
-    #    title = title.replace("("," [ ")
-    #    print(title)
-    # elif ")" in title and "]" not in title:
-    #    title = title.replace(")"," ] ")
-
     if "]" not in title and "[" not in title and re.match("\((.+(>| to ).+)\)", title):
         # This is for cases where we have no square brackets but we have a > or " to " between parantheses instead.
         # print("Replacing parantheses...")
@@ -1630,10 +1689,8 @@ def title_format(title, display_process=False):
         if reformat_example is not None:
             title = reformat_example
 
-    # Some regex magic
-    # Replace things like [Language] >/- [language]
+    # Some regex magic, replace things like [Language] >/- [language]
     title = re.sub(r'(\]\s*[>\\-]\s*\[)', " > ", title)
-    # title = re.sub(r'(\]\s{0,}(>|-)\s{0,}\[)', " > ", title)
 
     # Code for taking out the country (most likely from cross-posts)
     if "{" in title and "}" in title and "[" in title:  # Probably has a country name in it.
@@ -1695,7 +1752,7 @@ def title_format(title, display_process=False):
         if " into " in title[0:30]:
             title = title.replace("into", ">")
 
-    if "KR " in title.upper()[0:10]:  # KR is technically Kanuri but no one actually means it to be
+    if "KR " in title.upper()[0:10]:  # KR is technically Kanuri but no one actually means it to be Kanuri.
         title = title.replace("KR ", "Korean ")
     
     # If all people write is [Unknown], account for that, and just send it back right away.
@@ -1723,16 +1780,12 @@ def title_format(title, display_process=False):
     elif "<" in title and ">" not in title:
         source_language = title.split('>')[0]
 
-    # for character in source_language:
-    #    if character == "-" or character == "/" or character == "[" or character == "("  or character == "." or character == "?" or character == ",":
-    #        source_language = source_language.replace(character," ")
     source_language = re.sub(r"""
                            [,.;@#?!&$()\[\]/“”’"•]+  # Accept one or more copies of punctuation
                            \ *           # plus zero or more copies of a space,
                            """,
                              " ",  # and replace it with a single space
                              source_language, flags=re.VERBOSE)
-    # print(source_language)
     source_language = source_language.title()
     source_language = source_language_original = source_language.split()  # Convert it from a string to a list
 
@@ -1794,10 +1847,6 @@ def title_format(title, display_process=False):
         for character in target_language:
             if character == "," or character == "/" or character == "]" or character == ")" or character == "." or character == ":":
                 target_language = target_language.replace(character, " ")
-
-    # Segment to split with commas...
-    # Something like [English > Old English, German, French] where's it's clearly defined.
-    # We're not putting this in now but something to think for the future perhaps...
 
     # Replace punctuation in the string. Not yet divided.
     target_language = re.sub(r"""
@@ -1903,10 +1952,6 @@ def title_format(title, display_process=False):
             final_css = converter(combined_total[0])[0]
         else:
             final_css = 'en'  # Obviously it was just English
-        '''
-        else:  # English is not any of them. Take the source language.
-            final_css = converter(str(d_source_languages[0]))[0]
-        '''
 
     # Check to see if there is an "or" in the target languages
     test_chunk = title.split(']', 1)[0]  # Split it at the tag boundary and take the first part.
@@ -1933,12 +1978,10 @@ def title_format(title, display_process=False):
             # Looks like it really does have more than two non-English target languages.
             final_css = "multiple"  # Then we assign it the "multiple" CSS
             notify_languages = d_target_languages
-            # Put notify_languages here
 
     language_country = None
 
     if not has_country:  # There isn't a country digitally in the source language part.
-        # print("Checking for regions...")
         # Now we check for regional variations.
         source_country_data = country_validator(source_language_original, d_source_languages)
         target_country_data = country_validator(target_language_original, d_target_languages)
@@ -2072,6 +2115,17 @@ def main_posts_filter(otitle):
     """
     A functionized filter for title filtering (removing posts that don't match the formatting guidelines).
     This was decoupled from ziwen_posts in order to be more easily maintained and to allow Wenyuan to use it.
+
+    :param otitle: Any potential or actual r/translator post title.
+    :return: post_okay: A boolean determining whether the post fits the community formatting guidelines.
+             otitle: A currently unused variable that would potentially allow this function to change the title text.
+             filter_reason: If the post violates the rules, the filter_reason is a one/two-letter code indicating
+                            what particular formatting rule it violated.
+                            1: The title contained none of the required keywords.
+                            1A: The title contained a string like "to English" but it was not in the first part of it.
+                            1B: The title was super short and generic. (e.g. 'Translation to English')
+                            2: The title contained the important symbol `>` but it was randomly somewhere in the title.
+                            EE: (not activated here) English-only post. (e.g. 'English > English')
     """
 
     post_okay = True
@@ -2102,7 +2156,7 @@ def main_posts_filter(otitle):
                 print("[L] Main_Posts_Filter: > Filtered a post out due to incorrect title format. Rule: #" + filter_reason)
                 post_okay = False  # Since it's a bad post title, we don't need to process it anymore.
 
-            # Added a rule 1B, basically this checks for super short things like 'Translation to English'
+            # Added a Rule 1B, basically this checks for super short things like 'Translation to English'
             # This should only activate if 1A is not triggered.
             if len(otitle) < 35 and filter_reason is None and '[' not in otitle:
 
