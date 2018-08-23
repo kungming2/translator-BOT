@@ -80,12 +80,16 @@ BOT_DISCLAIMER_EXCHANGE = ("\n\n---\n^Huiban: ^a ^bot ^for ^r/LanguageSwap ^| "
                            "^[Contact](https://www.reddit.com/message/compose/?to=kungming2&subject=About+Huiban+Bot)")
 
 
-'''DEFINING LOGIN INFO'''
+'''DEFINING LOGIN CREDENTIALS'''
 
 
 def credentials_loader():
     """
     A simple function that takes the login credentials in a JSON file and converts them to global variables to use.
+    The keys for the variables are the same as the ones used elsewhere in these scripts (e.g. USERNAME).
+
+    :param: None
+    :return: This function declares the variables it reads from the JSON file as global variables in Python.
     """
 
     # Access the JSON file with the credentials.
@@ -96,12 +100,13 @@ def credentials_loader():
     # Convert the JSON data into a dictionary.
     login_data = json.loads(login_data)
 
-    # Declare them.
+    # Declare the variables.
     globals().update(login_data)
 
     return
 
 
+# Load the credentials from the JSON file.
 credentials_loader()
 
 ''' LOGGING '''
@@ -111,8 +116,7 @@ logformatter = '%(levelname)s: %(asctime)s - %(message)s'
 logging.basicConfig(format=logformatter, level=logging.INFO)  # By default only show INFO or higher levels.
 logger = logging.getLogger(__name__)
 
-# Define Logging handler (file to write to with formatting.)
-# Example use: logger.info("Okay")
+# Define the logging handler (the file to write to with formatting.)
 handler = logging.FileHandler(FILE_ADDRESS_EVENTS)
 handler.setLevel(logging.INFO)  # Change this level for debugging or to display more information.
 handler_format = logging.Formatter(logformatter, datefmt="%Y-%m-%d [%I:%M:%S %p]")
@@ -125,6 +129,8 @@ logger.addHandler(handler)
 def get_random_useragent():
     """
     Simple function that chooses items for use in `requests` from the list above.
+
+    :param: None.
     :return: It outputs a dictionary.
     """
 
@@ -150,10 +156,17 @@ def error_log_basic(entry, bot_version):
     A function to save errors to a log for later examination.
     This one is more basic and does not include the last comments or submission text.
     The advantage is that it can be shared between different routines, as it does not depend on PRAW.
+
+    :param entry: The text we wish to include in the error log entry. Typically this is the traceback.
+    :param bot_version: The version of the script that's writing this error entry (e.g. Ziwen, Wenyuan).
+    :return: Nothing.
     """
-    f = open(FILE_ADDRESS_ERROR, 'a+', encoding='utf-8')  # File address for the error log, cumulative.
+
+    # Open the file for the error log in appending mode.
+    f = open(FILE_ADDRESS_ERROR, 'a+', encoding='utf-8')
     current_entries = f.read()
 
+    # If this hasn't already been recorded, add it.
     if entry not in current_entries:
         error_date_format = strftime("%Y-%m-%d [%I:%M:%S %p]")
         f.write("\n-----------------------------------\n{} ({})\n{}".format(error_date_format, bot_version, entry))
@@ -166,7 +179,7 @@ def action_counter(messages_number, action_type):
     """
     Function takes in a number and an action type and writes it to a file.
 
-    :param messages_number: The number of actions to record. Typically 1, but more for some (like notifications)
+    :param messages_number: The number of actions to record. Typically 1, but more for some (like notifications).
     :param action_type: The type of action, as a string. Usually a command.
     :return: This function does not return anything.
     """

@@ -11,7 +11,7 @@ import itertools
 
 from fuzzywuzzy import fuzz  # When installing, use fuzzywuzzy[speedup]
 
-VERSION_NUMBER_LANGUAGES = "1.6.19"
+VERSION_NUMBER_LANGUAGES = "1.6.20"
 
 # Access the CSV with ISO 639-3 and ISO 15924 data.
 lang_script_directory = os.path.dirname(__file__)  # <-- absolute dir the script is in
