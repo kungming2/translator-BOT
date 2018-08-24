@@ -4901,7 +4901,7 @@ def ziwen_posts():
                 logger.info("[ZW] Posts: Title formatting routine couldn't make sense of '{}'.".format(otitle))
 
             # Check to see if we should add (Long) to the flair. There's a YouTube test and a text length test.
-            if POSTS_KEYWORDS[0] in ourl or POSTS_KEYWORDS[1] in ourl:
+            if "youtube.com" in ourl or "youtu.be" in ourl:
                 # This changes the CSS text to indicate if it's a long YouTube video
                 try:
                     # Let's try to get the length of the video.

@@ -213,16 +213,6 @@ SUPPORTED_ALTERNATE = {'am': ['Ethiopian', 'Ethiopia', 'Ethopian', 'Ethiopic', '
                        'om': ['Oromoo', 'Oromiffa', 'Oromifa', 'Oromos'], 'ota': ['Ottoman'], 'pi': ['Pāli'],
                        'ug': ['Uighur']}
 
-# These are keywords that must be included in titles. If they don't include this, it'll be rejected and filtered out.
-REQUIRED_KEYWORDS = ['>', "to English", "English to", "- Eng", "- English", "- EN", ">EN", "-Eng", "-English", "-EN",
-                     "English-", "English -", "< English", "English <", "[Unknown]", "<English", "<english",
-                     "< english", "to english", "english to", "ENG -", "ENG-", "~ English", "English ~", "[unknown]",
-                     "english <", "English <", "English<", "English To", "To English", "To english", "english To",
-                     "- english", "-english", "~ English", "English ~", "to Eng", "Eng to", "[Community]", "[Meta]",
-                     "[META]"]
-# Below are keywords used to help filtering the posts that come in, but not to remove them per se.
-POSTS_KEYWORDS = ["youtube.com", "youtu.be", "to english", "english to"]
-
 # Following lists are lists of ISO codes, in their ISO 639-1/3 equivalents and their names.
 ISO_639_1 = ['ab', 'aa', 'af', 'ak', 'sq', 'am', 'ar', 'an', 'hy', 'as', 'av', 'ae', 'ay', 'az', 'bm', 'ba', 'eu', 'be',
              'bn', 'bh', 'bi', 'bs', 'br', 'bg', 'my', 'ca', 'ch', 'ce', 'ny', 'zh', 'cv', 'kw', 'co', 'cr', 'hr', 'cs',
@@ -285,9 +275,9 @@ ISO_639_1_ALTERNATE = {'aa': ['Afaraf'], 'ab': ['Abxazo', 'Abkhazian'], 'ae': ['
                        'bh': ['Bhojpuri', 'Maithili', 'Magahi'], 'cv': ["Bulgar"],
                        'dv': ['Divehi', 'Maldivian', 'Divehli'],
                        'en': ['Ingles', 'Inggeris', 'Englisch', 'Inglese', 'Inglesa', 'Engrish', 'Enlighs', 'Engilsh',
-                              'Enlish', 'Englishe', 'Engish', 'Engelish', 'Engliah', 'Englisg', 'England', 'Englsih',
+                              'Enlish', 'Englishe', 'Engish', 'Engelish', 'Engliah', 'Englisg', 'Englsih',
                               'Englkish', 'Engilish', 'Enlglish', 'Englsh', 'Enghlish', 'Engligh', 'Englist', 'Engkish',
-                              'Ensglish', 'Enhlish', 'Английский', 'английский', 'Inggris', 'Englische', '英語', '영어'
+                              'Ensglish', 'Enhlish', 'Английский', 'Inggris', 'Englische', '英語', '영어',
                               'Anglais', 'Engels', 'Engelsk', 'İngilizce', '英文'],
                        'ff': ['Fulah'], 'gl': ['Gallego'],
                        'gv': ['Gailck', 'Manx Gaelic'], 'ha': ['Haoussa', 'Hausawa'], 'ig': ['Ibo'],
@@ -2111,6 +2101,60 @@ def title_format(title, display_process=False):
         actual_title, processed_title, notify_languages, language_country, direction
 
 
+def main_posts_filter_required_keywords():
+    """
+    This function takes the language name list and a series of okay words for English and generates a list of keywords
+    that we can use to enforce the formatting requirements. This is case-insensitive and also allows more flexibility
+    for non-English requests.
+
+    :return: A dictionary with two keys: `total`, and `to_phrases`.
+    """
+
+    possible_strings = {'total': [], 'to_phrases': []}
+
+    # Create a master list of words for "English"
+    words_for_english = ['english', 'en', 'eng', 'englisch', 'англи́йский', '英語', '英文']
+    '''
+    words_for_english_more = []  # If we want to add the misspellings as well.
+    for word in ISO_639_1_ALTERNATE['en']:  # Fetch data from the alternate spelling dictionary.
+        words_for_english_more.append(word.lower())
+    words_for_english += words_for_english_more
+    '''
+
+    # Create a list of connecting words between languages.
+    words_connection = [">", "to", "<", "〉", "›", "》", "»", "⟶", "→", "~"]
+
+    # Add to the list combinations with 'English' that are allowed.
+    for word in words_for_english:
+        for connector in words_connection:
+            temporary_list = [" {} {}".format(connector, word), "{} {} ".format(word, connector)]
+
+            if connector != "to":
+                temporary_list.append("{}{}".format(connector, word))
+                temporary_list.append("{}{}".format(word, connector))
+            else:
+                possible_strings['to_phrases'] += temporary_list
+            possible_strings['total'] += temporary_list
+
+    # Add to the list combinations with language names that are allowed.
+    for language in SUPPORTED_LANGUAGES:
+        language_lower = language.lower()
+        for connector in words_connection:
+            temporary_list = [" {} {}".format(connector, language_lower), "{} {} ".format(language_lower, connector)]
+
+            if connector != "to":
+                temporary_list.append("{}{}".format(connector, language_lower))
+                temporary_list.append("{}{}".format(language_lower, connector))
+            else:
+                possible_strings['to_phrases'] += temporary_list
+            possible_strings['total'] += temporary_list
+
+    # Function tags.
+    possible_strings['total'] += ['>', '[unknown]', '[community]', '[meta]']
+
+    return possible_strings
+
+
 def main_posts_filter(otitle):
     """
     A functionized filter for title filtering (removing posts that don't match the formatting guidelines).
@@ -2131,7 +2175,12 @@ def main_posts_filter(otitle):
     post_okay = True
     filter_reason = None
 
-    if not any(keyword in otitle for keyword in REQUIRED_KEYWORDS):
+    # Obtain a list of keywords that we will allow.
+    main_keywords = main_posts_filter_required_keywords()
+    mandatory_keywords = main_keywords['total']
+    to_phrases_keywords = main_keywords['to_phrases']
+
+    if not any(keyword in otitle.lower() for keyword in mandatory_keywords):
         # This is the same thing as AM's content_rule #1. The title does not contain any of our keywords.
         # But first, we'll try to salvage the title into something we can work with.
         otitle = replace_bad_english_typing(otitle)  # This replaces any bad words for "English"
@@ -2144,16 +2193,18 @@ def main_posts_filter(otitle):
             post_okay = False
         '''
 
-        if not any(keyword in otitle for keyword in REQUIRED_KEYWORDS):  # Try again
+        if not any(keyword in otitle.lower() for keyword in mandatory_keywords):  # Try again
             filter_reason = '1'
-            print("[L] Main_Posts_Filter: > Filtered a post out due to incorrect title format. Rule: #" + filter_reason)
+            print("[L] Main_Posts_Filter: > Filtered a post with an incorrect title format. Rule: #" + filter_reason)
             post_okay = False
     elif ">" not in otitle:  # Try to take out titles that bury the lede.
-        if POSTS_KEYWORDS[2] in otitle.lower() or POSTS_KEYWORDS[3] in otitle.lower():
-            if POSTS_KEYWORDS[2] not in otitle.lower()[0:30] and POSTS_KEYWORDS[3] not in otitle.lower()[0:30]:
-                # This means the "to english" part is probably all the way at the end. Take it out.
+
+        if any(phrase in otitle.lower() for phrase in to_phrases_keywords):
+
+            if not any(phrase in otitle.lower()[:25] for phrase in to_phrases_keywords):
+                # This means the "to LANGUAGE" part is probably all the way at the end. Take it out.
                 filter_reason = '1A'
-                print("[L] Main_Posts_Filter: > Filtered a post out due to incorrect title format. Rule: #" + filter_reason)
+                print("[L] Main_Posts_Filter: > Filtered a post with an incorrect title format. Rule: #" + filter_reason)
                 post_okay = False  # Since it's a bad post title, we don't need to process it anymore.
 
             # Added a Rule 1B, basically this checks for super short things like 'Translation to English'
@@ -2171,7 +2222,7 @@ def main_posts_filter(otitle):
                 if listed_languages is None or len(listed_languages) == 0:
                     filter_reason = '1B'
                     post_okay = False
-                    print("[L] Main_Posts_Filter: > Filtered a post out that had no valid language. Rule: #" + filter_reason)
+                    print("[L] Main_Posts_Filter: > Filtered a post with no valid language. Rule: #" + filter_reason)
     if ">" in otitle and "]" not in otitle and ">" not in otitle[0:50]:
         # If people tack on the languages as an afterthought, it can be hard to process.
         filter_reason = '2'
