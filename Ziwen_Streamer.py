@@ -141,7 +141,7 @@ def streamer_duplicate_checker(post_author, original_title):
     This is meant to work with both text-only (self) posts and link posts.
 
     :param post_author: The post's original author (that is, not the bot).
-    :param: original_title: The original title of the post.
+    :param original_title: The original title of the post.
     :return: True if this post has been posted before, and False if it hasn't.
     """
     
