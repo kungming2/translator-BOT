@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+"""
+Ziwen Streamer [ZWS] is a separate component of Ziwen that monitors *all* Reddit commands for certain keywords.
+Its primary responsibilities are to watch for crossposting commands and mentions of the subreddit.
+
+Ziwen Streamer is much simpler than the main routine and does not rely on any local databases, and it also has a
+separate app ID key than the main one with which it connects to Reddit.
+"""
 
 import datetime
 import time
@@ -8,55 +15,62 @@ import traceback
 import praw
 import prawcore
 
+# Import local components.
 from _config import *
 from _responses import *
-from _languages import *  # Import all the languages
+from _languages import *
 
 # Dynamically change which subreddit to crosspost to.
 if sys.platform == "linux":  # Linux
     SUBREDDIT = "translator"
-else:  # Windows
+else:  # Windows, testing.
     SUBREDDIT = 'trntest'
 
-XPOST_KEYWORDS = ['!translate', '!translator', 'r/translate', 'r/translator']
+
+'''KEYWORDS LISTS'''
+# The keywords Ziwen Streamer watches for.
+STREAMER_KEYWORDS = ['!translate', '!translator', 'r/translate', 'r/translator']
+# These are keywords we DON'T want to match for r/translate correction. Mostly Internet TLDs and one subreddit.
 EXCLUDED_DETECT_KEYWORDS = ['.fr', '.ar', '.cr', '.gr', '.ir', '.nr', '.tr', '.kr', 'r/translater']
-# These are keywords we DON'T want to match for r/translate detection. Mostly Internet TLDs and one subreddit.
-EXCLUDED_MENTION_SUBREDDITS = ["r/translator", "r/translatorbot"]
 # These are subreddits to ignore when tracking mentions of r/translator.
+EXCLUDED_MENTION_SUBREDDITS = ["r/translator", "r/translatorbot"]
+# These are users to ignore when tracking mentions of r/translator.
 EXCLUDED_MENTION_USERS = ["AutoModerator", "translator-BOT", "kungming2", "ImagesOfNetwork", "TrendingCommenterBot",
                           "TotesMessenger", "sneakpeekbot", "ContentForager", "transcribot", "SmallSubBot"]
-# These are users to ignore when tracking mentions of r/translator.
 
 BOT_NAME = 'Ziwen Streamer'
-VERSION_NUMBER = '1.1.19'  # This version uses native crossposts.
+VERSION_NUMBER = '1.1.20'
 USER_AGENT = ('{} {}, a runtime to watch comments on Reddit for reposting translation requests to r/translator. '
               'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
 
-print('|======================Logging in as u/translator-BOT...======================|')
+'''CONNECTING TO REDDIT'''
+logger.info('[ZWS] Startup: Logging in as u/{}...'.format(USERNAME))
 reddit = praw.Reddit(client_id=ZIWEN_STREAMER_APP_ID,
                      client_secret=ZIWEN_STREAMER_APP_SECRET, password=PASSWORD,
                      user_agent=USER_AGENT, username=USERNAME)
 r = reddit.subreddit(SUBREDDIT)
-
-print('|=============================================================================|')
-print('  Initializing ' + BOT_NAME + ' ' + VERSION_NUMBER + ' for r/translator...\n')
-print('  with languages module {}'.format(VERSION_NUMBER_LANGUAGES))
-print('|=============================================================================|')
+logger.info('[ZWS] Startup: Initializing {} {} for r/{} with languages module {}.'.format(BOT_NAME, VERSION_NUMBER,
+                                                                                          SUBREDDIT,
+                                                                                          VERSION_NUMBER_LANGUAGES))
 
 
 def first_user_check(username):
-    """A quick check as to whether someone posted on our subreddit before.
-    Returns True if they have, False if they have not."""
+    """
+    A function that conducts a quick check as to whether someone posted on r/translator before.
+
+    :return: Returns True if they have, False if they have not.
+    """
+
     past_subreddits = []
+
     try:
         for submission in reddit.redditor(username).submissions.new(limit=200):
             # Check the last two hundred submissions of a user, see if they have submitted to our sub before.
             ssubreddit = submission.subreddit_name_prefixed[2:]  # Get the raw name of the subreddit.
             past_subreddits.append(ssubreddit)
             if ssubreddit == "translator":
-                has_posted = True
-                return has_posted
+                return True
             else:
                 continue
         if "translator" not in past_subreddits:
@@ -65,7 +79,15 @@ def first_user_check(username):
         return False
 
 
-def is_user_mod(username, subreddit_name):  # Checking if a user is a moderator in the sub they posted in.
+def is_user_mod(username, subreddit_name):
+    """
+    This function checks to see if a user is a moderator in the sub they posted in.
+
+    :param username: The username of the person.
+    :param subreddit_name: The subreddit in which they posted a comment.
+    :return: True if they are a moderator, False if they are not.
+    """
+
     moderators_list = []  # Make a list of the subreddit moderators.
 
     for moderator in reddit.subreddit(subreddit_name).moderator():
@@ -78,10 +100,15 @@ def is_user_mod(username, subreddit_name):  # Checking if a user is a moderator 
 
 
 def blacklist_checker(b_username, b_subreddit):
-    """Function that checks if a user or subreddit is blacklisted. Blacklisted users are users who have abused the 
-    crossposting function or the subreddit's rules. Blacklisted subreddits are subreddits where use of crossposting
-    commands would cause problems. (e.g. r/duckduckgo, as !translate is a DDG command)
-    This function would return a boolean. True if it matches either criterion.
+    """
+    This is a function that checks if a user or subreddit is blacklisted.
+    Blacklisted users are users who have abused the crossposting function or the subreddit's rules.
+    Blacklisted subreddits are subreddits where use of crossposting commands would cause problems.
+    (e.g. r/duckduckgo, as !translate is a DuckDuckGo command)
+
+    :param b_username: The username we're checking against.
+    :param b_subreddit: The subreddit we're checking against.
+    :return: True if it matches *either* criterion.
     """
 
     b_username = b_username.lower()
@@ -109,11 +136,13 @@ def blacklist_checker(b_username, b_subreddit):
 
 
 def streamer_duplicate_checker(post_author, original_title):
-    """ Function to check if something has been submitted by the bot for a crosspost to r/translator before.
+    """
+    Function to check if something has been submitted by the bot for a crosspost to r/translator before.
     This is meant to work with both text-only (self) posts and link posts.
-    It will return True if it has been posted before, and False if it hasn't (standard operation)
-    param: post_author, the post's original author (that is, not the bot)
-    param: original_title, the original title of the post. 
+
+    :param post_author: The post's original author (that is, not the bot).
+    :param: original_title: The original title of the post.
+    :return: True if this post has been posted before, and False if it hasn't.
     """
     
     # A list where we put the titles of things that match. 
@@ -155,20 +184,27 @@ def streamer_duplicate_checker(post_author, original_title):
 
 
 def ziwen_streamer():
-    """ The main cross-posting function for Ziwen. It was split off from the main runtime to enable independent
-    cross-posting from anywhere on Reddit.
+    """
+    The main monitoring function for Ziwen Streamer. It was split off from the main runtime to enable independent
+    crossposting from anywhere on Reddit.
+    This function also watches for mentions of the subreddit as an in-house self-written version of r/Sub_Notifications.
+    Ziwen Streamer also posts corrections if people accidentally link to r/translate instead, as it is a subreddit that
+    is frequently mistaken for r/translator (and redirects there).
+
+    :return: Nothing.
     """
 
-    print("\n# Streaming...")
+    logger.info("[ZWS] Streamer routine starting up...")
+
     for comment in reddit.subreddit('all').stream.comments():  # Watching the stream...
 
         pbody = comment.body.lower()
 
-        if not any(key.lower() in pbody for key in XPOST_KEYWORDS):
+        if not any(key.lower() in pbody for key in STREAMER_KEYWORDS):
             # Does not contain our keyword
             continue
 
-        if XPOST_KEYWORDS[2] in pbody:  # for r/translate checks...
+        if STREAMER_KEYWORDS[2] in pbody:  # for r/translate checks...
             if any(key.lower() in pbody for key in EXCLUDED_DETECT_KEYWORDS):
                 # Contains an UNWANTED KEYWORD:
                 continue
@@ -200,7 +236,7 @@ def ziwen_streamer():
             continue
 
         # ADD CHECK FOR COMMANDS THAT ARE LONGER AND NOT EXACT (say !translateme, or !translators)
-        if XPOST_KEYWORDS[0] in pbody or XPOST_KEYWORDS[1] in pbody:
+        if STREAMER_KEYWORDS[0] in pbody or STREAMER_KEYWORDS[1] in pbody:
             if '!translate' in pbody and "!translate:" not in pbody:
                 accurate_test = pbody.split("!translate", 1)[1]
                 if accurate_test == "" or accurate_test[0] == " ":
@@ -228,17 +264,15 @@ def ziwen_streamer():
         
         # If either are on the blacklist (that is, either are True), skip.
         if blacklist_requester_test or blacklist_op_test:
-            if XPOST_KEYWORDS[2] not in pbody and pauthor != "AutoModerator":  # Exclude r/translate mentions
+            if STREAMER_KEYWORDS[2] not in pbody and pauthor != "AutoModerator":  # Exclude r/translate mentions
                 # print("> User or subreddit is on my blacklist. See link at https://redd.it/{}.".format(oid))
-                logger.info("[ZWS] > User or subreddit is blacklisted. See https: // www.reddit.com{}.".format(opermalink))
+                logger.info("[ZWS] > User/subreddit is blacklisted. See https://www.reddit.com{}.".format(opermalink))
                 continue
 
         if '!translated' in pbody:  # Let's not cross post if it's an accidental use of this command.
             if 'trntest' not in opermalink:  # No need to note test commands.
-                log_info = ("[ZWS] > This is probably an accidental use of an r/translator command outside the subreddit at "
-                            "https: // www.reddit.com{}\n".format(opermalink))
-                # print(log_info)
-                logger.info(log_info)
+                logger.info("[ZWS] > This is probably an accidental use of an r/translator command outside the "
+                            "subreddit at https://www.reddit.com{}\n".format(opermalink))
             continue
 
         if ois_self:
@@ -252,7 +286,7 @@ def ziwen_streamer():
         if oreddit in TESTING_SUBREDDITS and SUBREDDIT != "trntest":  # This is a subreddit we don't need to note.
             continue
 
-        if XPOST_KEYWORDS[0] in pbody or XPOST_KEYWORDS[1] in pbody:
+        if STREAMER_KEYWORDS[0] in pbody or STREAMER_KEYWORDS[1] in pbody:
             parent_comment_mode = False
             parent_comment_text = None
 
@@ -265,9 +299,9 @@ def ziwen_streamer():
             if '!translate:' in pbody or '!translator:' in pbody:  # Try to get the language if it's mentioned
                 match_data = None
 
-                if XPOST_KEYWORDS[0] in pbody:
+                if STREAMER_KEYWORDS[0] in pbody:
                     match_data = comment_info_parser(pbody, '!translate:')
-                elif XPOST_KEYWORDS[1] in pbody:
+                elif STREAMER_KEYWORDS[1] in pbody:
                     match_data = comment_info_parser(pbody, '!translator:')
 
                 if match_data is not None:  # We found a language included.
@@ -399,7 +433,7 @@ def ziwen_streamer():
                 except praw.exceptions.APIException:  # The comment was deleted
                     logger.error("[ZWS] >> The original command appears to have been deleted.")
             logger.info("[ZWS] >> Added a comment crediting the OP u/" + oauthor + ".")
-        elif XPOST_KEYWORDS[2] in pbody:  # Someone accidentally referenced r/translate instead (this is a redirect).
+        elif STREAMER_KEYWORDS[2] in pbody:  # Someone accidentally referenced r/translate instead (this is a redirect).
             # Double check to make sure it's actually a mistaken link to our subreddit.
             # Run a regex search to see if it's a right and proper mention.
             check = re.search(r"(?:\b|\s+|/)(r/translate(?:\s|\b))", pbody)
@@ -424,8 +458,8 @@ def ziwen_streamer():
                             logger.info("[ZWS] >> Posted a correction reply.\n")
                         except praw.exceptions.APIException:  # The comment had been deleted.
                             logger.info("[ZWS] >> Original mention comment has been deleted. Skipping...")
-        elif XPOST_KEYWORDS[3] in pbody:
-            # Someone mentioned our subreddit! This is an in-house version of r/SubNotifications.
+        elif STREAMER_KEYWORDS[3] in pbody:
+            # Someone mentioned our subreddit!
 
             if pauthor in EXCLUDED_MENTION_USERS:  # This is a user we don't need to note.
                 continue
@@ -482,23 +516,36 @@ def ziwen_streamer():
             action_counter(1, "Subreddit reference")
             logger.info("[ZWS] >> Saved to the 'mentions' page.\n")
 
+    return
+
+
+'''RUNNING THE BOT'''
+
+# This is the actual loop that runs the top-level functions of the bot.
 
 while True:
+
     # noinspection PyBroadException
     try:
+
+        # Run the actual streamer routine.
         ziwen_streamer()
-    except Exception as e:  # We can log all other exceptions.
+
+    except Exception as e:  # The bot encountered an error/exception.
+
+        # Format the error text.
         error_entry = traceback.format_exc()
         error_date = strftime("%a, %b %d, %Y [%I:%M:%S %p]")
+
+        # Exclude saving the error if it's just a connection problem.
         if any(keyword in error_entry for keyword in CONNECTION_KEYWORDS):  # Bot will not log common connection issues
-            print("### There was a connection error.")
             logger.debug("[ZWS] Connection Error: {}".format(error_entry))
-            time.sleep(10)  # Pause the system briefly.
-        else:
-            print("### There was an error.")
-            print(error_entry)  # Print error.
+        else:  # Error is not a connection error, we want to save that.
+
+            # Write the error to the log.
             logger.error("[ZWS] Runtime Error: {}".format(error_entry))
             bot_version = "{} {}".format(BOT_NAME, VERSION_NUMBER)
-            error_log_basic(error_entry, bot_version)  # Write the error to the log.
-            time.sleep(10)  # Pause the system briefly.
+            error_log_basic(error_entry, bot_version)
+
+        time.sleep(10)  # Pause the system briefly.
         print("# Restarting at {}...".format(error_date))
