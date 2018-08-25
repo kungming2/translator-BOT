@@ -10,11 +10,19 @@ Documentation for Ziwen's various commands can be found **[here](https://www.red
 
 #### Modules
 
-* `_config.py`
-* `_languages.py`
-* `_responses.py`
-* `Ziwen.py`
-* `Ziwen_Streamer.py`
+* `_config.py` - a file containing connections to the bot's databases and credentials.
+* `_languages.py` - a file containing basic language data and functions.
+* `_responses.py` - a file containing all the long-form message and comment templates used by the bot.
+* `Ziwen.py` - the main runtime of the bot.
+* `Ziwen_Streamer.py` - the live "streaming" component of the bot. Run independently, it allows users to crosspost from anywhere on Reddit.
+
+#### Bot Data Files
+
+The bulk of Ziwen's data is stored in three SQLite3 files:
+
+* `_cache_main.db` contains the temporary caches of the bot, including the cache for comment edits and language multipliers for points.
+* `_database_ajo` stores the Ajos of the bot (see below) indexed by their post ID.
+* `_database_main.db` stores everything else, including the database of user notifications, points, and items that have already been processed.
 
 # Technical Info
 
@@ -32,6 +40,7 @@ Ziwen uses various databases to provide language reference and lookup informatio
 * [CC-CEDICT](https://cc-cedict.org/)
 * [Chinese Text Project](https://ctext.org/)
 * [Ethnologue](http://ethnologue.com/)
+* [Jinmei Kanji Jisho 人名漢字辞典](http://kanji.reader.bz/)
 * [Jisho](http://jisho.org/)
 * [Jitenon](https://yoji.jitenon.jp/)
 * [MultiTree](http://multitree.org/)
@@ -40,6 +49,7 @@ Ziwen uses various databases to provide language reference and lookup informatio
 * [Shufazidian  书法字典](http://www.shufazidian.com/)
 * [Soothill-Lewis](http://mahajana.net/en/library/texts/a-dictionary-of-chinese-buddhist-terms)
 * [Unihan](http://unicode.org/charts/unihan.html)
+* [Wikipedia](https://www.wikipedia.org/)
 * [Wiktionary](https://www.wiktionary.org/)
 
 # Feedback
