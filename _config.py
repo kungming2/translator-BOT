@@ -192,6 +192,9 @@ def action_counter(messages_number, action_type):
     if new_messages_number == 0:  # There's nothing to add. Don't do anything.
         return
 
+    if action_type == "!id:":
+        action_type = "!identify:"
+
     current_day = strftime("%Y-%m-%d")
     current_test = "{} | {}".format(strftime("%Y-%m-%d"), action_type)  # The current day as a formatted string
 

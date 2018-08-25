@@ -74,6 +74,12 @@ A {post_type} has been newly identified as {language_name}:
 '''
 MSG_WIKIPAGE_FULL = ("The [{0} wiki page](https://www.reddit.com/r/translatorBOT/wiki/{0}) seems to be full. "
                      "Please archive some of the older entries on that page.")
+MSG_NO_POINTS = ("You haven't earned any points on r/translator yet. "
+                 "You can earn points by helping identify or translate requests in our community!")
+MSG_LANGUAGE_FREQUENCY = ("For your reference, our [statistics](https://www.reddit.com/r/translator/wiki/{})"
+                          " indicate that approximately **{} requests are made per {}** for {}.")
+MSG_UNSUBSCRIBE_ALL = ("You have been unsubscribed from **{}** notifications on r/translator. "
+                       "To resubscribe, please [click here]({}).")
 
 # A comment that is added to long YouTube videos or long text posts.
 COMMENT_LONG = ("**Your translation request appears to be very long.** It may take a while for a translator to respond. "
@@ -169,6 +175,7 @@ Latin | *Latn*
 Nastaliq | *Aran*
 '''
 COMMENT_VERIFICATION_RESPONSE = "Thanks, u/{}. I've taken note of your verification request."
+COMMENT_REFERENCE_HEADER = "*Another member of our community has identified your translation request as:*\n\n"
 COMMENT_INVALID_REFERENCE = ("Sorry, but that doesn't look like anything to me. "
                              "Please enter a valid ISO 639-1 code, ISO 639-3 code, or language name to look up.")
 COMMENT_INVALID_CODE = ("Sorry, but `{0}` doesn't look like anything to me. Would you like to [send my creator a "
@@ -177,7 +184,9 @@ COMMENT_INVALID_CODE = ("Sorry, but `{0}` doesn't look like anything to me. Woul
 COMMENT_INVALID_SCRIPT = ("Sorry, but the script code `{}` doesn't look like anything to me. Please "
                           "[see here](https://en.wikipedia.org/wiki/ISO_15924#List_of_codes) for a list of "
                           "valid ISO 15924 codes.")
-
+COMMENT_INVALID_ZH_CHARACTER = ("**There were no results for {}**. Please check to make sure it is a valid Chinese "
+                                "character. Alternatively, it may be an uncommon variant that is not in "
+                                "online dictionaries.")
 
 '''WENYUAN RESPONSES'''
 
