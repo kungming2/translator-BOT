@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+"""
+Ziwen [ZW] is the main active component of u/translator-BOT, servicing r/translator and other communities.
 
-"""PYTHON MODULES"""
+Ziwen posts comments and sends messages and also moderates and keeps r/translator organized. It also provides community
+members with useful reference information and enforces the community's formatting guidelines.
+"""
+
 import calendar
 import datetime
 import time
@@ -37,20 +42,20 @@ as they define many of the basic functions of the bot.
 '''
 
 BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.7.45'
+VERSION_NUMBER = '1.7.46'
 USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator. '
               'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
 # This is how many posts Ziwen will retrieve all at once. PRAW can download 100 at a time.
 MAXPOSTS = 100
-# This is how many seconds I will wait between cycles. The bot is completely inactive during this time.
+# This is how many seconds Ziwen will wait between cycles. The bot is completely inactive during this time.
 WAIT = 30
 # After this many cycles, the bot will clean its database
 # Keeping only the latest (CLEANCYCLES * MAXPOSTS) items
 CLEANCYCLES = 90
-# How long do we allow people to !claim a post? (in seconds)
+# How long do we allow people to `!claim` a post? (in seconds)
 CLAIM_PERIOD = 28800
-# A boolean that enables the bot to send messages or not. Used for testing.
+# A boolean that enables the bot to send messages. Used for testing.
 MESSAGES_OKAY = True
 # A number that defines the soft number of notifications an individual will get in a month *per language*.
 NOTIFICATIONS_LIMIT = 100
@@ -61,8 +66,8 @@ KEYWORDS = ["!page:", "`", "!missing", "!translated", "!id:", "!set:", "!note:",
             "!doublecheck", "!identify:", '!translate', '!translator', '!delete', '!claim', '!reset', '!long']
 # These are the words that count as a 'thanks' from the OP.
 # If a message includes them, the bot won't message them asking them to thank the translator.
-THANKS_KEYWORDS = ["thank", "thanks", "tyvm", "thx", "danke", "arigato", "gracias", "appreciate", "solved"]
-# These are keywords that if included with !translated will give credit to the parent commentator.
+THANKS_KEYWORDS = ["thank", "thanks", "tyvm", "tysm", "thx", "danke", "arigato", "gracias", "appreciate", "solved"]
+# These are keywords that if included with `!translated` will give credit to the parent commentator.
 VERIFYING_KEYWORDS = ["concur", "agree", "verify", "verified", "approve", "is correct", "is right", "well done",
                       "well-done", "good job", "marking", "good work"]
 # A cache for language multipliers, generated each instance of running.
@@ -665,7 +670,7 @@ class Ajo:
                 elif multiple_languages is not None:  # This is a defined multiple
                     #  Construct a status dictionary.(we could also use multiple_languages)
                     actual_list = reddit_submission.link_flair_text.split("[")[1][:-1]  # Get just the codes
-                    self.status = ajo_defined_multiple_flair_assessor(actual_list)  # Pass it to the dictionary constructor
+                    self.status = ajo_defined_multiple_flair_assessor(actual_list)  # Pass it to dictionary constructor
             else:
                 self.status = "untranslated"
 
@@ -680,23 +685,55 @@ class Ajo:
             except AttributeError:  # It's not a crosspost.
                 self.is_bot_crosspost = False
 
-    def __eq__(self, other):  # Two Ajos are the same if their dictionary contents match.
+    def __eq__(self, other):
+        """
+        Two Ajos are defined as the same if the dictionary representation of their contents match.
+
+        :param other: The other Ajo we are comparing against.
+        :return: A boolean. True if their dictionary contents match, False otherwise.
+        """
+
         return self.__dict__ == other.__dict__
 
-    def set_status(self, new_status):  # Change the status of the Ajo. (translated, doublecheck, etc. )
+    def set_status(self, new_status):
+        """
+        Change the status/state of the Ajo - a status like translated, doublecheck, etc.
+
+        :param new_status: The new status for the Ajo to have, defined as a string.
+        """
         self.status = new_status
 
-    def set_status_multiple(self, status_language_code, new_status):  # Change the status of a defined Multiple post
+    def set_status_multiple(self, status_language_code, new_status):
+        """
+        Similar to `set_status` but changes the status of a defined multiple post. This function does this by writing
+        its status as a dictionary instead, keyed by the language.
+
+        :param status_language_code: The language code (e.g. `zh`) we want to define the status for.
+        :param new_status: The new status for that language code.
+        """
         if isinstance(self.status, dict):  # Make sure it's something we can actually update
             if self.status[status_language_code] != 'translated':  # Once something's marked as translated stay there.
                 self.status[status_language_code] = new_status
         else:
             pass
 
-    def set_long(self, new_long):  # Change the status of the Ajo as to whether it's long.
+    def set_long(self, new_long):
+        """
+        Change the `is_long` boolean of the Ajo, a variable that defines whether it's considered a long post.
+        Moderators can call this function with the command `!long`.
+
+        :param new_long: A boolean on whether the post is considered long. True if it is, False otherwise.
+        :return:
+        """
         self.is_long = new_long
 
-    def set_country(self, new_country_code):  # Change the country code in the Ajo.
+    def set_country(self, new_country_code):
+        """
+        A function that allows us to change the country code in the Ajo. Country codes are generally optional for Ajos,
+        but they can be defined to provide more granular detail (e.g. `de-AO`).
+
+        :param new_country_code: The country code (as a two-letter ISO 3166-1 alpha-2 code) the Ajo should be set as.
+        """
 
         if new_country_code is not None:
             new_country_code = new_country_code.upper()
@@ -704,7 +741,18 @@ class Ajo:
         self.country_code = new_country_code
 
     def set_language(self, new_language_code, new_is_identified=False):
-        # This changes the language of the Ajo and accepts a code as well as an identification boolean.
+        """
+        This changes the language of the Ajo. It accepts a language code as well as an identification boolean.
+        The boolean is False by default.
+
+        :param new_language_code: The new language code to set the Ajo as.
+        :param new_is_identified: Whether or not the `is_identified` boolean of the Ajo should be set to True.
+                                  For example, `!identify` commands will set `is_identified` to True, but
+                                  moderator `!set` commands won't. Ajos with `is_identified` as True will have
+                                  "(Identified)" appended to their flair text.
+        :return:
+        """
+
         old_language_name = str(self.language_name)
 
         if new_language_code not in ["multiple", "app"]:  # This is just a single type of languyage.
@@ -754,8 +802,13 @@ class Ajo:
             self.is_identified = new_is_identified  # Update with said change
 
     def set_script(self, new_script_code):
-        # Change the script of the Ajo (has to be Unknown though), takes a four letter code
-        # This will also now reset the flair to be Unknown.
+        """
+        Change the script (ISO 15924) of the Ajo, assuming it is an Unknown post. This will also now reset the
+        flair to Unknown.
+
+        :param new_script_code: A four-letter ISO 15924 code.
+        :return:
+        """
 
         self.language_name = "Unknown"
         self.language_code_1 = None
@@ -766,8 +819,15 @@ class Ajo:
         self.script_name = lang_code_search(new_script_code, True)[0]  # Get the name of the script
 
     def set_defined_multiple(self, new_language_codes):
-        # This is a function that sets the language of an Ajo to a defined Multiple one.
-        # Example: Multiple Languages [AR, KM, VI]
+        """
+        This is a function that sets the language of an Ajo to a defined Multiple one.
+        Example: Multiple Languages [AR, KM, VI]
+
+        :param new_language_codes: A string of language names or codes, where each element is separated by a `+`.
+                                   Example: arabic+khmer+vi
+        :return:
+        """
+
         self.type = 'multiple'
         old_language_name = str(self.language_name)
 
@@ -808,9 +868,15 @@ class Ajo:
         except (AttributeError, IndexError):  # There was no language_history defined... Let's create it.
             self.language_history = [old_language_name, "Multiple Languages"]
 
-    def set_time(self, state, moment):  # Function creates or updates a dictionary marking times.
-        # Moment is the Unix UTC time when the action was taken. It should be an integer.
-        # State is the state that it was changed to. Translated, for example.
+    def set_time(self, status, moment):
+        """
+        This function creates or updates a dictionary, marking times when the status/state of the Ajo changed.
+        This updates a dictionary where it is keyed by status and contains Unix times of the changes.
+
+        :param status: The status that it was changed to. Translated, for example.
+        :param moment: The Unix UTC time when the action was taken. It should be an integer.
+        :return:
+        """
 
         try:
             # We check here to make sure the dictionary exists.
@@ -818,14 +884,21 @@ class Ajo:
         except (AttributeError, NameError):  # There was no time_delta defined... Let's create it.
             working_dictionary = {}
 
-        if state not in working_dictionary:  # This state hasn't been recorded. We create it as a key in the dictioanry.
-            working_dictionary[state] = int(moment)
+        if status not in working_dictionary:  # This state hasn't been recorded. We create it as a key in the dictioanry.
+            working_dictionary[status] = int(moment)
         else:
             pass
 
         self.time_delta = working_dictionary
 
-    def add_translators(self, translator_name):  # A function to add who translated what to the Ajo (append to list).
+    def add_translators(self, translator_name):
+        """
+        A function to add the username of who translated what to the Ajo of a post (by appending their name to list).
+        This allows Ziwen to keep track of translators and contributors.
+
+        :param translator_name: The name of the individual who made the translation.
+        :return:
+        """
 
         try:
             if translator_name not in self.recorded_translators:  # The username isn't already in it.
@@ -835,7 +908,14 @@ class Ajo:
             self.recorded_translators = [translator_name]
 
     def reset(self, original_title):
-        # A function that will completely reset it to the original specifications. Not intended to be used often.
+        """
+        A function that will completely reset it to the original specifications. Not intended to be used often.
+        Moderators and OPs can call this with `!reset` to make Ziwen reprocess its flair and languages.
+
+        :param original_title: The title of the post.
+        :return:
+        """
+
         self.language_name = title_format(original_title)[3]
         self.status = "untranslated"
         self.time_delta = {}  # Clear this dictionary.
@@ -883,7 +963,13 @@ class Ajo:
                 self.language_code_3 = "app"
 
     # noinspection PyAttributeOutsideInit,PyAttributeOutsideInit
-    def update_reddit(self):  # Sets the flair properly on Reddit properly. No arguments taken.
+    def update_reddit(self):
+        """
+        Sets the flair properly on Reddit. No arguments taken. It collates all the attributes and decides what flair
+        to give it, then selects the appropriate template for it.
+
+        :return:
+        """
 
         # Get the original submission object.
         original_submission = reddit.submission(self.id)
@@ -1375,11 +1461,11 @@ def points_worth_cacher():
 
     # Code to check the database file to see if the values are current.
     # It will transform the database info into a dictionary.
-    
+
     # Get the year-month string.
     current_zeit = time.time()
     month_string = datetime.datetime.fromtimestamp(current_zeit).strftime('%Y-%m')
-    
+
     # Select from the database the current months data if it exists.
     multiplier_command = "SELECT * from multiplier_cache WHERE month_year = ?"
     cursor_multiplier.execute(multiplier_command, (month_string,))
@@ -1402,7 +1488,7 @@ def points_worth_cacher():
 
         # Get the data for the common languages
         for language in check_languages:
-        
+
             # Fetch the number of points it's worth.
             points_worth_determiner(language)
 
@@ -2676,7 +2762,7 @@ def ziwen_messages():
                 sql_del = "DELETE FROM notify_users WHERE username = ?"
                 cursor_notify.execute(sql_del, (mauthor,))
                 conn_notify.commit()
-                
+
                 # Send the reply.
                 message.reply(MSG_UNSUBSCRIBE_ALL.format('all', MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER)
 
@@ -2786,9 +2872,9 @@ def ziwen_messages():
                 language_matches = language_matches.split(", ")  # Turn it into a list
             else:  # there were no commas. 
                 language_matches = [language_matches]
-            
+
             final_match_codes = []
-            
+
             for match in language_matches:  # Process their relevant codes
                 converted_result = converter(match)  # This will return a tuple.
                 match_code = converted_result[0]  # Get just the code
@@ -2797,7 +2883,7 @@ def ziwen_messages():
                 to_commit = (code, username)
                 cursor_notify.execute("INSERT INTO notify_users VALUES (?, ?)", to_commit)
                 conn_notify.commit()
-        
+
             final_match_codes_print = ", ".join(final_match_codes)
             addition_message = "Added the language codes **{}** for u/{} into the notifications database."
             message.reply(addition_message.format(final_match_codes_print, username))
@@ -3109,11 +3195,11 @@ def zh_character(character):
     :param character: Any Chinese character.
     :return: A formatted string containing the character's information.
     """
-    
+
     multi_mode = False
     multi_character_dict = {}
     multi_character_list = list(character)
-    
+
     if len(multi_character_list) > 1:  # Whether or not multiple characters are passed to this function
         multi_mode = True
 
@@ -3122,12 +3208,12 @@ def zh_character(character):
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
     pronunciation = [div.text_content() for div in tree.xpath('//div[contains(@class,"pinyin")]')]
     cmn_pronunciation, yue_pronunciation = pronunciation[::2], pronunciation[1::2]
-    
+
     if len(pronunciation) == 0:  # Check to not return anything if the entry is invalid
         to_post = COMMENT_INVALID_ZH_CHARACTER.format(character)
         logger.info("[ZW] ZH-Character: No results for {}".format(character))
         return to_post
-    
+
     if not multi_mode:  # Regular old-school character search for just one.
         cmn_pronunciation = ' / '.join(cmn_pronunciation)
         yue_pronunciation = tree.xpath('//a[contains(@onclick,"pronounce-jyutping")]/text()')
@@ -3206,10 +3292,10 @@ def zh_character(character):
             for i in range(0, 9):
                 yue_pronunciation = yue_pronunciation.replace(str(i), "^%s " % str(i))
             yue_pronunciation = "*" + yue_pronunciation.strip() + "*"
-            
+
             multi_character_dict[wenzi]["mandarin"] = cmn_pronunciation
             multi_character_dict[wenzi]["cantonese"] = yue_pronunciation
-            
+
             # Format the meaning data.
             meaning = new_tree.xpath('//div[contains(@class,"defs")]/text()')
             meaning = '/ '.join(meaning)
@@ -3219,7 +3305,7 @@ def zh_character(character):
             # Create a randomized wait time.
             wait_sec = random.randint(3, 12)
             time.sleep(wait_sec)
-        
+
         # Now let's construct the table based on the data.
         for key in multi_character_list:  # Iterate over the characters in order
             character_data = multi_character_dict[key]
@@ -4033,12 +4119,19 @@ def ja_word(japanese_word):
     y_data = None
 
     # Fetch data from the API
-    link_json = 'https://jisho.org/api/v1/search/words?keyword="{}"%20%23words'.format(japanese_word)
-    word_data = requests.get(link_json)
-    word_data = word_data.json()
-    word_data = word_data['data']
+    link_json = 'https://jisho.org/api/v1/search/words?keyword={}%20%23words'.format(japanese_word)
+    returned_data = requests.get(link_json)
+    word_data = returned_data.json()
+    main_data = word_data['data']
+    main_data = main_data[0]  # Choose the first result.
 
-    if len(word_data) == 0:  # It appears that this word doesn't exist on Jisho.
+    # Attempt to get the reading of it in hiragana. If there is an KeyError, then it's not a real Jisho entry.
+    try:
+        word_reading = main_data['japanese'][0]['reading']
+    except KeyError:
+        word_reading = ""
+
+    if len(word_reading) == 0:  # It appears that this word doesn't exist on Jisho.
         logger.info("[ZW] JA-Word: No results found for a Japanese word '{}'.".format(japanese_word))
 
         katakana_test = re.search('[\u30a0-\u30ff]', japanese_word)  # Check if katakana. Will return none if kanji.
@@ -4065,13 +4158,11 @@ def ja_word(japanese_word):
             logger.info("[ZW] JA-Word: Found matching Japanese sound effects.")
             return sfx_data
 
-    # Format the data from the returned JSON.
-    word_data = word_data[0]  # Get the main dictionary
-    word_reading = word_data['japanese'][0]['reading']
+    # Jisho data is good, format the data from the returned JSON.
     word_reading_chunk = '{} (*{}*)'.format(word_reading, romkan.to_hepburn(word_reading))
-    word_meaning = word_data['senses'][0]['english_definitions']
+    word_meaning = main_data['senses'][0]['english_definitions']
     word_meaning = '"{}."'.format(', '.join(word_meaning))
-    word_type = word_data['senses'][0]['parts_of_speech']
+    word_type = main_data['senses'][0]['parts_of_speech']
     word_type = '*{}*'.format(', '.join(word_type))
 
     # Construct the comment structure with the data.
@@ -4202,7 +4293,18 @@ def lookup_matcher(content_text, language_name):
     # If there is an identification command, we should classify this as the identified language.
     # First we check to see if there is another identification command here.
     if "!identify:" in original_text:
-        language_name = converter(comment_info_parser(original_text, "!identify:")[0])[1]
+
+        # Parse the data from the command.
+        parsed_data = comment_info_parser(original_text, "!identify:")[0]
+
+        # Code to help make sense of CJK script codes if they're identified.
+        language_keys = ['Chinese', 'Japanese', 'Korean']
+        for key in language_keys:
+            if len(parsed_data) == 4 and parsed_data.title() in CJK_LANGUAGES[key]:
+                parsed_data = key
+
+        # Set the language name to the identified language.
+        language_name = converter(parsed_data)[1]
     # Secondly we see if there's a language mentioned.
     elif language_mention_search(content_text) is not None:
         if len(language_mentions) == 1:
@@ -4275,7 +4377,7 @@ def lookup_matcher(content_text, language_name):
                     ko_temp_list.append(selection)
         master_dictionary["Korean"] = ko_temp_list
 
-    # Create a master list of all CJK languages.
+    # Create a master list of all CJK languages to check against.
     all_cjk = []
     for value in CJK_LANGUAGES.values():
         all_cjk += value
@@ -4340,7 +4442,7 @@ def lookup_ko_word(word):
         lookup_line_3 = lookup_line_3.format(word)
 
         to_post = (lookup_line_1 + lookup_line_2 + lookup_line_3)
-        logger.info("[ZW] lookup_ko_word: Received a word lookup for the word {} in Korean. Returned results.".format(word))
+        logger.info("[ZW] lookup_ko_word: Received a word lookup for '{}' in Korean. Returned results.".format(word))
         return to_post
 
 
@@ -4399,7 +4501,7 @@ def lookup_zhja_tokenizer(phrase, language):
         if language == 'zh':
             if item not in "\.\!\/_,$%^*(+\"\']+|[+——！，。？、~@#￥%……&*（）：；《）《》“”()»〔〕「」％":
                 final_list.append(item)
-    
+
     return final_list  # Returns a list of words / characters
 
 
@@ -4552,19 +4654,19 @@ def reference_other_search(string_text):
             # MultiTree does have information on this code
             language_iso3 = google_url[0][-3:]  # Takes only the part of the URL that contains the ISO 639-3 code
             multitree_link = 'http://multitree.org/codes/' + language_iso3
-    
+
     # Exit early if we have no results. 
     if multitree_link is None or language_iso3 is None:
         logger.info("[ZW] No results for the reference search term {} on Multitree.".format(string_text))
         return no_results_comment
-    
+
     # By now we should have a MultiTree link and can get info from it.
     fetch_page = requests.get('http://multitree.org/codes/' + string_text, headers=ZW_USERAGENT)
     tree = html.fromstring(fetch_page.content)
     page_title = tree.xpath('//title/text()')
     if "We're sorry" in page_title:
         # MultiTree does not have any information on this code.
-        logger.info("[ZW] reference_other_search: No results for the reference term {} on Multitree.".format(string_text))
+        logger.info("[ZW] reference_other_search: No results for reference term {} on Multitree.".format(string_text))
         return no_results_comment  # Exit earlu
     else:  # We do have results.
         language_name = tree.xpath('//*[@id="code-info"]/div[1]/div[1]/span[2]/text()')
@@ -4573,7 +4675,7 @@ def reference_other_search(string_text):
         lookup_line_1 = ('\n**Language Name**: {}\n\n**ISO 639-3 Code**: {}'
                          '\n\n**Alternate Names**: {}\n\n**Classification**: {}')
         lookup_line_1 = lookup_line_1.format(language_name[0], language_iso3, alt_names[0], language_classification[0])
-        
+
         # Fetch Wikipedia information, using the ISO code.
         wk_to_get = wikipedia.search("ISO_639:{}".format(language_iso3))[0]
         wk_page = wikipedia.page(title=wk_to_get, auto_suggest=True,
@@ -4587,15 +4689,15 @@ def reference_other_search(string_text):
 
         if "\n" in wk_summary:  # Take out line breaks from the wikipedia summary.
             wk_summary = wk_summary.replace("\n", " ")
-        
+
         wk_chunk = str('\n\n**[Wikipedia Entry](' + wk_page.url + ')**:\n\n> ' + wk_summary)
         lookup_line_2 = '\n\n\n^Information ^from ^[MultiTree]({}.html) ^| ' \
                         '[^Glottolog](http://glottolog.org/glottolog?iso={}) ^| [^Wikipedia]({})'
         lookup_line_2 = lookup_line_2.format(multitree_link, language_iso3, wk_page.url)
-        
+
         to_post = str("## [{}]({})\n{}{}{}".format(language_name[0], multitree_link,
                                                    lookup_line_1, wk_chunk, lookup_line_2))
-        
+
         return to_post
 
 
@@ -4963,8 +5065,8 @@ def edit_finder():
         logger.debug("[ZW] Edit Finder: Cleaned up the edited comments cache.")
 
     return
-        
-        
+
+
 '''
 POSTS FILTERING & TESTING FUNCTIONS
 
@@ -5538,7 +5640,8 @@ def ziwen_bot():
                         is_nsfw = False
 
                     # Send a message via the paging system.
-                    notifier_page_translators(language_code, language_name, pauthor, otitle, opermalink, oauthor, is_nsfw)
+                    notifier_page_translators(language_code, language_name, pauthor, otitle,
+                                              opermalink, oauthor, is_nsfw)
 
         if KEYWORDS[1] in pbody:  # This function returns data for character lookups with `character`.
             post_content = []
@@ -5549,7 +5652,7 @@ def ziwen_bot():
 
             if oflair_css in ['meta', 'community', 'missing']:
                 continue
-    
+
             if oajo.language_name is None:
                 continue
             elif type(oajo.language_name) is not str:
@@ -5587,9 +5690,7 @@ def ziwen_bot():
                 continue
 
             for key, value in total_matches.items():
-                if key in ['Chinese', 'Cantonese', 'Unknown', 'Classical Chinese', 'Han Characters', "Simplified Han",
-                           "Traditional Han", "Min Dong Chinese", "Hakka Chinese", "Late Middle Chinese",
-                           "Min Nan Chinese", "Min Bei Chinese"]:
+                if key in CJK_LANGUAGES['Chinese']:
                     for match in total_matches[key]:
                         match_length = len(match)
                         if match_length == 1:  # Single-character
@@ -5602,7 +5703,7 @@ def ziwen_bot():
                         # Create a randomized wait time between requests.
                         wait_sec = random.randint(3, 12)
                         time.sleep(wait_sec)
-                elif key in ['Japanese', 'Central Okinawan', 'Old Japanese']:
+                elif key in CJK_LANGUAGES['Japanese']:
                     for match in total_matches[key]:
                         match_length = len(str(match))
                         if match_length == 1:
@@ -5611,7 +5712,7 @@ def ziwen_bot():
                         elif match_length > 1:
                             find_word = str(match)
                             post_content.append(ja_word(find_word))
-                elif key in ['Korean', 'Jejueo', 'Old Korean']:
+                elif key in CJK_LANGUAGES['Korean']:
                     for match in total_matches[key]:
                         find_word = str(match)
                         post_content.append(lookup_ko_word(find_word))
@@ -5790,7 +5891,7 @@ def ziwen_bot():
         if any(keyword in pbody for keyword in THANKS_KEYWORDS) and KEYWORDS[3] not in pbody and len(pbody) <= 20:
             # This processes simple thanks into translated, but leaves alone if it's an exception.
             # Has to be a short thanks, and not have !translated in the body.
-            if oflair_css in ['meta', 'community', 'multiple', 'app']:
+            if oflair_css in ['meta', 'community', 'multiple', 'app', 'generic']:
                 continue
 
             if pauthor != oauthor:  # Is the author of the comment the author of the post?
@@ -5928,7 +6029,7 @@ def ziwen_bot():
 
             if translated_found and not thanks_already and oflair_css not in ['multiple', 'app']:
                 if not TESTING_MODE and pauthor != oauthor:
-                    messaging_translated_message(oauthor=oauthor, opermalink=opermalink)  # Sends them a notification message
+                    messaging_translated_message(oauthor=oauthor, opermalink=opermalink)  # Sends them notification msg
 
         '''MODERATOR-ONLY COMMANDS (!delete, !reset, !note, !set)'''
 

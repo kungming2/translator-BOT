@@ -369,11 +369,11 @@ ISO_MACROLANGUAGES = {
 CJK_LANGUAGES = {"Chinese": ['Chinese', 'Min Dong Chinese', 'Classical Chinese', 'Jinyu Chinese', 'Mandarin Chinese',
                              'Pu-Xian Chinese', 'Huizhou Chinese', 'Min Zhong Chinese', 'Gan Chinese', 'Hakka Chinese',
                              'Xiang Chinese', 'Min Bei Chinese', 'Min Nan Chinese', 'Wu Chinese', 'Yue Chinese',
-                             'Cantonese', 'Late Middle Chinese', 'Old Chinese'],
+                             'Cantonese', 'Late Middle Chinese', 'Old Chinese', 'Hani', 'Hanb', 'Hans', 'Hant'],
                  "Japanese": ['Japanese', 'Old Japanese', 'Northern Amami-Oshima', 'Southern Amami-Oshima', 'Kikai',
                               'Toku-No-Shima', 'Kunigami', 'Oki-No-Erabu', 'Central Okinawan', 'Yoron', 'Miyako',
-                              'Yaeyama', 'Yonaguni'],
-                 "Korean": ['Korean', 'Middle Korean', 'Old Korean', 'Jejueo']}
+                              'Yaeyama', 'Yonaguni', 'Hira', 'Jpan', 'Kana'],
+                 "Korean": ['Korean', 'Middle Korean', 'Old Korean', 'Jejueo', 'Hang', 'Kore']}
 
 # These are lists of language learning or country subreddits associated with a specific language.
 # The language learning one should be the FIRST one in the list. The rest can be country or cultural ones.
