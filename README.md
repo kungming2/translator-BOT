@@ -28,7 +28,71 @@ The bulk of Ziwen's data is stored in three SQLite3 files:
 
 Ziwen is written in Python 3 and utilizes [PRAW](https://github.com/praw-dev/praw) to connect to Reddit. The bot also uses [SQLite3](https://www.sqlite.org/index.html) and [Markdown](https://daringfireball.net/projects/markdown/syntax) to store data in its `Data` folder. 
 
-#### Reference Databases
+### Ajo Objects
+
+Each r/translator post that Ziwen processes is stored locally as an *Ajo* object (from Esperanto *aĵo*, meaning "thing"). This allows the bot to keep track of information that would otherwise be lost as the post changes. Below are some examples.
+
+#### Single-Language Ajo
+
+    {
+        'output_oflair_text': 'Needs Review [JA]',
+        'language_code_1': 'ja',
+        'created_utc': 1534953367,
+        'is_long': False,
+        'output_oflair_css': 'doublecheck',
+        'author': 'right8',
+        'country_code': None,
+        'status': 'doublecheck',
+        'type': 'single',
+        'language_history': ['Chinese', 'Japanese'],
+        'language_code_3': 'jpn',
+        'title_original': '[Chinese > English] Found under a bronze statue of the Buddha. Meaning?',
+        'time_delta': {'doublecheck': 1534960329},
+        'recorded_translators': ['kungming2'],
+        'is_supported': True,
+        'title': 'Found under a bronze statue of the Buddha. Meaning?',
+        'is_identified': True,
+        'original_source_language_name': 'Chinese',
+        'is_bot_crosspost': False,
+        'language_name': 'Japanese',
+        'direction': 'english_to',
+        'original_target_language_name': 'English',
+        'id': '99eint'
+    }
+
+#### Multiple-Language Ajo
+
+    {
+        'original_source_language_name': 'English',
+        'language_code_3': ['fin', 'fra', 'hrv', 'jpn', 'nld', 'nor'],
+        'title': 'Great Lion',
+        'recorded_translators': ['Cyntex-', 'T-a-r-a-x', 'tobiasvl', 'Rootriver'],
+        'created_utc': 1534478920,
+        'original_target_language_name': ['Finnish', 'French', 'Norwegian', 'Croatian', 'Dutch', 'Japanese'],
+        'title_original': '[English > French, Japanese, Croatian, Dutch, Finnish, Norwegian] Great Lion',
+        'output_oflair_text': 'Multiple Languages [FI✔, FR✔, HR, JA✔, NL✔, NO✔]',
+        'language_history': ['Multiple Languages'],
+        'output_oflair_css': 'multiple',
+        'language_name': ['Finnish', 'French', 'Croatian', 'Japanese', 'Dutch', 'Norwegian'],
+        'country_code': None,
+        'is_long': False,
+        'direction': 'english_from',
+        'status': {'fi': 'translated', 
+                   'ja': 'translated',
+                   'fr': 'translated',
+                   'no': 'translated',
+                   'hr': 'untranslated',
+                   'nl': 'translated'},
+        'type': 'multiple',
+        'is_supported': True,
+        'is_bot_crosspost': False,
+        'author': 'PrinceTanglemane',
+        'language_code_1': ['fi', 'fr', 'hr', 'ja', 'nl', 'no'],
+        'is_identified': False,
+        'id': '97z6rg'
+    }
+
+### Reference Databases
 
 Ziwen uses various databases to provide language reference and lookup information, including but not limited to: 
 
