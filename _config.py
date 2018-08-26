@@ -32,20 +32,23 @@ SOURCE_FOLDER = script_directory
 # Ziwen database files (either static files or files that will be written to)
 FILE_ADDRESS_CREDENTIALS = os.path.join(script_directory, "_login.json")
 FILE_ADDRESS_UA = os.path.join(script_directory, "_ua.json")
-FILE_ADDRESS_PROCESSED = os.path.join(script_directory, "_database_processed.db")
+
 FILE_ADDRESS_AJO_DB = os.path.join(script_directory, '_database_ajo.db')
+FILE_ADDRESS_MAIN = os.path.join(script_directory, "_database_main.db")
+'''
+FILE_ADDRESS_PROCESSED = os.path.join(script_directory, "_database_processed.db")
 FILE_ADDRESS_NOTIFY = os.path.join(script_directory, "_database_notify.db")
 FILE_ADDRESS_POINTS = os.path.join(script_directory, "_database_points.db")
 FILE_ADDRESS_REFERENCE = os.path.join(script_directory, "_database_reference.db")
+'''
 FILE_ADDRESS_OLD_CHINESE = os.path.join(script_directory, "_database_old_chinese.csv")
 FILE_ADDRESS_ZH_ROMANIZATION = os.path.join(script_directory, "_database_romanization_chinese.csv")
 FILE_ADDRESS_ZH_BUDDHIST = os.path.join(script_directory, "_database_buddhist_chinese.md")
 FILE_ADDRESS_ZH_CCCANTO = os.path.join(script_directory, "_database_cccanto.md")
 FILE_ADDRESS_MECAB = os.path.join(script_directory, "mecab-ipadic-neologd")  # Folder where MeCab dict files are
 
-# Ziwen SQLite3 cache files (cache files are generated as the bot runs and have volatile data)
-FILE_ADDRESS_COMMENT_CACHE = os.path.join(script_directory, "_cache_comment.db")
-FILE_ADDRESS_MULTIPLIER_CACHE = os.path.join(script_directory, "_cache_multiplier.db")
+# Ziwen SQLite3 cache file (cache file data is generated as the bot runs and is volatile).
+FILE_ADDRESS_CACHE = os.path.join(script_directory, "_cache_main.db")
 
 # Ziwen Markdown output files (text files for saving information)
 FILE_ADDRESS_ERROR = os.path.join(script_directory, "_log_error.md")

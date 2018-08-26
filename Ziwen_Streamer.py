@@ -39,7 +39,7 @@ EXCLUDED_MENTION_USERS = ["AutoModerator", "translator-BOT", "kungming2", "Image
                           "TotesMessenger", "sneakpeekbot", "ContentForager", "transcribot", "SmallSubBot"]
 
 BOT_NAME = 'Ziwen Streamer'
-VERSION_NUMBER = '1.1.20'
+VERSION_NUMBER = '1.1.21'
 USER_AGENT = ('{} {}, a runtime to watch comments on Reddit for reposting translation requests to r/translator. '
               'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
@@ -266,13 +266,13 @@ def ziwen_streamer():
         if blacklist_requester_test or blacklist_op_test:
             if STREAMER_KEYWORDS[2] not in pbody and pauthor != "AutoModerator":  # Exclude r/translate mentions
                 # print("> User or subreddit is on my blacklist. See link at https://redd.it/{}.".format(oid))
-                logger.info("[ZWS] > User/subreddit is blacklisted. See https://www.reddit.com{}.".format(opermalink))
+                logger.info("[ZWS] > User/subreddit is on blacklist. See https://www.reddit.com{}.".format(opermalink))
                 continue
 
         if '!translated' in pbody:  # Let's not cross post if it's an accidental use of this command.
             if 'trntest' not in opermalink:  # No need to note test commands.
                 logger.info("[ZWS] > This is probably an accidental use of an r/translator command outside the "
-                            "subreddit at https://www.reddit.com{}\n".format(opermalink))
+                            "subreddit at https://www.reddit.com{}".format(opermalink))
             continue
 
         if ois_self:
@@ -455,7 +455,7 @@ def ziwen_streamer():
                     if "r/translator" not in new_comment:
                         try:
                             comment.reply(ZWS_COMMENT_WRONG_SUBREDDIT)
-                            logger.info("[ZWS] >> Posted a correction reply.\n")
+                            logger.info("[ZWS] >> Posted a correction reply.")
                         except praw.exceptions.APIException:  # The comment had been deleted.
                             logger.info("[ZWS] >> Original mention comment has been deleted. Skipping...")
         elif STREAMER_KEYWORDS[3] in pbody:
@@ -514,7 +514,7 @@ def ziwen_streamer():
                 reddit.subreddit('translatorBOT').message(message_subject, message_template)
 
             action_counter(1, "Subreddit reference")
-            logger.info("[ZWS] >> Saved to the 'mentions' page.\n")
+            logger.info("[ZWS] >> Saved to the 'mentions' page.")
 
     return
 

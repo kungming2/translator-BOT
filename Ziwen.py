@@ -12,7 +12,7 @@ import datetime
 import time
 import traceback  # For documenting errors that are encountered.
 import sqlite3  # For processing and accessing the databases.
-import praw  # Simple interface to the Reddit API, also handles rate limiting of requests
+import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 import prawcore  # The base module praw for error logging.
 import requests
 import pafy  # Gets YouTube video length.
@@ -42,7 +42,7 @@ as they define many of the basic functions of the bot.
 '''
 
 BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.7.46'
+VERSION_NUMBER = '1.7.47'
 USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator. '
               'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
@@ -50,10 +50,9 @@ USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and m
 MAXPOSTS = 100
 # This is how many seconds Ziwen will wait between cycles. The bot is completely inactive during this time.
 WAIT = 30
-# After this many cycles, the bot will clean its database
-# Keeping only the latest (CLEANCYCLES * MAXPOSTS) items
+# After this many cycles, the bot will clean its database, keeping only the latest (CLEANCYCLES * MAXPOSTS) items.
 CLEANCYCLES = 90
-# How long do we allow people to `!claim` a post? (in seconds)
+# How long do we allow people to `!claim` a post? This is defined in seconds.
 CLAIM_PERIOD = 28800
 # A boolean that enables the bot to send messages. Used for testing.
 MESSAGES_OKAY = True
@@ -64,7 +63,7 @@ NOTIFICATIONS_LIMIT = 100
 # These are the the commands on r/translator.
 KEYWORDS = ["!page:", "`", "!missing", "!translated", "!id:", "!set:", "!note:", "!reference:", "!search:",
             "!doublecheck", "!identify:", '!translate', '!translator', '!delete', '!claim', '!reset', '!long']
-# These are the words that count as a 'thanks' from the OP.
+# These are the words that count as a 'short thanks' from the OP.
 # If a message includes them, the bot won't message them asking them to thank the translator.
 THANKS_KEYWORDS = ["thank", "thanks", "tyvm", "tysm", "thx", "danke", "arigato", "gracias", "appreciate", "solved"]
 # These are keywords that if included with `!translated` will give credit to the parent commentator.
@@ -82,33 +81,18 @@ Ziwen relies on several SQLite3 files to store its data and uses PRAW to connect
 '''
 
 logger.info('[ZW] Startup: Accessing SQL databases...')
-# This connects the bot with the database of posts and comments that have already been processed.
-conn_processed = sqlite3.connect(FILE_ADDRESS_PROCESSED)
-cursor_processed = conn_processed.cursor()
 
-# This connects the bot with the database of users signed up for notifications.
-conn_notify = sqlite3.connect(FILE_ADDRESS_NOTIFY)
-cursor_notify = conn_notify.cursor()
-
-# This is the main points database.
-conn_points = sqlite3.connect(FILE_ADDRESS_POINTS)
-cursor_points = conn_points.cursor()
-
-# We store language reference data here.
-conn_reference = sqlite3.connect(FILE_ADDRESS_REFERENCE)
-cursor_reference = conn_reference.cursor()
-
-# Local storage for Ajos, objects that the bot uses for posts.
-conn_ajo = sqlite3.connect(FILE_ADDRESS_AJO_DB)
-cursor_ajo = conn_ajo.cursor()
-
-# This is the comment cache used for detecting edits.
-conn_cache = sqlite3.connect(FILE_ADDRESS_COMMENT_CACHE)
+# This connects to the local cache used for detecting edits and the multiplier cache for points.
+conn_cache = sqlite3.connect(FILE_ADDRESS_CACHE)
 cursor_cache = conn_cache.cursor()
 
-# This is the multiplier cache for points.
-conn_multiplier = sqlite3.connect(FILE_ADDRESS_MULTIPLIER_CACHE)
-cursor_multiplier = conn_multiplier.cursor()
+# This connects to the main database, including notifications, points, and past processed data.
+conn_main = sqlite3.connect(FILE_ADDRESS_MAIN)
+cursor_main = conn_main.cursor()
+
+# This connects to the database for Ajos, objects that the bot generates for posts.
+conn_ajo = sqlite3.connect(FILE_ADDRESS_AJO_DB)
+cursor_ajo = conn_ajo.cursor()
 
 # Connecting to the Reddit API via OAuth.
 logger.info('[ZW] Startup: Logging in as u/{}...'.format(USERNAME))
@@ -248,8 +232,8 @@ def maintenance_database_processed_cleaner():
     """
 
     pruning_command = 'DELETE FROM oldcomments WHERE id NOT IN (SELECT id FROM oldcomments ORDER BY id DESC LIMIT ?)'
-    cursor_processed.execute(pruning_command, [MAXPOSTS * 10])
-    conn_processed.commit()
+    cursor_main.execute(pruning_command, [MAXPOSTS * 10])
+    conn_main.commit()
 
     return
 
@@ -409,15 +393,20 @@ def ajo_retrieve_script_code(script_name):
 
 class Ajo:
     """
-    A post on r/translator. Used as an object for the bot to work with for consistency with languages.
+    A equivalent of a post on r/translator. Used as an object for Ziwen and Wenyuan to work with for
+    consistency with languages and to store extra data.
 
-    The process is: Submission > Ajo (changes made to it) > Ajo.update()
+    The process is: Submission > Ajo (changes made to it) > Ajo.update().
+    After a submission has been turned into an Ajo, Ziwen will only work with the Ajo unless it has to update Reddit's
+    flair.
 
     Attributes:
 
         id: A Reddit submission that forms the base of this class.
         created_utc: The Unix time that the item was created.
-        author: The reddit username of the creator. [deleted] if not found.
+        author: The Reddit username of the creator. [deleted] if not found.
+        author_messaged: A boolean that marks whether or not the creator has been messaged that their post has been
+                         translated.
 
         type: single, multiple
 
@@ -470,6 +459,7 @@ class Ajo:
             # Create some empty variables that can be used later.
             self.recorded_translators = []
             self.time_delta = {}
+            self.author_messaged = False
 
             # try:
             title_data = title_format(reddit_submission.title)
@@ -727,6 +717,19 @@ class Ajo:
         """
         self.is_long = new_long
 
+    def set_author_messaged(self, is_messaged):
+        """
+        Change the `author_messaged` boolean of the Ajo, a variable that notes whether the OP of the post has been
+        messaged that it's been translated.
+
+        :param is_messaged: A boolean on whether the author has been messaged. True if they have, False otherwise.
+        :return:
+        """
+        try:
+            self.author_messaged = is_messaged
+        except AttributeError:
+            self.author_messaged = is_messaged
+
     def set_country(self, new_country_code):
         """
         A function that allows us to change the country code in the Ajo. Country codes are generally optional for Ajos,
@@ -884,7 +887,7 @@ class Ajo:
         except (AttributeError, NameError):  # There was no time_delta defined... Let's create it.
             working_dictionary = {}
 
-        if status not in working_dictionary:  # This state hasn't been recorded. We create it as a key in the dictioanry.
+        if status not in working_dictionary:  # This status hasn't been recorded. Create it as a key in the dictionary.
             working_dictionary[status] = int(moment)
         else:
             pass
@@ -1091,8 +1094,8 @@ def ajo_writer(new_ajo):
         if new_ajo.__dict__ != stored_ajo:  # The dictionary representations are not the same
             representation = str(new_ajo.__dict__)  # Convert the dict of the Ajo into a string.
             representation = (representation,)  # Convert into a tuple of length one for insertion.
-            update_command = "UPDATE local_database SET ajo = (?) WHERE id = '{}'".format(ajo_id)
-            cursor_ajo.execute(update_command, representation)
+            update_command = "UPDATE local_database SET ajo = ? WHERE id = ?"
+            cursor_ajo.execute(update_command, (representation, ajo_id))
             conn_ajo.commit()
             logger.debug("ZW] ajo_writer: Ajo exists, data updated.")
         else:
@@ -1333,12 +1336,12 @@ def points_retreiver(username):
     month_string = datetime.datetime.fromtimestamp(current_time).strftime('%Y-%m')
 
     sql_s = "SELECT * FROM total_points WHERE username = ? AND month_year = ?"
-    cursor_points.execute(sql_s, (username, month_string))
-    username_month_points_data = cursor_points.fetchall()  # Returns a list of lists.
+    cursor_main.execute(sql_s, (username, month_string))
+    username_month_points_data = cursor_main.fetchall()  # Returns a list of lists.
 
     sql_un = "SELECT * FROM total_points WHERE username = ?"
-    cursor_points.execute(sql_un, (username,))
-    username_all_points_data = cursor_points.fetchall()
+    cursor_main.execute(sql_un, (username,))
+    username_all_points_data = cursor_main.fetchall()
 
     for data in username_month_points_data:  # Compile the monthly number of points the user has earned.
         month_points += data[3]
@@ -1370,8 +1373,8 @@ def points_retreiver(username):
         scratchpad_posts = []
 
         command = "SELECT * FROM total_points WHERE username = ? AND month_year = ?"
-        cursor_points.execute(command, (username, month))
-        month_data = cursor_points.fetchall()
+        cursor_main.execute(command, (username, month))
+        month_data = cursor_main.fetchall()
         for data in month_data:
             recorded_month_points += data[3]
             scratchpad_posts.append(data[4])
@@ -1441,8 +1444,8 @@ def points_worth_determiner(language_name):
         current_zeit = time.time()
         month_string = datetime.datetime.fromtimestamp(current_zeit).strftime('%Y-%m')
         insert_data = (month_string, language_name, final_point_value)
-        cursor_multiplier.execute("INSERT INTO multiplier_cache VALUES (?, ?, ?)", insert_data)
-        conn_multiplier.commit()
+        cursor_cache.execute("INSERT INTO multiplier_cache VALUES (?, ?, ?)", insert_data)
+        conn_cache.commit()
 
     return final_point_value
 
@@ -1468,8 +1471,8 @@ def points_worth_cacher():
 
     # Select from the database the current months data if it exists.
     multiplier_command = "SELECT * from multiplier_cache WHERE month_year = ?"
-    cursor_multiplier.execute(multiplier_command, (month_string,))
-    multiplier_entries = cursor_multiplier.fetchall()
+    cursor_cache.execute(multiplier_command, (month_string,))
+    multiplier_entries = cursor_cache.fetchall()
     # If not current, fetch new data and save it.
 
     if len(multiplier_entries) != 0:  # We actually have cached data for this month.
@@ -1483,8 +1486,8 @@ def points_worth_cacher():
 
         # Delete everything from the cache (clearing out previous months' data as well)
         command = 'DELETE FROM multiplier_cache'
-        cursor_multiplier.execute(command)
-        conn_multiplier.commit()
+        cursor_cache.execute(command)
+        conn_cache.commit()
 
         # Get the data for the common languages
         for language in check_languages:
@@ -1493,7 +1496,7 @@ def points_worth_cacher():
             points_worth_determiner(language)
 
             # Write the data to the cache.
-            conn_multiplier.commit()
+            conn_cache.commit()
 
     return
 
@@ -1660,8 +1663,8 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
             # Code here to check in the database if the person already got points.
             final_translator_points += 1 + (1 * language_multiplier)
             command_selection = "SELECT * FROM total_points WHERE username = ? AND oid = ?"
-            cursor_points.execute(command_selection, (final_translator, oid))
-            obtained_points = cursor_points.fetchall()
+            cursor_main.execute(command_selection, (final_translator, oid))
+            obtained_points = cursor_main.fetchall()
             # [('2017-09', 'dn9u1g0', 'davayrino', 2, '71bfh4'), ('2017-09', 'dn9u1g0', 'davayrino', 21, '71bfh4')
 
             for record in obtained_points:  # Go through
@@ -1704,8 +1707,8 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
         if entry[1] != 0:
             addition_command = "INSERT INTO total_points VALUES (?, ?, ?, ?, ?)"
             addition_tuple = (month_string, pid, entry[0], str(entry[1]), oid)
-            cursor_points.execute(addition_command, addition_tuple)
-            conn_points.commit()
+            cursor_main.execute(addition_command, addition_tuple)
+            conn_main.commit()
 
     return points_status
 
@@ -1942,8 +1945,8 @@ def messaging_user_statistics_writer(body_text, username):
 
     # Let's try and load any saved record of this
     sql_us = "SELECT * FROM total_commands WHERE username = ?"
-    cursor_points.execute(sql_us, (username,))
-    username_commands_data = cursor_points.fetchall()
+    cursor_main.execute(sql_us, (username,))
+    username_commands_data = cursor_main.fetchall()
 
     if len(username_commands_data) == 0:  # Not saved, create a new one
         commands_dictionary = {}
@@ -1969,13 +1972,12 @@ def messaging_user_statistics_writer(body_text, username):
     # Save to the database if there's stuff.
     if len(commands_dictionary.keys()) != 0 and not already_saved:  # This is a new username.
         to_store = (username, str(commands_dictionary))
-        cursor_points.execute("INSERT INTO total_commands VALUES (?, ?)", to_store)
-        conn_points.commit()
+        cursor_main.execute("INSERT INTO total_commands VALUES (?, ?)", to_store)
+        conn_main.commit()
     elif len(commands_dictionary.keys()) != 0 and already_saved:  # This username exists. Update instead.
-        to_store = (str(commands_dictionary),)
-        update_command = "UPDATE total_commands SET commands = (?) WHERE username = '{}'".format(username)
-        cursor_points.execute(update_command, to_store)
-        conn_points.commit()
+        update_command = "UPDATE total_commands SET commands = ? WHERE username = ?"
+        cursor_main.execute(update_command, (commands_dictionary, username))
+        conn_main.commit()
     else:
         logger.debug("[ZW] messaging_user_statistics_writer: No commands to write.")
         pass
@@ -1997,8 +1999,8 @@ def messaging_user_statistics_loader(username):
     header = "Command | Times \n--------|------\n"
 
     sql_us = "SELECT * FROM total_commands WHERE username = ?"
-    cursor_points.execute(sql_us, (username,))
-    username_commands_data = cursor_points.fetchall()
+    cursor_main.execute(sql_us, (username,))
+    username_commands_data = cursor_main.fetchall()
 
     if len(username_commands_data) == 0:  # There is no data for this user.
         return None
@@ -2167,8 +2169,8 @@ def notifier_list_pruner(username):
         sql_cn = "SELECT * FROM notify_users WHERE username = ?"
 
         # We try to retrieve the languages the user is subscribed to.
-        cursor_notify.execute(sql_cn, (username,))
-        all_subscriptions = cursor_notify.fetchall()
+        cursor_main.execute(sql_cn, (username,))
+        all_subscriptions = cursor_main.fetchall()
 
         for subscription in all_subscriptions:
             final_codes.append(subscription[0])  # We only want the language codes (don't need the username).
@@ -2176,8 +2178,8 @@ def notifier_list_pruner(username):
 
         # Remove the user from the database.
         sql_command = "DELETE FROM notify_users WHERE username = ?"
-        cursor_notify.execute(sql_command, (username,))
-        conn_notify.commit()
+        cursor_main.execute(sql_command, (username,))
+        conn_main.commit()
         logger.info("[ZW] notifier_list_pruner: Deleted subscription information for u/{}.".format(username))
 
         return to_post  # Return the list of formerly subscribed languages
@@ -2209,13 +2211,13 @@ def notifier_regional_language_fetcher(targeted_language):
                 targeted_language = lang_country
 
     sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
-    cursor_notify.execute(sql_lc, (targeted_language,))
-    notify_targets = cursor_notify.fetchall()
+    cursor_main.execute(sql_lc, (targeted_language,))
+    notify_targets = cursor_main.fetchall()
 
     if relevant_iso_code is not None:  # There is an equvalent code. Let's get the users from that too.
-        sql_lc = "SELECT * FROM notify_users WHERE language_code = '{}'".format(relevant_iso_code)
-        cursor_notify.execute(sql_lc)
-        notify_targets += cursor_notify.fetchall()
+        sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
+        cursor_main.execute(sql_lc, (relevant_iso_code,))
+        notify_targets += cursor_main.fetchall()
 
     for target in notify_targets:
         username = target[1]  # Get the username.
@@ -2226,8 +2228,8 @@ def notifier_regional_language_fetcher(targeted_language):
     # Now we need to find the overall list's user names for the broader langauge (e.g. ar)
     broader_code = targeted_language.split("-")[0]  # Take only the language part (ar).
     sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
-    cursor_notify.execute(sql_lc, (broader_code,))
-    all_notify_targets = cursor_notify.fetchall()
+    cursor_main.execute(sql_lc, (broader_code,))
+    all_notify_targets = cursor_main.fetchall()
 
     for target in all_notify_targets:
         all_broader_usernames.append(target[1])  # This creates a list of all the people signed up for the original.
@@ -2250,8 +2252,8 @@ def notifier_duplicate_checker(language_code, username):
 
     sql_nc = "SELECT * FROM notify_users WHERE language_code = ? and username = ?"
     sql_nc_tuple = (language_code, username)
-    cursor_notify.execute(sql_nc, sql_nc_tuple)
-    specific_entries = cursor_notify.fetchall()
+    cursor_main.execute(sql_nc, sql_nc_tuple)
+    specific_entries = cursor_main.fetchall()
 
     if len(specific_entries) > 0:  # There already is an entry.
         return True
@@ -2337,8 +2339,8 @@ def notifier_limit_writer(username):
 
     # Fetch the data
     sql_lw = "SELECT * FROM notify_monthly_limit WHERE username = ?"
-    cursor_notify.execute(sql_lw, (username,))
-    user_data = cursor_notify.fetchall()
+    cursor_main.execute(sql_lw, (username,))
+    user_data = cursor_main.fetchall()
 
     # Parse it
     if len(user_data) == 0:  # No record
@@ -2351,13 +2353,13 @@ def notifier_limit_writer(username):
     # Write the changes to the database.
     if num_notifications == 0:  # Create a new record
         to_store = (username, current_notifications)
-        cursor_notify.execute("INSERT INTO notify_monthly_limit VALUES (?, ?)", to_store)
+        cursor_main.execute("INSERT INTO notify_monthly_limit VALUES (?, ?)", to_store)
     else:  # Update an existing one.
         update_command = "UPDATE notify_monthly_limit SET received = ? WHERE username = ?"
         to_store = (current_notifications, username)
-        cursor_notify.execute(update_command, to_store)
+        cursor_main.execute(update_command, to_store)
 
-    conn_notify.commit()
+    conn_main.commit()
 
     return
 
@@ -2374,8 +2376,8 @@ def notifier_limit_over_checker(username, hard_limit):
 
     # Fetch the data
     sql_lw = "SELECT * FROM notify_monthly_limit WHERE username = ?"
-    cursor_notify.execute(sql_lw, (username,))
-    user_data = cursor_notify.fetchall()
+    cursor_main.execute(sql_lw, (username,))
+    user_data = cursor_main.fetchall()
 
     if len(user_data) == 0:  # No record, so it's okay to send.
         return False
@@ -2457,8 +2459,8 @@ def notifier_page_translators(language_code, language_name, pauthor, otitle, ope
     """
 
     sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
-    cursor_notify.execute(sql_lc, (language_code,))
-    page_targets = cursor_notify.fetchall()
+    cursor_main.execute(sql_lc, (language_code,))
+    page_targets = cursor_main.fetchall()
 
     page_users_list = []
 
@@ -2552,6 +2554,10 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
     notify_users_list = []
     post_type = "translation request"
 
+    # We don't want to send testing messages.
+    if 'trntest' in opermalink:
+        return
+
     # Load the language_history from the Ajo for this.
     # Exception for dashed stuff for now and meta and community and multiple ones. (defined multiples will just go thru)
     if suggested_css_text not in ['Community', 'Meta', 'Multiple Languages', 'App'] and "-" not in suggested_css_text:
@@ -2587,14 +2593,14 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
         language_code = suggested_css_text.split("-", 1)[0]  # We get the broader category here. (ar, unknown)
         language_name = converter(suggested_css_text)[1]
         if language_code == "unknown":  # Add a new script phrase
-            language_name += " (script)"  # This is to distinguish script notifications
+            language_name += " (Script)"  # This is to distinguish script notifications
         regional_data = notifier_regional_language_fetcher(suggested_css_text)
         if len(regional_data) != 0:
             notify_users_list += regional_data  # add the additional people to the notifications list.
 
     sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
-    cursor_notify.execute(sql_lc, (language_code,))
-    notify_targets = cursor_notify.fetchall()
+    cursor_main.execute(sql_lc, (language_code,))
+    notify_targets = cursor_main.fetchall()
 
     if len(notify_targets) == 0 and len(notify_users_list) == 0:  # If there's no one on the list, just continue
         return
@@ -2694,7 +2700,7 @@ def ziwen_messages():
                 else:
                     match_name = converted_result[1]
                     if "unknown-" in match_code:
-                        match_name += " (script)"  # This is to disambiguate Arabic from Arabic script, for example
+                        match_name += " (Script)"  # This is to disambiguate Arabic from Arabic script, for example
                 final_match_codes.append(match_code)
                 final_match_names.append(match_name)
             logger.info("[ZW] Messages: New subscription request from u/{}.".format(mauthor))
@@ -2717,8 +2723,8 @@ def ziwen_messages():
                     is_there = notifier_duplicate_checker(code, mauthor)
                     if not is_there:  # There isn't already an entry for it in there
                         to_commit = (code, mauthor)
-                        cursor_notify.execute("INSERT INTO notify_users VALUES (? , ?)", to_commit)
-                        conn_notify.commit()
+                        cursor_main.execute("INSERT INTO notify_users VALUES (? , ?)", to_commit)
+                        conn_main.commit()
 
                 # Try to get a custom thank you phrase, often in the language that was subscribed to.
                 if converter(final_match_codes[0])[1] in THANKS_WORDS:  # Do we have a thank you word for this lang?
@@ -2753,15 +2759,15 @@ def ziwen_messages():
                 # Let's add code to see which ones they were first subscribed to.
                 sql_stat = "SELECT * FROM notify_users WHERE username = '{}'".format(mauthor)
                 # We try to retrieve the languages the user is subscribed to.
-                cursor_notify.execute(sql_stat)
-                all_subscriptions = cursor_notify.fetchall()  # Returns a list of lists, with both code and the username
+                cursor_main.execute(sql_stat)
+                all_subscriptions = cursor_main.fetchall()  # Returns a list of lists, with both code and the username
                 for subscription in all_subscriptions:
                     final_match_codes.append(subscription[0])  # We only want the language codes (no need the username).
                 '''
                 # Delete the user from the database.
                 sql_del = "DELETE FROM notify_users WHERE username = ?"
-                cursor_notify.execute(sql_del, (mauthor,))
-                conn_notify.commit()
+                cursor_main.execute(sql_del, (mauthor,))
+                conn_main.commit()
 
                 # Send the reply.
                 message.reply(MSG_UNSUBSCRIBE_ALL.format('all', MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER)
@@ -2793,10 +2799,9 @@ def ziwen_messages():
                 else:
                     # Iterate over the included codes.
                     for code in final_match_codes:
-                        sql_del = "DELETE FROM notify_users WHERE language_code = '{}' and username = '{}'"
-                        sql_del = sql_del.format(code, mauthor)
-                        cursor_notify.execute(sql_del)
-                        conn_notify.commit()
+                        sql_del = "DELETE FROM notify_users WHERE language_code = ? and username = ?"
+                        cursor_main.execute(sql_del, (code, mauthor))
+                        conn_main.commit()
 
                     # Join the list into a string, and fix that the curly braces could cause issues
                     final_match_string = ", ".join(final_match_names)
@@ -2824,8 +2829,8 @@ def ziwen_messages():
             sql_stat = "SELECT * FROM notify_users WHERE username = ?"
 
             # We try to retrieve the languages the user is subscribed to.
-            cursor_notify.execute(sql_stat, (mauthor,))
-            all_subscriptions = cursor_notify.fetchall()  # Returns a list of lists w/ the language code & the username
+            cursor_main.execute(sql_stat, (mauthor,))
+            all_subscriptions = cursor_main.fetchall()  # Returns a list of lists w/ the language code & the username
             for subscription in all_subscriptions:
                 final_match_codes.append(subscription[0])  # We only want the language codes (don't need the username).
 
@@ -2841,7 +2846,7 @@ def ziwen_messages():
                     elif code == 'community':
                         match_name = 'Community'
                     elif "unknown-" in code:  # For scripts
-                        match_name += " (script)"
+                        match_name += " (Script)"
                     final_match_names.append(match_name)
                 # De-dupe and sort the returned languages.
                 final_match_names = list(set(final_match_names))  # Remove duplicates
@@ -2881,8 +2886,8 @@ def ziwen_messages():
                 final_match_codes.append(match_code)
             for code in final_match_codes:  # Actually add the codes into the database
                 to_commit = (code, username)
-                cursor_notify.execute("INSERT INTO notify_users VALUES (?, ?)", to_commit)
-                conn_notify.commit()
+                cursor_main.execute("INSERT INTO notify_users VALUES (?, ?)", to_commit)
+                conn_main.commit()
 
             final_match_codes_print = ", ".join(final_match_codes)
             addition_message = "Added the language codes **{}** for u/{} into the notifications database."
@@ -2896,14 +2901,14 @@ def ziwen_messages():
             sql_stat = "SELECT * FROM notify_users WHERE username = ?"
 
             # We try to retrieve the languages the user is subscribed to.
-            cursor_notify.execute(sql_stat, (username,))
-            all_subscriptions = cursor_notify.fetchall()  # Returns a list of lists with both the code and the username.
+            cursor_main.execute(sql_stat, (username,))
+            all_subscriptions = cursor_main.fetchall()  # Returns a list of lists with both the code and the username.
             for subscription in all_subscriptions:
                 final_match_codes.append(subscription[0])  # We only want the language codes (no need the username).
 
             # Actually delete from database
-            cursor_notify.execute("DELETE FROM notify_users WHERE username = ?", (username,))
-            conn_notify.commit()
+            cursor_main.execute("DELETE FROM notify_users WHERE username = ?", (username,))
+            conn_main.commit()
 
             # Send a message back to the moderator confirming this.
             final_match_codes_print = ", ".join(final_match_codes)
@@ -4123,12 +4128,12 @@ def ja_word(japanese_word):
     returned_data = requests.get(link_json)
     word_data = returned_data.json()
     main_data = word_data['data']
-    main_data = main_data[0]  # Choose the first result.
 
     # Attempt to get the reading of it in hiragana. If there is an KeyError, then it's not a real Jisho entry.
     try:
+        main_data = main_data[0]  # Choose the first result.
         word_reading = main_data['japanese'][0]['reading']
-    except KeyError:
+    except (KeyError, IndexError):
         word_reading = ""
 
     if len(word_reading) == 0:  # It appears that this word doesn't exist on Jisho.
@@ -4329,7 +4334,7 @@ def lookup_matcher(content_text, language_name):
             matches.append(new_matches)
     matches = [x for x in matches if x]
 
-    combined_text = "".join(matches)  # A simple string to allow for quick detection of languages that fall in unicode
+    combined_text = "".join(matches)  # A simple string to allow for quick detection of languages that fall in Unicode.
     zhja_true = re.findall('([\u2E80-\u9FFF]+)', combined_text, re.DOTALL)
     zh_b_true = re.findall('([\U00020000-\U0002EBEF]+)', combined_text, re.DOTALL)
     kana_true = re.findall('([\u3041-\u309f]+|[\u30a0-\u30ff]+)', combined_text, re.DOTALL)
@@ -4724,8 +4729,8 @@ def reference_search(language_match):
         logger.debug("[ZW] Run_Reference Code: {}".format(check_code))
         sql_command = "SELECT * FROM language_cache WHERE language_code = ?"
         # We try to retrieve the language in question.
-        cursor_reference.execute(sql_command, (check_code,))
-        reference_results = cursor_reference.fetchall()
+        cursor_main.execute(sql_command, (check_code,))
+        reference_results = cursor_main.fetchall()
 
         if len(reference_results) != 0:  # We could find a cached value for this language
             reference_cached_info = reference_results[0][1]
@@ -4750,8 +4755,8 @@ def reference_search(language_match):
         if 'Ethnologue has no page for' in str(language_exist):  # Check to see if the page exists at all
             to_post = reference_other_search(language_iso3)
             reference_to_store = (language_iso3, to_post)
-            cursor_reference.execute("INSERT INTO language_cache VALUES (?, ?)", reference_to_store)
-            conn_reference.commit()
+            cursor_main.execute("INSERT INTO language_cache VALUES (?, ?)", reference_to_store)
+            conn_main.commit()
             return to_post
         if language_iso3 in ISO_MACROLANGUAGES:  # If it's a macrolanguage let's take a look.
             logger.debug("[ZW] Reference: '{}' is a macrolanguage.".format(language_match))
@@ -4885,8 +4890,8 @@ def reference_search(language_match):
                       lookup_line_1b + lookup_line_2 + lookup_line_3 + "\n\n" + lookup_line_4)
 
         reference_to_store = (cache_code, to_post)
-        cursor_reference.execute("INSERT INTO language_cache VALUES (?, ?)", reference_to_store)
-        conn_reference.commit()
+        cursor_main.execute("INSERT INTO language_cache VALUES (?, ?)", reference_to_store)
+        conn_main.commit()
 
         logger.info("[ZW] Retrieved and saved reference information about '{}' as a language.".format(language_match))
 
@@ -5038,8 +5043,8 @@ def edit_finder():
 
                 if force_change:  # Delete the comment from the processed database to force it to update and reprocess.
                     delete_comment_command = "DELETE FROM oldcomments WHERE id = ?"
-                    cursor_processed.execute(delete_comment_command, (cid,))
-                    conn_processed.commit()
+                    cursor_main.execute(delete_comment_command, (cid,))
+                    conn_main.commit()
                     logger.debug("[ZW] Edit Finder: Removed edited comment `{}` from processed database.".format(cid))
 
         else:  # This is a comment that has not been stored.
@@ -5170,13 +5175,13 @@ def ziwen_posts():
             continue
 
         # Check the local database to see if this is in there.
-        cursor_processed.execute('SELECT * FROM oldposts WHERE ID=?', [oid])
-        if cursor_processed.fetchone():
+        cursor_main.execute('SELECT * FROM oldposts WHERE ID=?', [oid])
+        if cursor_main.fetchone():
             # Post is already in the database
             logger.debug("[ZW] Posts: This post {} already exists in the processed database.".format(oid))
             continue
-        cursor_processed.execute('INSERT INTO oldposts VALUES(?)', [oid])
-        conn_processed.commit()
+        cursor_main.execute('INSERT INTO oldposts VALUES(?)', [oid])
+        conn_main.commit()
 
         if not css_check(oflair_css) and oflair_css is not None:
             # If it's a Meta or Community post (that's what css_check does), just alert those signed up for it. 
@@ -5396,8 +5401,8 @@ def ziwen_bot():
         if pauthor == USERNAME:  # Will not reply to my own comments
             continue
 
-        cursor_processed.execute('SELECT * FROM oldcomments WHERE ID=?', [pid])
-        if cursor_processed.fetchone():
+        cursor_main.execute('SELECT * FROM oldcomments WHERE ID=?', [pid])
+        if cursor_main.fetchone():
             # Post is already in the database
             continue
 
@@ -5420,8 +5425,8 @@ def ziwen_bot():
 
         if oid != VERIFIED_POST_ID:
             # Enter it into the processed comments database
-            cursor_processed.execute('INSERT INTO oldcomments VALUES(?)', [pid])
-            conn_processed.commit()
+            cursor_main.execute('INSERT INTO oldcomments VALUES(?)', [pid])
+            conn_main.commit()
 
         pbody = post.body
         pbody_original = str(pbody)  # Create a copy with capitalization
@@ -6028,8 +6033,17 @@ def ziwen_bot():
                 translated_found = False
 
             if translated_found and not thanks_already and oflair_css not in ['multiple', 'app']:
-                if not TESTING_MODE and pauthor != oauthor:
+
+                # First we check to see if the author has already been recorded as getting a message.
+                try:
+                    messaged_already = oajo.author_messaged
+                except AttributeError:
+                    messaged_already = False
+
+                # If the commentor is not the author of the post and they have not been messaged, we can tell them.
+                if pauthor != oauthor and not messaged_already:
                     messaging_translated_message(oauthor=oauthor, opermalink=opermalink)  # Sends them notification msg
+                    oajo.set_author_messaged(True)
 
         '''MODERATOR-ONLY COMMANDS (!delete, !reset, !note, !set)'''
 
@@ -6143,12 +6157,12 @@ def verification_parser():
         except AttributeError:
             # Author is deleted. We don't care about this post.
             continue
-        cursor_processed.execute('SELECT * FROM oldcomments WHERE ID=?', [cid])
-        if cursor_processed.fetchone():
+        cursor_main.execute('SELECT * FROM oldcomments WHERE ID=?', [cid])
+        if cursor_main.fetchone():
             # Post is already in the database
             continue
-        cursor_processed.execute('INSERT INTO oldcomments VALUES(?)', [cid])
-        conn_processed.commit()
+        cursor_main.execute('INSERT INTO oldcomments VALUES(?)', [cid])
+        conn_main.commit()
 
         comment.save()  # Saves the comment on Reddit so we know not to use it. (bot will not process saved comments)
 
@@ -6270,8 +6284,8 @@ def cc_ref():
 
         pid = post.id
 
-        cursor_processed.execute('SELECT * FROM oldcomments WHERE ID=?', [pid])
-        if cursor_processed.fetchone():
+        cursor_main.execute('SELECT * FROM oldcomments WHERE ID=?', [pid])
+        if cursor_main.fetchone():
             # Post is already in the database
             continue
 
@@ -6282,8 +6296,8 @@ def cc_ref():
             # Does not contain our keyword
             continue
 
-        cursor_processed.execute('INSERT INTO oldcomments VALUES(?)', [pid])
-        conn_processed.commit()
+        cursor_main.execute('INSERT INTO oldcomments VALUES(?)', [pid])
+        conn_main.commit()
 
         if KEYWORDS[1] in pbody:
             post_content = []
