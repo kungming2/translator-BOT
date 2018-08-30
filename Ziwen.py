@@ -37,12 +37,12 @@ from Data import _ko_romanizer
 '''
 UNIVERSAL VARIABLES
 
-These variables (all denoted by UPPERCASE names) are variables by many functions in Ziwen. These are important
+These variables (all denoted by UPPERCASE names) are variables used by many functions in Ziwen. These are important
 as they define many of the basic functions of the bot.
 '''
 
 BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.7.47'
+VERSION_NUMBER = '1.7.48'
 USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator. '
               'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
@@ -142,7 +142,7 @@ def maintenance_most_recent():
     A function that grabs the usernames of people who have submitted to r/translator in the last 24 hours.
     Another function can check against this to make sure people aren't submitting too many.
 
-    :return most_recent: A list of usernames that have recently submitted to r/translator.
+    :return most_recent: A list of usernames that have recently submitted to r/translator. Duplicates will be on there.
     """
 
     # Define the time parameters (24 hours earlier from present)
@@ -1093,7 +1093,6 @@ def ajo_writer(new_ajo):
         stored_ajo = eval(stored_ajo[2])  # We only want the stored dict here.
         if new_ajo.__dict__ != stored_ajo:  # The dictionary representations are not the same
             representation = str(new_ajo.__dict__)  # Convert the dict of the Ajo into a string.
-            representation = (representation,)  # Convert into a tuple of length one for insertion.
             update_command = "UPDATE local_database SET ajo = ? WHERE id = ?"
             cursor_ajo.execute(update_command, (representation, ajo_id))
             conn_ajo.commit()
@@ -1976,7 +1975,7 @@ def messaging_user_statistics_writer(body_text, username):
         conn_main.commit()
     elif len(commands_dictionary.keys()) != 0 and already_saved:  # This username exists. Update instead.
         update_command = "UPDATE total_commands SET commands = ? WHERE username = ?"
-        cursor_main.execute(update_command, (commands_dictionary, username))
+        cursor_main.execute(update_command, (str(commands_dictionary), username))
         conn_main.commit()
     else:
         logger.debug("[ZW] messaging_user_statistics_writer: No commands to write.")
@@ -2326,64 +2325,87 @@ def notifier_over_frequency_checker(username):
         return False
 
 
-def notifier_limit_writer(username):
+def notifier_limit_writer(username, language_code, num_notifications=1):
     """
-    A function to record how many notifications a user has received. (e.g. kungming2, 12)
-    This function iterates the recorded number by 1 each time it's called.
-
+    A function to record how many notifications a user has received. (e.g. kungming2, {'yue': 2, 'unknown': 1, 'ar': 3})
+    This function iterates the recorded number by num_notifications each time it's called and stores it in a dictionary.
+    It creates a new record if the user has not been recorded before, otherwise it updates a dictionary.
     The database will be cleared out monthly by a separate function contained within Wenyuan.
 
     :param username: The username of the person who just received a notification.
+    :param language_code: The language code for which the notification was for.
+    :param num_notifications: The number of notifications the user was sent. 1 by default.
     :return: Nothing.
     """
+
+    monthly_limit_dictionary = {}
 
     # Fetch the data
     sql_lw = "SELECT * FROM notify_monthly_limit WHERE username = ?"
     cursor_main.execute(sql_lw, (username,))
-    user_data = cursor_main.fetchall()
+    user_data = cursor_main.fetchone()
 
-    # Parse it
-    if len(user_data) == 0:  # No record
-        num_notifications = 0
-    else:  # There's data already for this username.
-        num_notifications = user_data[0][1]  # Take the second part of the tuple in a list.
-
-    current_notifications = num_notifications + 1
+    # Parse the user's data. Load it if it exists.
+    if user_data is not None:  # There's a record.
+        monthly_limit_dictionary = user_data[1]  # Take the stored dictionary.
+        monthly_limit_dictionary = eval(monthly_limit_dictionary)  # Convert the string to a proper dictionary.
 
     # Write the changes to the database.
-    if num_notifications == 0:  # Create a new record
-        to_store = (username, current_notifications)
+    if language_code not in monthly_limit_dictionary and user_data is None:  # Create a new record, user doesn't exist.
+
+        # Define the key and its value.
+        monthly_limit_dictionary[language_code] = num_notifications
+
+        # Write to the database.
+        to_store = (username, str(monthly_limit_dictionary))
         cursor_main.execute("INSERT INTO notify_monthly_limit VALUES (?, ?)", to_store)
     else:  # Update an existing one.
+
+        # Attempt to update the dictionary value.
+        try:
+            monthly_limit_dictionary[language_code] += num_notifications
+        except KeyError:
+            monthly_limit_dictionary[language_code] = num_notifications
+
+        # Write to the database.
+        to_store = (str(monthly_limit_dictionary), username)
         update_command = "UPDATE notify_monthly_limit SET received = ? WHERE username = ?"
-        to_store = (current_notifications, username)
         cursor_main.execute(update_command, to_store)
 
+    # Commit changes.
     conn_main.commit()
 
     return
 
 
-def notifier_limit_over_checker(username, hard_limit):
+def notifier_limit_over_checker(username, language_code, hard_limit):
     """
-    Function that takes a username and checks if they're above the monthly limit. This is currently UNUSED.
+    Function that takes a username and checks if they're above a hard monthly limit. This is currently UNUSED.
     True if they're over the limit, False otherwise.
 
     :param username: The username of the person.
-    :param hard_limit: The hard monthly limit for notifications per user.
+    :param language_code: The language code for the
+    :param hard_limit: The hard monthly limit for notifications per user per language. This means that once they exceed
+                       this amount they would no longer get notifications for this language. This is an integer.
     :return: True if they are over the limit, False otherwise.
     """
 
     # Fetch the data
     sql_lw = "SELECT * FROM notify_monthly_limit WHERE username = ?"
     cursor_main.execute(sql_lw, (username,))
-    user_data = cursor_main.fetchall()
+    user_data = cursor_main.fetchone()
 
-    if len(user_data) == 0:  # No record, so it's okay to send.
+    if user_data is None:  # No record of this user, so it's okay to send.
         return False
     else:  # There's data already for this username.
-        num_notifications = user_data[0][1]  # Take the second part of the tuple in a list.
-        if num_notifications > hard_limit:  # Over the limit
+        monthly_limit_dictionary = eval(user_data[1])
+
+        try:  # Attempt to get the number of notifications user has received for this language.
+            current_number_notifications = monthly_limit_dictionary[language_code]
+        except KeyError:  # There is no entry, so this must be zero.
+            current_number_notifications = 0
+
+        if current_number_notifications > hard_limit:  # Over the limit
             return True
         else:
             return False
@@ -2627,7 +2649,7 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
         try:
             message_subject = '[Notification] New {} post on r/translator'.format(language_name)
             reddit.redditor(username).message(message_subject, message + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
-            notifier_limit_writer(username)  # Record that they have been messaged
+            notifier_limit_writer(username, language_code)  # Record that they have been messaged
         except praw.exceptions.APIException:  # If the user deleted their account...
             logger.info("[ZW] Notifier: An error occured while sending a message to u/{}. Removing...".format(username))
             notifier_list_pruner(username)  # Remove the username from our database.
@@ -4037,6 +4059,7 @@ def ja_word_sfx(katakana_string):
 def ja_word_given_name_search(ja_given_name):
     """
     A function to get the kanji readings of Japanese given names, which may not necessarily be in dictionaries.
+    This also returns readings of place names, such as temples.
 
     :param ja_given_name: A Japanese given name, in kanji *only*.
     :return formatted_section: A chunk of text with readings and meanings of the character.
@@ -4066,13 +4089,14 @@ def ja_word_given_name_search(ja_given_name):
 
     # Create the readings list.
     for name in hiragana_names:
-        furigana_chunk = "{} (*{}*)".format(name, romkan.to_hepburn(name).title())
+        name_formatted = name.strip()
+        furigana_chunk = "{} (*{}*)".format(name_formatted, romkan.to_hepburn(name_formatted).title())
         names_w_readings.append(furigana_chunk)
     name_formatted_readings = ", ".join(names_w_readings)
 
     # Create the comment
     formatted_section = ('# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n'
-                         '**Readings:** {1}\n\n**Meanings**: A Japanese given name.'
+                         '**Readings:** {1}\n\n**Meanings**: A Japanese name.'
                          "\n\n\n^Information ^from [^Jinmei ^Kanji ^Jisho](http://kanji.reader.bz/{0}) "
                          "^| [^Weblio ^EJJE](http://ejje.weblio.jp/content/{0})")
     formatted_section = formatted_section.format(ja_given_name, name_formatted_readings)
@@ -4082,8 +4106,9 @@ def ja_word_given_name_search(ja_given_name):
 
 def ja_word_surname(name):
     """
-    Function to get a Japanese surname (backup if a word search fails)
-    :param name: Any Japanese surname (usually two kanji long)
+    Function to get a Japanese surname (backup if a word search fails).
+
+    :param name: Any Japanese surname (usually two kanji long).
     :return None: if no results, otherwise return a formatted string.
     """
 
@@ -4098,7 +4123,7 @@ def ja_word_surname(name):
     else:
         furigana_chunk = ""
         for reading in ja_reading:
-            furigana_chunk_new = reading + ' (*' + romkan.to_hepburn(reading).title() + '*)'
+            furigana_chunk_new = reading.strip() + ' (*' + romkan.to_hepburn(reading).title() + '*)'
             furigana_chunk = furigana_chunk + ', ' + furigana_chunk_new
         lookup_line_1 = '# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n'.format(name)
         lookup_line_1 += '**Readings:** ' + furigana_chunk[2:]  # We return the formatted readings of this name
