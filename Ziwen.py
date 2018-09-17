@@ -42,7 +42,7 @@ as they define many of the basic functions of the bot.
 '''
 
 BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.7.48'
+VERSION_NUMBER = '1.7.51'
 USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator. '
               'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
@@ -849,9 +849,23 @@ class Ajo:
         for language in set_languages_raw:
             code = converter(language)[0]
             name = converter(language)[1]
-            set_languages_processed_codes.append(code)
-            self.language_name.append(name)
-            self.status[code] = "untranslated"
+            if len(code) != 0:
+                set_languages_processed_codes.append(code)
+                self.language_name.append(name)
+                self.status[code] = "untranslated"
+
+        print(set_languages_processed_codes)
+        languages_tag_string = ", ".join(set_languages_processed_codes)  # Evaluate the length of the potential string
+
+        # The limit for link flair text is 64 characters. we need to trim it so that it'll fit the flair.
+        if len(languages_tag_string) > 34:
+            languages_tag_short = []
+            for tag in set_languages_processed_codes:
+                if len(", ".join(languages_tag_short)) <= 30:
+                    languages_tag_short.append(tag)
+                else:
+                    continue
+            set_languages_processed_codes = list(languages_tag_short)
 
         # Now we have code to generate a list of language codes ISO 639-1 and 3.
         for code in set_languages_processed_codes:
@@ -2438,7 +2452,7 @@ def notifier_equalizer(notify_users_list, language_name, monthly_limit):
     # Get the number of requests on average per month for a language
     try:
         if language_name == "Unknown":  # Hardcode Unknown frequency
-            monthly_number_notifications = 240
+            monthly_number_notifications = 260
         else:
             monthly_number_notifications = messaging_language_frequency(language_name)[1][1]
     except TypeError:  # If there are no statistics for this language, just set it to low.
@@ -2452,9 +2466,13 @@ def notifier_equalizer(notify_users_list, language_name, monthly_limit):
     if users_to_contact < users_number:
         notify_users_list = random.sample(notify_users_list, users_to_contact)
 
+        # Get the new number of people on this list.
+        users_number = len(notify_users_list)
+
     # If there are more than limit_number for a language...  Cut it down.
     if users_number > limit_number:
-        notify_users_list = random.sample(notify_users_list, limit_number)  # Pick X people at random. Cut the list down
+        # Pick X people at random. Cut the list down
+        notify_users_list = random.sample(notify_users_list, limit_number)
         logger.info("[ZW] Notifier Equalizer: {}+ people for {} notifications. Randomized.".format(limit_number,
                                                                                                    language_name))
 
@@ -2610,6 +2628,10 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
             language_code = suggested_css_text
             language_name = suggested_css_text.title()
             post_type = "post"  # Since these are technically not language requests
+
+            # Here we have code to make sure that only mods and the bot send notifications for meta/community posts.
+            if not is_mod(oauthor):  # This OP is not a mod. Don't send notifications.
+                return  # Exit.
     else:  # This is a specific code, we want to add the people only signed up for them.
         # Note, this only gets people who are specifically signed up for them, not
         language_code = suggested_css_text.split("-", 1)[0]  # We get the broader category here. (ar, unknown)
@@ -5333,7 +5355,8 @@ def ziwen_posts():
                         if final_css_text is not None:  # Let's leave None flair text alone
                             final_css_text += " (Long)"
                             post.reply(COMMENT_LONG + BOT_DISCLAIMER)
-                except (ValueError, TypeError, UnicodeEncodeError, youtube_dl.utils.ExtractorError):
+                except (ValueError, TypeError, UnicodeEncodeError, youtube_dl.utils.ExtractorError,
+                        youtube_dl.utils.RegexNotFoundError):
                     # The pafy routine cannot make sense of it.
                     logger.debug("[ZW] Posts: Unable to process this YouTube link.")
                 else:
@@ -5517,7 +5540,7 @@ def ziwen_bot():
             match = determined_data[0]
             advanced_mode = comment_info_parser(pbody, "!identify:")[1]
             language_country = None  # Default value
-            original_language_name = str(oajo.language_name)  # Store the original language defined in the Ajo
+            o_language_name = str(oajo.language_name)  # Store the original language defined in the Ajo
             # This should return a boolean as to whether or not it's in advanced mode.
 
             logger.info("[ZW] Bot: COMMAND: !identify, from u/{}.".format(pauthor))
@@ -5573,10 +5596,10 @@ def ziwen_bot():
                     oajo.set_script(language_code)
                     logger.info("[ZW] Bot: Changed flair to '{}', with an Unknown+script flair.".format(language_name))
 
-                if not match_script and original_language_name != oajo.language_name or not converter(oajo.language_name)[2]:
+                if not match_script and o_language_name != oajo.language_name or not converter(oajo.language_name)[2]:
                     # Definitively a language. Let's archive this to the wiki.
                     # We've also made sure that it's not just a change of state.
-                    record_to_wiki(odate=int(ocreated), otitle=otitle, oid=oid, oflair_text=original_language_name,
+                    record_to_wiki(odate=int(ocreated), otitle=otitle, oid=oid, oflair_text=o_language_name,
                                    s_or_i=False, oflair_new=oajo.language_name)  # Write to the identified page
             else:  # This is an !identify command for multiple defined languages (e.g. !identify:ru+es+ja
                 oajo.set_defined_multiple(match)
@@ -5585,7 +5608,7 @@ def ziwen_bot():
             if KEYWORDS[3] not in pbody and KEYWORDS[9] not in pbody and oajo.status == "untranslated":
                 # Just a check that we're not sending notifications AGAIN if the identified language is the same as orig
                 # This makes sure that they're different languages. So !identify:Chinese on Chinese won't send messages.
-                if original_language_name != language_name and MESSAGES_OKAY:
+                if o_language_name != language_name and MESSAGES_OKAY:
                     if not match_script:  # This is not a script.
                         ziwen_notifier(language_name, otitle, opermalink, oauthor, True)
                         # Notify people on the list if the post hasn't already been marked as translated

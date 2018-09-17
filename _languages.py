@@ -11,7 +11,7 @@ import itertools
 
 from fuzzywuzzy import fuzz  # When installing, use fuzzywuzzy[speedup]
 
-VERSION_NUMBER_LANGUAGES = "1.6.20"
+VERSION_NUMBER_LANGUAGES = "1.6.21"
 
 # Access the CSV with ISO 639-3 and ISO 15924 data.
 lang_script_directory = os.path.dirname(__file__)  # <-- absolute dir the script is in
@@ -154,17 +154,17 @@ SUPPORTED_ALTERNATE = {'am': ['Ethiopian', 'Ethiopia', 'Ethopian', 'Ethiopic', '
                                'Classical Greek'], 'gu': ['Gujerathi', 'Gujerati', 'Gujrathi'],
                        'he': ['Israeli', 'Hebraic', 'Jewish'], 'hi': ['Hindustani', 'Hindī'],
                        'hr': ['Croation', 'Serbo-Croatian', 'Hrvatski'],
-                       'ht': ['Haitian', 'Kreyòl Ayisyen', 'Western Caribbean Creole', 'Kreyol'],
+                       'ht': ['Haitian', 'Kreyòl Ayisyen', 'Kreyol'],
                        'hu': ['Magyar', 'Hungary'],
                        'id': ['Indonesia', 'Indo'],
                        'it': ['Italiano', 'Italiana', 'Italia', 'Italien', 'Italy'], 'iu': ['Inuit'],
                        'ja': ['Jap', 'Jpn', 'Japenese', 'Japaneese', 'Japanes', 'Katakana', 'Hiragana', 'Japaness',
                               'Romaji', 'Japneese', 'Japnese', 'Kanji', 'Japaese', 'Japn', 'Japonais', 'Romajin',
-                              'Nihongo', 'Kenji', 'Romanji', 'Rōmaji', '日本語'],
-                       'ka': ['Common Kartvelian', 'Kartvelian'],
+                              'Nihongo', 'Kenji', 'Romanji', 'Rōmaji', '日本語', 'Japones', 'Japonés'],
+                       'ka': ['Kartvelian'],
                        'kk': ['Kazakhstan', "Kazak", 'Kaisak', 'Kosach'],
                        'km': ['Cambodian', 'Cambodia', 'Kampuchea'],
-                       'ko': ['Korea', 'Hangul', 'Korian', 'Kor', 'Hanguk', 'Guk-Eo'],
+                       'ko': ['Korea', 'Hangul', 'Korian', 'Kor', 'Hanguk', 'Guk-Eo', 'Hangeul', 'Hanguel'],
                        'ku': ['Kurdi', 'Kurd'], 'la': ['Latina', 'Classical Roman'],
                        'lo': ['Laos', 'Laotian'],
                        'lt': ['Lithuania', 'Lietuviu', 'Litauische', 'Litewski', 'Litovskiy', 'Lith'],
@@ -343,6 +343,7 @@ ISO_MACROLANGUAGES = {
     "oji": ("ojb", ["ciw", "ojb", "ojc", "ojg", "ojs", "ojw", "otw"]),
     "ori": ("ory", ["ory", "spv"]),
     "orm": ("gaz", ["gaz", "gax", "hae", "orc"]),
+    "pus": ("pst", ["pbt", "pbu", "pst"]),
     "pus": ("pst", ["pbt", "pbu", "pst"]),
     "que": ("quh", ["cqu", "qub", "qud", "quf", "qug", "quh", "quk", "qul", "qup", "qur", "qus", "quw", "qux", "quy",
                     "quz", "qva", "qvc", "qve", "qvh", "qvi", "qvj", "qvl", "qvm", "qvn", "qvo", "qvp", "qvs", "qvw",
@@ -972,7 +973,7 @@ def converter(language):
     country_code = None
     targeted_language = str(language)
 
-    if "-" in language and "Anglo" not in language:  # There's a hyphen... probably a special code.
+    if "-" in language and "Anglo" not in language and "Komi" not in language:  # There's a hyphen... probably a special code.
         broader_code = targeted_language.split("-")[0]  # Take only the language part (ar).
         specific_code = targeted_language.split("-")[1]  # Get the specific code.
         if len(specific_code) <= 1:  # If it's just a letter it cannot be valid.
@@ -1111,7 +1112,7 @@ def converter(language):
                                 language_code = ""
                     else:  # Otherwise it's a name for an ISO 639-3 language?
                         # Now we check DB to see if it's a name for an ISO 639-3 language
-                        # Note: We use capwords() because it can account for quotes. 
+                        # Note: We use capwords() because it can account for quotes.
                         iso_data = lang_code_search(string.capwords(language_name), False)
                         language_code = iso_data[0]
                         if len(language_code) == 0:  # There was no match
@@ -1890,9 +1891,6 @@ def title_format(title, display_process=False):
         notify_languages = both_test_languages
     # By this point, we have the source and target languages broken up into two separate lists.
     # Now we determine what CSS class to give this post.
-
-    # print("Final source: " + str(d_source_languages))
-    # print("Final target: " + str(d_target_languages))
 
     if "English" in d_target_languages and 'English' not in d_source_languages:
         # If the target language is English, we want to give it a source language CSS.
