@@ -6,12 +6,11 @@
 import csv
 import re
 import os
-import string
 import itertools
 
 from fuzzywuzzy import fuzz  # When installing, use fuzzywuzzy[speedup]
 
-VERSION_NUMBER_LANGUAGES = "1.6.21"
+VERSION_NUMBER_LANGUAGES = "1.7"
 
 # Access the CSV with ISO 639-3 and ISO 15924 data.
 lang_script_directory = os.path.dirname(__file__)  # <-- absolute dir the script is in
@@ -19,34 +18,1586 @@ lang_script_directory += "/Data/"  # Where the main files are kept.
 FILE_ADDRESS_ISO_ALL = os.path.join(lang_script_directory, '_database_iso_codes.csv')
 
 '''LANGUAGE CODE LISTS'''
-# The following two lists are hard-coded codes that are the 120 languages and others supported on the subreddit.
-# They have equivalent flairs in the CSS and icons (https://www.reddit.com/r/translator/wiki/linkflair).
-SUPPORTED_CODES = ['af', 'sq', 'am', 'egy', 'ar', 'arc', 'hy', 'eu', 'be', 'bn', 'bs', 'bg', 'my', 'yue', 'ca', 'zh',
-                   'hr', 'cs', 'da', 'nl', 'et', 'fi', 'fr', 'de', 'ka', 'el', 'gu', 'ht', 'he', 'hi', 'hu', 'is', 'id',
-                   'ga', 'it', 'ja', 'kk', 'km', 'ko', 'ku', 'la', 'lv', 'lt', 'mg', 'ms', 'mr', 'mn', 'non', 'no',
-                   'ps', 'fa', 'pl', 'pt', 'pa', 'ro', 'ru', 'sa', 'sc', 'gd', 'sr', 'si', 'sk', 'sl', 'so', 'es', 'sw',
-                   'sv', 'tl', 'ta', 'te', 'th', 'bo', 'tr', 'uk', 'ur', 'uz', 'vi', 'cy', 'yi', 'zu', 'multiple',
-                   'app', 'unknown', 'generic', 'art', 'ang', 'ban', 'ceb', 'haw', 'mk', 'ml', 'mt', 'ne', 'zxx',
-                   'chr', 'co', 'cop', 'cu', 'eo', 'grc', 'iu', 'lo', 'nv', 'qu', 'xh', 'yo', 'az', 'br', 'dz', 'fo',
-                   'jv', 'kl', 'kn', 'lb', 'li', 'ln', 'lzh', 'mi', 'om', 'ota', 'pi', 'syc', 'tg', 'tt', 'tw', 'ug']
-SUPPORTED_LANGUAGES = ['Afrikaans', 'Albanian', 'Amharic', 'Ancient Egyptian', 'Arabic', 'Aramaic', 'Armenian',
-                       'Basque', 'Belarusian', 'Bengali', 'Bosnian', 'Bulgarian', 'Burmese', 'Cantonese', 'Catalan',
-                       'Chinese', 'Croatian', 'Czech', 'Danish', 'Dutch', 'Estonian', 'Finnish', 'French', 'German',
-                       'Georgian', 'Greek', 'Gujarati', 'Haitian Creole', 'Hebrew', 'Hindi', 'Hungarian', 'Icelandic',
-                       'Indonesian', 'Irish', 'Italian', 'Japanese', 'Kazakh', 'Khmer', 'Korean', 'Kurdish', 'Latin',
-                       'Latvian', 'Lithuanian', 'Malagasy', 'Malay', 'Marathi', 'Mongolian', 'Norse', 'Norwegian',
-                       'Pashto', 'Persian', 'Polish', 'Portuguese', 'Punjabi', 'Romanian', 'Russian', 'Sanskrit',
-                       'Sardinian', 'Scottish Gaelic', 'Serbian', 'Sinhalese', 'Slovak', 'Slovene', 'Somali', 'Spanish',
-                       'Swahili', 'Swedish', 'Tagalog', 'Tamil', 'Telugu', 'Thai', 'Tibetan', 'Turkish', 'Ukrainian',
-                       'Urdu', 'Uzbek', 'Vietnamese', 'Welsh', 'Yiddish', 'Zulu', 'Multiple Languages', 'App',
-                       'Unknown', 'Generic', 'Conlang', 'Anglo-Saxon', 'Balinese', 'Cebuano', 'Hawaiian', 'Macedonian',
-                       'Malayalam', 'Maltese', 'Nepali', 'Nonlanguage', 'Cherokee', 'Corsican', 'Coptic',
-                       'Old Church Slavonic', 'Esperanto', 'Ancient Greek', 'Inuktitut', 'Lao', 'Navajo', 'Quechua',
-                       'Xhosa', 'Yoruba', 'Azerbaijani', 'Breton', 'Dzongkha', 'Faroese', 'Javanese', 'Kalaallisut',
-                       'Kannada', 'Luxembourgish', 'Limburgish', 'Lingala', 'Classical Chinese', 'Maori', 'Oromo',
-                       'Ottoman Turkish', 'Pali', 'Syriac', 'Tajik', 'Tatar', 'Twi', 'Uyghur']
 # These are symbols used to indicate states in defined multiple posts.
 DEFINED_MULTIPLE_LEGEND = {'⍉': 'missing', '¦': 'inprogress', '✓': 'doublecheck', '✔': 'translated'}
+
+# This is our main dictionary.
+MAIN_LANGUAGES = {
+    "aa": {
+        'supported': False,
+        'name': 'Afar',
+        'language_code_3': 'aar',
+        'alternate_names': ['Afaraf']
+    },
+    "ab": {
+        'supported': False,
+        'name': 'Abkhaz',
+        'language_code_3': 'abk',
+        'alternate_names': ['Abxazo', 'Abkhazian'],
+        'thanks': "Иҭабуп"
+    },
+    "ae": {
+        'supported': False,
+        'name': 'Avestan',
+        'language_code_3': 'ave',
+        'alternate_names': ['Avesta'],
+        'subreddits': ["r/avestan"]
+    },
+    "af": {
+        'supported': True,
+        'name': 'Afrikaans',
+        'language_code_3': 'afr',
+        'alternate_names': None,
+        'countries_default': 'ZA',
+        'countries_associated': ['NA'],
+        'subreddits': ['r/afrikaans'],
+        'thanks': "Dankie"
+    },
+    "ak": {
+        'supported': False,
+        'name': 'Akan',
+        'language_code_3': 'aka',
+        'alternate_names': None
+    },
+    "am": {
+        'supported': True,
+        'name': 'Amharic',
+        'language_code_3': 'amh',
+        'alternate_names': ['Ethiopian', 'Ethiopia', 'Ethopian', 'Ethiopic', 'Abyssinian', 'Amarigna', 'Amarinya',
+                            'Amhara'],
+        'countries_default': 'ET',
+        'subreddits': ["r/amharic"],
+        'thanks': "አመሰግናለሁ"
+    },
+    "an": {
+        'supported': False,
+        'name': 'Aragonese',
+        'language_code_3': 'arg',
+        'alternate_names': None,
+        'thanks': "Gracias"
+    },
+    "ang": {
+        'supported': True,
+        'name': 'Anglo-Saxon',
+        'language_code_3': 'ang',
+        'alternate_names': ['Old English', 'Anglo Saxon', 'Anglosaxon', 'Anglisc'],
+        'thanks': "Þancas"
+    },
+    'app': {
+        'language_code_3': 'app',
+        'name': 'App',
+        'supported': True,
+        'alternate_names': None
+    },
+    "ar": {
+        'supported': True,
+        'name': 'Arabic',
+        'language_code_3': 'arb',
+        'alternate_names': ['Arab', 'Arabian', 'Arbic', 'Aribic', 'Arabe', 'Levantine', 'Arabish', 'Arabiic',
+                            'Lebanese', 'Syrian', 'Yemeni', '3arabi', 'Msarabic', 'Moroccan', 'Arabizi', 'Tunisian'],
+        'countries_associated': ['AE', 'CY', 'DZ', 'BH', 'DJ', 'EG', 'IL', 'IQ', 'JO', 'KW', 'LB', 'LY', 'MA', 'ML',
+                                 'OM', 'PS', 'SA', 'SO', 'SD', 'SS', 'SY', 'TD', 'TN', 'YE'],
+        'subreddits': ["r/learn_arabic", "r/arabic", "r/arabs", "r/learnarabic"],
+        'thanks': "ﺷﻜﺮﺍﹰ"
+    },
+    'arc': {
+        'alternate_names': None,
+        'name': 'Aramaic',
+        'supported': True,
+        'language_code_3': 'arc',
+        'subreddits': ["r/aramaic"],
+        'thanks': "Yishar"
+    },
+    'art': {
+        'language_code_3': 'art',
+        'name': 'Conlang',
+        'supported': True,
+        'alternate_names': ['Artificial', 'Conlang', 'Constructed', 'Tengwar'],
+    },
+    "as": {
+        'supported': False,
+        'name': 'Assamese',
+        'language_code_3': 'asm',
+        'alternate_names': ['Asamiya', 'Asambe', 'Asami'],
+        'thanks': "ধন্যবাদ"
+    },
+    "av": {
+        'supported': False,
+        'name': 'Avar',
+        'language_code_3': 'ava',
+        'alternate_names': ['Avaro', 'Avaric']
+    },
+    "ay": {
+        'supported': False,
+        'name': 'Aymara',
+        'language_code_3': 'ayr',
+        'alternate_names': None,
+        'countries_associated': ['PE', 'CL', 'BO'],
+        'thanks': "Juspajaraña"
+    },
+    "az": {
+        'supported': True,
+        'name': 'Azerbaijani',
+        'language_code_3': 'azj',
+        'alternate_names': ['Azeri'],
+        'thanks': "Təşəkkür edirəm"
+    },
+    "ba": {
+        'supported': False,
+        'name': 'Bashkir',
+        'language_code_3': 'bak',
+        'alternate_names': None,
+        'thanks': "рәхмәт"
+    },
+    "ban": {
+        'supported': True,
+        'name': 'Balinese',
+        'language_code_3': 'ban',
+        'alternate_names': ['Bali'],
+        'thanks': "Suksma"
+    },
+    "be": {
+        'supported': True,
+        'name': 'Belarusian',
+        'language_code_3': 'bel',
+        'alternate_names': ['Belarussian', 'Belorusian', 'Belorussian', 'Bielorussian', 'Byelorussian'],
+        'countries_default': 'BY',
+        'subreddits': ["r/belarusian"],
+        'thanks': "Дзякуй"
+    },
+    "bg": {
+        'supported': True,
+        'name': 'Bulgarian',
+        'language_code_3': 'bul',
+        'alternate_names': None,
+        'thanks': "благодаря"
+    },
+    "bh": {
+        'supported': False,
+        'name': 'Bihari',
+        'language_code_3': 'bho',
+        'alternate_names': ['Bhojpuri', 'Maithili', 'Magahi']
+    },
+    "bi": {
+        'supported': False,
+        'name': 'Bislama',
+        'language_code_3': 'bis',
+        'alternate_names': ['Bichelamar'],
+        'thanks': "Tangkyu"
+    },
+    "bm": {
+        'supported': False,
+        'name': 'Bambara',
+        'language_code_3': 'bam',
+        'alternate_names': None
+    },
+    "bn": {
+        'supported': True,
+        'name': 'Bengali',
+        'language_code_3': 'ben',
+        'alternate_names': ['Bangala', 'Bangla'],
+        'countries_default': 'BD',
+        'subreddits': ["r/bengalilanguage"],
+        'thanks': "ধন্যবাদ"
+    },
+    "bo": {
+        'supported': True,
+        'name': 'Tibetan',
+        'language_code_3': 'bod',
+        'language_code_2b': 'tib',
+        'alternate_names': ['Tibetic'],
+        'subreddits': ["r/tibet", "r/tibetanlanguage"],
+        'thanks': "ཐུགས་རྗེ་ཆེ་།"
+    },
+    "br": {
+        'supported': True,
+        'name': 'Breton',
+        'language_code_3': 'bre',
+        'alternate_names': ['Brezhoneg', 'Berton'],
+        'subreddits': ["r/breton"],
+        'thanks': "Trugarez"
+    },
+    "bs": {
+        'supported': True,
+        'name': 'Bosnian',
+        'language_code_3': 'bos',
+        'alternate_names': ['Bosnien'],
+        'countries_default': 'BA',
+        'thanks': "Hvala"
+    },
+    "ca": {
+        'supported': True,
+        'name': 'Catalan',
+        'language_code_3': 'cat',
+        'alternate_names': ['Catalonian', 'Valencian', 'Catalán'],
+        'countries_default': 'ES',
+        'subreddits': ["r/catalan"],
+        'thanks': "Gràcies"
+    },
+    "ce": {
+        'supported': False,
+        'name': 'Chechen',
+        'language_code_3': 'che',
+        'alternate_names': None,
+        'subreddits': ["r/chechnya"],
+        'thanks': "Баркалла"
+    },
+    "ceb": {
+        'supported': True,
+        'name': 'Cebuano',
+        'language_code_3': 'ceb',
+        'alternate_names': ['Cebu', 'Visaya', 'Bisaya', 'Visayan'],
+        'thanks': "Salamat"
+    },
+    "ch": {
+        'supported': False,
+        'name': 'Chamorro',
+        'language_code_3': 'cha',
+        'alternate_names': None
+    },
+    "chr": {
+        'supported': True,
+        'name': 'Cherokee',
+        'language_code_3': 'chr',
+        'alternate_names': ['Tsalagi', 'ᏣᎳᎩ'],
+        'thanks': "ᏩᏙ"
+    },
+    "co": {
+        'supported': True,
+        'name': 'Corsican',
+        'language_code_3': 'cos',
+        'alternate_names': ['Corsu', 'Corso', 'Corse'],
+        'thanks': "À ringraziavvi"
+    },
+    "cop": {
+        'supported': True,
+        'name': 'Coptic',
+        'language_code_3': 'cop',
+        'alternate_names': None,
+        'thanks': 'Sephmot'
+    },
+    "cr": {
+        'supported': False,
+        'name': 'Cree',
+        'language_code_3': 'crk',
+        'alternate_names': None
+    },
+    "cs": {
+        'supported': True,
+        'name': 'Czech',
+        'language_code_3': 'ces',
+        'language_code_2b': 'cze',
+        'alternate_names': ['Bohemian', 'Čeština', 'Czechoslovakian'],
+        'countries_default': 'CZ',
+        'mistake_abbreviation': 'cz',
+        'subreddits': ["r/learnczech"],
+        'thanks': "Dík"
+    },
+    "cu": {
+        'supported': True,
+        'name': 'Old Church Slavonic',
+        'language_code_3': 'chu',
+        'alternate_names': ['Slavonic', 'Church Slavonic', 'Old Slavic']
+    },
+    "cv": {
+        'supported': False,
+        'name': 'Chuvash',
+        'language_code_3': 'chv',
+        'alternate_names': ['Bulgar'],
+        'thanks': "Тав"
+    },
+    "cy": {
+        'supported': True,
+        'name': 'Welsh',
+        'language_code_3': 'cym',
+        'language_code_2b': 'wel',
+        'alternate_names': ['Wales', 'Cymraeg', 'Gymraeg'],
+        'subreddits': ["r/learnwelsh", "r/cymru", "r/wales"],
+        'thanks': "Diolch"
+    },
+    "da": {
+        'supported': True,
+        'name': 'Danish',
+        'language_code_3': 'dan',
+        'alternate_names': ['Dansk', 'Denmark', 'Rigsdansk'],
+        'countries_default': 'DK',
+        'mistake_abbreviation': 'dk',
+        'subreddits': ["r/danishlanguage"],
+        'thanks': "Tak"
+    },
+    "de": {
+        'supported': True,
+        'name': 'German',
+        'language_code_3': 'deu',
+        'language_code_2b': 'ger',
+        'alternate_names': ['Deutsch', 'Deutsche', 'Ger', 'Deutch', 'Bavarian', 'Kurrent', 'Austrian', 'Sütterlin',
+                            'Plattdeutsch', 'Suetterlin', 'Tedesco'],
+        'countries_associated': ['AT', 'BE', 'CH'],
+        'subreddits': ["r/german", "r/de", "r/germany"],
+        'thanks': "Danke"
+    },
+    "dv": {
+        'supported': False,
+        'name': 'Dhivehi',
+        'language_code_3': 'div',
+        'alternate_names': ['Divehi', 'Maldivian', 'Divehli'],
+        'thanks': "ޝުކުރިއްޔާ"
+    },
+    "dz": {
+        'supported': True,
+        'name': 'Dzongkha',
+        'language_code_3': 'dzo',
+        'alternate_names': ['Bhutanese', 'Zongkhar']
+    },
+    "ee": {
+        'supported': False,
+        'name': 'Ewe',
+        'language_code_3': 'ewe',
+        'alternate_names': None,
+        'thanks': "Akpe"
+    },
+    'egy': {
+        'alternate_names': ['Hieroglyphs', 'Hieroglyphic', 'Hieroglyphics', 'Hyroglifics', 'Egyptian Hieroglyphs',
+                            'Egyptian Hieroglyph'],
+        'name': 'Ancient Egyptian',
+        'supported': True,
+        'language_code_3': 'egy',
+        'subreddits': ["r/ancientegypt"],
+        'thanks': "Dua"
+    },
+    "el": {
+        'supported': True,
+        'name': 'Greek',
+        'language_code_3': 'ell',
+        'language_code_2b': 'gre',
+        'alternate_names': ['Hellenic', 'Greece', 'Hellas', 'Cypriot'],
+        'countries_default': 'GR',
+        'countries_associated': ['CY'],
+        'mistake_abbreviation': 'gr',
+        'subreddits': ["r/greek"],
+        'thanks': "Ευχαριστώ"
+    },
+    "en": {
+        'supported': False,
+        'name': 'English',
+        'language_code_3': 'eng',
+        'alternate_names': ['Ingles', 'Inggeris', 'Englisch', 'Inglese', 'Inglesa', 'Engrish', 'Enlighs', 'Engilsh',
+                            'Enlish', 'Englishe', 'Engish', 'Engelish', 'Engliah', 'Englisg', 'Englsih', 'Englkish',
+                            'Engilish', 'Enlglish', 'Englsh', 'Enghlish', 'Engligh', 'Englist', 'Engkish', 'Ensglish',
+                            'Enhlish', 'Английский', 'Inggris', 'Englische', '英語', '영어', 'Anglais', 'Engels',
+                            'Engelsk', 'İngilizce', '英文'],
+        'subreddits': ["r/englishlearning"]
+    },
+    "eo": {
+        'supported': True,
+        'name': 'Esperanto',
+        'language_code_3': 'epo',
+        'alternate_names': None,
+        'subreddits': ["r/esperanto"],
+        'thanks': "Dankon"
+    },
+    "es": {
+        'supported': True,
+        'name': 'Spanish',
+        'language_code_3': 'spa',
+        'alternate_names': ['Espanol', 'Spainish', 'Mexican', 'Castilian', 'Español', 'Spain', 'Esp', 'Chilean',
+                            'Castellano', 'Españo'],
+        'countries_associated': ['MX', 'VE', 'AR', 'BO', 'CL', 'CO', 'CR', 'CU', 'DO', 'EC', 'SV', 'GQ', 'GT', 'HN',
+                                 'NI', 'PA', 'PY', 'PE', 'PR', 'UY'],
+        'subreddits': ["r/spanish", "r/learnspanish", "r/argentina"],
+        'thanks': "Gracias"
+    },
+    "et": {
+        'supported': True,
+        'name': 'Estonian',
+        'language_code_3': 'ekk',
+        'alternate_names': ['Eesti'],
+        'countries_default': 'EE',
+        'subreddits': ["r/eesti"],
+        'thanks': "Tänan"
+    },
+    "eu": {
+        'supported': True,
+        'name': 'Basque',
+        'language_code_3': 'eus',
+        'language_code_2b': 'baq',
+        'alternate_names': ['Euska', 'EuskeraEuskerie', 'Euskara'],
+        'countries_default': 'ES',
+        'subreddits': ["r/basque"],
+        'thanks': "Eskerrik asko"
+    },
+    "fa": {
+        'supported': True,
+        'name': 'Persian',
+        'language_code_3': 'pes',
+        'language_code_2b': 'per',
+        'alternate_names': ['Farsi', 'Iranian', 'Iran', 'Parsi', 'Farse'],
+        'countries_default': 'IR',
+        'countries_associated': ['AF'],
+        'subreddits': ["r/farsi", "r/iran", "r/learnfarsi", "r/persian"],
+        'thanks': "ممنونم"
+    },
+    "ff": {
+        'supported': False,
+        'name': 'Fula',
+        'language_code_3': 'fuf',
+        'alternate_names': ['Fulah'],
+        'countries_associated': ['SN', 'GM', 'MR', 'SL', 'GN', 'GW', 'ML', 'GH', 'TG', 'BJ', 'BF', 'NE', 'SD', 'TD',
+                                 'CM', 'CF', 'NG']
+    },
+    "fi": {
+        'supported': True,
+        'name': 'Finnish',
+        'language_code_3': 'fin',
+        'alternate_names': ['Finnic', 'Suomi', 'Finland'],
+        'subreddits': ["r/learnfinnish"],
+        'thanks': "Kiitos"
+    },
+    "fj": {
+        'supported': False,
+        'name': 'Fijian',
+        'language_code_3': 'fij',
+        'alternate_names': None,
+        'thanks': "Vinaka"
+    },
+    "fo": {
+        'supported': True,
+        'name': 'Faroese',
+        'language_code_3': 'fao',
+        'alternate_names': ['Faeroese'],
+        'subreddits': ["r/faroese"],
+        'thanks': "Takk"
+    },
+    "fr": {
+        'supported': True,
+        'name': 'French',
+        'language_code_3': 'fra',
+        'language_code_2b': 'fre',
+        'alternate_names': ['Francais', 'Français', 'Quebecois', 'France', 'Québécois'],
+        'countries_associated': ['BE', 'CA', 'CF', 'CD', 'DJ', 'GQ', 'HT', 'ML', 'NE', 'SN', 'CH', 'TG'],
+        'subreddits': ["r/french", "r/france", "r/frenchimmersion"],
+        'thanks': "Merci"
+    },
+    "fy": {
+        'supported': False,
+        'name': 'Frisian',
+        'language_code_3': 'fry',
+        'alternate_names': None
+    },
+    "ga": {
+        'supported': True,
+        'name': 'Irish',
+        'language_code_3': 'gle',
+        'alternate_names': ['Gaeilge', 'Gaelic'],
+        'countries_default': 'IE',
+        'subreddits': ["r/gaeilge"],
+        'thanks': "Go raibh míle maith agat"
+    },
+    "gd": {
+        'supported': True,
+        'name': 'Scottish Gaelic',
+        'language_code_3': 'gla',
+        'alternate_names': ['Gaidhlig', 'Scottish Gaelic', 'Scots Gaelic'],
+        'subreddits': ["r/gaidhlig"],
+        'thanks': "Tapadh leat"
+    },
+    "generic": {
+        'supported': True,
+        'name': 'Generic',
+        'language_code_3': 'generic',
+        'alternate_names': None
+    },
+    "gl": {
+        'supported': False,
+        'name': 'Galician',
+        'language_code_3': 'glg',
+        'alternate_names': ['Gallego'],
+        'thanks': "Grazas"
+    },
+    "gn": {
+        'supported': False,
+        'name': 'Guarani',
+        'language_code_3': 'grn',
+        'alternate_names': None,
+        'countries_associated': ['PY', 'AR', 'BO']
+    },
+    "grc": {
+        'supported': True,
+        'name': 'Ancient Greek',
+        'language_code_3': 'grc',
+        'alternate_names': ['Koine', 'Doric', 'Attic', 'Byzantine Greek', 'Medieval Greek', 'Classic Greek',
+                            'Classical Greek', 'Koine Greek', 'Greek Koine'],
+        'subreddits': ["r/ancientgreek"],
+        'thanks': "Ἐπαινῶ"
+    },
+    "gu": {
+        'supported': True,
+        'name': 'Gujarati',
+        'language_code_3': 'guj',
+        'alternate_names': ['Gujerathi', 'Gujerati', 'Gujrathi'],
+        'countries_default': 'IN',
+        'thanks': "ધન્યવાદ"
+    },
+    "gv": {
+        'supported': False,
+        'name': 'Manx',
+        'language_code_3': 'glv',
+        'alternate_names': ['Gailck', 'Manx Gaelic'],
+        'subreddits': ["r/gaelg"]
+    },
+    "ha": {
+        'supported': False,
+        'name': 'Hausa',
+        'language_code_3': 'hau',
+        'alternate_names': ['Haoussa', 'Hausawa'],
+        'countries_associated': ['NE', 'NG', 'TD'],
+        'thanks': "Na gode"
+    },
+    "haw": {
+        'supported': True,
+        'name': 'Hawaiian',
+        'language_code_3': 'haw',
+        'alternate_names': ["Hawai'Ian", "Hawaii", "Hawai'I"],
+        'subreddits': ["r/learn_hawaiian"],
+        'thanks': "Mahalo"
+    },
+    "he": {
+        'supported': True,
+        'name': 'Hebrew',
+        'language_code_3': 'heb',
+        'alternate_names': ['Israeli', 'Hebraic', 'Jewish'],
+        'countries_default': 'IL',
+        'subreddits': ["r/hebrew", "r/israel"],
+        'thanks': "תודה רבה"
+    },
+    "hi": {
+        'supported': True,
+        'name': 'Hindi',
+        'language_code_3': 'hin',
+        'alternate_names': ['Hindustani', 'Hindī'],
+        'countries_default': 'IN',
+        'countries_associated': ['FJ'],
+        'subreddits': ["r/hindi"],
+        'thanks': "धन्यवाद"
+    },
+    "ho": {
+        'supported': False,
+        'name': 'Hiri Motu',
+        'language_code_3': 'hmo',
+        'alternate_names': None
+    },
+    "hr": {
+        'supported': True,
+        'name': 'Croatian',
+        'language_code_3': 'hrv',
+        'alternate_names': ['Croation', 'Serbo-Croatian', 'Hrvatski'],
+        'subreddits': ["r/croatian"],
+        'thanks': "Hvala"
+    },
+    "ht": {
+        'supported': True,
+        'name': 'Haitian Creole',
+        'language_code_3': 'hat',
+        'alternate_names': ['Haitian', 'Kreyòl Ayisyen', 'Kreyol'],
+        'subreddits': "r/haiti",
+        'thanks': "Mesi"
+    },
+    "hu": {
+        'supported': True,
+        'name': 'Hungarian',
+        'language_code_3': 'hun',
+        'alternate_names': ['Magyar', 'Hungary'],
+        'countries_default': 'HU',
+        'subreddits': ["r/hungarian", "r/hungary"],
+        'thanks': "Köszi"
+    },
+    "hy": {
+        'supported': True,
+        'name': 'Armenian',
+        'language_code_3': 'hye',
+        'language_code_2b': 'arm',
+        'alternate_names': None,
+        'countries_default': 'AM',
+        'subreddits': ["r/hayeren"],
+        'thanks': "մերսի"
+    },
+    "hz": {
+        'supported': False,
+        'name': 'Herero',
+        'language_code_3': 'her',
+        'alternate_names': None
+    },
+    "ia": {
+        'supported': False,
+        'name': 'Interlingua',
+        'language_code_3': 'ina',
+        'alternate_names': None,
+        'subreddits': ["r/interlingua"]
+    },
+    "id": {
+        'supported': True,
+        'name': 'Indonesian',
+        'language_code_3': 'ind',
+        'alternate_names': ['Indonesia', 'Indo'],
+        'subreddits': ["r/indonesian"],
+        'thanks': "Terima kasih"
+    },
+    "ie": {
+        'supported': False,
+        'name': 'Interlingue',
+        'language_code_3': 'ile',
+        'alternate_names': None,
+        'subreddits': ["r/interlingue"]
+    },
+    "ig": {
+        'supported': False,
+        'name': 'Igbo',
+        'language_code_3': 'ibo',
+        'alternate_names': ['Ibo'],
+        'thanks': "Ịmela"
+    },
+    "ii": {
+        'supported': False,
+        'name': 'Nuosu',
+        'language_code_3': 'iii',
+        'alternate_names': None
+    },
+    "ik": {
+        'supported': False,
+        'name': 'Inupiaq',
+        'language_code_3': 'ipk',
+        'alternate_names': ['Inupiat']
+    },
+    "io": {
+        'supported': False,
+        'name': 'Ido',
+        'language_code_3': 'ido',
+        'alternate_names': None,
+        'subreddits': ["r/ido"]
+    },
+    "is": {
+        'supported': True,
+        'name': 'Icelandic',
+        'language_code_3': 'isl',
+        'language_code_2b': 'ice',
+        'alternate_names': None,
+        'subreddits': ["r/learnicelandic"],
+        'thanks': "Takk"
+    },
+    "it": {
+        'supported': True,
+        'name': 'Italian',
+        'language_code_3': 'ita',
+        'alternate_names': ['Italiano', 'Italiana', 'Italia', 'Italien', 'Italy'],
+        'subreddits': ["r/italianlearning"],
+        'thanks': "Grazie"
+    },
+    "iu": {
+        'supported': True,
+        'name': 'Inuktitut',
+        'language_code_3': 'ike',
+        'alternate_names': ['Inuit'],
+        'subreddits': ["r/inuktitut"],
+        'thanks': "ᖁᔭᓇᐃᓐᓂ"
+    },
+    "ja": {
+        'supported': True,
+        'name': 'Japanese',
+        'language_code_3': 'jpn',
+        'alternate_names': ['Jap', 'Jpn', 'Japenese', 'Japaneese', 'Japanes', 'Katakana', 'Hiragana', 'Japaness',
+                            'Romaji', 'Japneese', 'Japnese', 'Kanji', 'Japaese', 'Japn', 'Japonais', 'Romajin',
+                            'Nihongo', 'Kenji', 'Romanji', 'Rōmaji', '日本語', 'Japones', 'Japonés'],
+        'countries_default': 'JP',
+        'mistake_abbreviation': 'jp',
+        'subreddits': ["r/learnjapanese", "r/japan", "r/japanese", "r/nihongo", "r/kanji"],
+        'thanks': "ありがとう"
+    },
+    "jv": {
+        'supported': True,
+        'name': 'Javanese',
+        'language_code_3': 'jav',
+        'alternate_names': ['Djawa']
+    },
+    "ka": {
+        'supported': True,
+        'name': 'Georgian',
+        'language_code_3': 'kat',
+        'language_code_2b': 'geo',
+        'alternate_names': ['Kartvelian'],
+        'countries_default': 'GE',
+        'thanks': "გმადლობთ"
+    },
+    "kg": {
+        'supported': False,
+        'name': 'Kongo',
+        'language_code_3': 'kon',
+        'alternate_names': ['Kikongo']
+    },
+    "ki": {
+        'supported': False,
+        'name': 'Kikuyu',
+        'language_code_3': 'kik',
+        'alternate_names': ['Gikuyu']
+    },
+    "kj": {
+        'supported': False,
+        'name': 'Kwanyama',
+        'language_code_3': 'kua',
+        'alternate_names': ['Kuanyama']
+    },
+    "kk": {
+        'supported': True,
+        'name': 'Kazakh',
+        'language_code_3': 'kaz',
+        'alternate_names': ['Kazakhstan', 'Kazak', 'Kaisak', 'Kosach'],
+        'countries_default': 'KZ',
+        'thanks': "Рахмет"
+    },
+    "kl": {
+        'supported': True,
+        'name': 'Kalaallisut',
+        'language_code_3': 'kal',
+        'alternate_names': ['Greenlandic'],
+        'subreddits': ["r/kalaallisut"],
+        'thanks': "Qujan"
+    },
+    "km": {
+        'supported': True,
+        'name': 'Khmer',
+        'language_code_3': 'khm',
+        'alternate_names': ['Cambodian', 'Cambodia', 'Kampuchea'],
+        'countries_default': 'KH',
+        'mistake_abbreviation': 'kh',
+        'subreddits': ["r/learnkhmer"],
+        'thanks': "ឣរគុណ"
+    },
+    "kn": {
+        'supported': True,
+        'name': 'Kannada',
+        'language_code_3': 'kan',
+        'alternate_names': None,
+        'subreddits': ["r/kannada"]
+    },
+    "ko": {
+        'supported': True,
+        'name': 'Korean',
+        'language_code_3': 'kor',
+        'alternate_names': ['Korea', 'Hangul', 'Korian', 'Kor', 'Hanguk', 'Guk-Eo', 'Hangeul', 'Hanguel'],
+        'countries_default': 'KR',
+        'subreddits': ["r/korean", "r/korea", "r/koreantranslate"],
+        'thanks': "감사합니다"
+    },
+    "kr": {
+        'supported': False,
+        'name': 'Kanuri',
+        'language_code_3': 'kau',
+        'alternate_names': None
+    },
+    "ks": {
+        'supported': False,
+        'name': 'Kashmiri',
+        'language_code_3': 'kas',
+        'alternate_names': ['Kacmiri', 'Kaschemiri', 'Keshur', 'Koshur']
+    },
+    "ku": {
+        'supported': True,
+        'name': 'Kurdish',
+        'language_code_3': 'ckb',
+        'alternate_names': ['Kurdi', 'Kurd'],
+        'countries_default': 'IQ',
+        'thanks': "سوپاس"
+    },
+    "kv": {
+        'supported': False,
+        'name': 'Komi',
+        'language_code_3': 'kom',
+        'alternate_names': None
+    },
+    "kw": {
+        'supported': False,
+        'name': 'Cornish',
+        'language_code_3': 'cor',
+        'alternate_names': None,
+        'subreddits': ["r/kernowek"],
+        'thanks': "Meur ras"
+    },
+    "ky": {
+        'supported': False,
+        'name': 'Kyrgyz',
+        'language_code_3': 'kir',
+        'alternate_names': ['Kirghiz', 'Kirgiz'],
+        'subreddits': ["r/learnkyrgyz"]
+    },
+    "la": {
+        'supported': True,
+        'name': 'Latin',
+        'language_code_3': 'lat',
+        'alternate_names': ['Latina', 'Classical Roman'],
+        'subreddits': ["r/latin", "r/mylatintattoo", "r/latina"],
+        'thanks': "Grātiās tibi agō"
+    },
+    "lb": {
+        'supported': True,
+        'name': 'Luxembourgish',
+        'language_code_3': 'ltz',
+        'alternate_names': ['Letzeburgesch', 'Letzburgisch', 'Luxembourgeois', 'Luxemburgian', 'Luxemburgish'],
+        'subreddits': ["r/luxembourg"]
+    },
+    "lg": {
+        'supported': False,
+        'name': 'Ganda',
+        'language_code_3': 'lug',
+        'alternate_names': ['Kiganda']
+    },
+    "li": {
+        'supported': True,
+        'name': 'Limburgish',
+        'language_code_3': 'lim',
+        'alternate_names': ['Limburgan', 'Limburger', 'Limburgs', 'Limburgian', 'Limburgic']
+    },
+    "ln": {
+        'supported': True,
+        'name': 'Lingala',
+        'language_code_3': 'lin',
+        'alternate_names': None
+    },
+    "lo": {
+        'supported': True,
+        'name': 'Lao',
+        'language_code_3': 'lao',
+        'alternate_names': ['Laos', 'Laotian'],
+        'subreddits': ["r/laos"],
+        'thanks': "ຂອບໃຈ"
+    },
+    "lt": {
+        'supported': True,
+        'name': 'Lithuanian',
+        'language_code_3': 'lit',
+        'alternate_names': ['Lithuania', 'Lietuviu', 'Litauische', 'Litewski', 'Litovskiy', 'Lith'],
+        'thanks': "Ačiū"
+    },
+    "lu": {
+        'supported': False,
+        'name': 'Luba-Kasai',
+        'language_code_3': 'lub',
+        'alternate_names': None
+    },
+    "lv": {
+        'supported': True,
+        'name': 'Latvian',
+        'language_code_3': 'lvs',
+        'alternate_names': None,
+        'subreddits': ["r/learnlatvian"],
+        'thanks': "Paldies"
+    },
+    'lzh': {
+        'alternate_names': ['Literary Chinese', 'Literary Sinitic', 'Classical Sinitic', '文言文', '古文'],
+        'name': 'Classical Chinese',
+        'supported': True,
+        'language_code_3': 'lzh',
+        'subreddits': ["r/classicalchinese"],
+        'thanks': "謝"
+    },
+    "mg": {
+        'supported': True,
+        'name': 'Malagasy',
+        'language_code_3': 'mlg',
+        'alternate_names': ['Madagascar'],
+        'subreddits': ["r/madagascar"],
+        'thanks': "Misaotra"
+    },
+    "mh": {
+        'supported': False,
+        'name': 'Marshallese',
+        'language_code_3': 'mah',
+        'alternate_names': None
+    },
+    "mi": {
+        'supported': True,
+        'name': 'Maori',
+        'language_code_3': 'mri',
+        'language_code_2b': 'mao',
+        'alternate_names': ['Māori'],
+        'subreddits': ["r/maori"],
+        'thanks': "Kia ora"
+    },
+    "mk": {
+        'supported': True,
+        'name': 'Macedonian',
+        'language_code_3': 'mkd',
+        'language_code_2b': 'mac',
+        'alternate_names': ['Macedonia'],
+        'thanks': "Благодарам"
+    },
+    "ml": {
+        'supported': True,
+        'name': 'Malayalam',
+        'language_code_3': 'mal',
+        'alternate_names': None,
+        'subreddits': ['r/malayalam'],
+        'thanks': "നന്ദി"
+    },
+    "mn": {
+        'supported': True,
+        'name': 'Mongolian',
+        'language_code_3': 'khk',
+        'alternate_names': None,
+        'subreddits': ["r/mongolian"],
+        'thanks': "Баярлалаа"
+    },
+    "mr": {
+        'supported': True,
+        'name': 'Marathi',
+        'language_code_3': 'mar',
+        'alternate_names': None,
+        'countries_default': 'IN',
+        'subreddits': ["r/marathi"],
+        'thanks': "आभारी आहे"
+    },
+    "ms": {
+        'supported': True,
+        'name': 'Malay',
+        'language_code_3': 'zlm',
+        'language_code_2b': 'may',
+        'alternate_names': ['Malaysia', 'Melayu', 'Malaysian'],
+        'countries_default': 'MY',
+        'countries_associated': ['BN', 'SG'],
+        'subreddits': ["r/bahasamelayu"],
+        'thanks': "Terima kasih"
+    },
+    "mt": {
+        'supported': True,
+        'name': 'Maltese',
+        'language_code_3': 'mlt',
+        'alternate_names': ['Malti'],
+        'thanks': "Grazzi"
+    },
+    'multiple': {
+        'language_code_3': 'multiple',
+        'alternate_names': ['Various', 'Any', 'All', 'Multi', 'Multi-language', 'Many', 'Everything',
+                            'Anything', 'Every Language', 'Mul'],
+        'name': 'Multiple Languages',
+        'supported': True
+    },
+    "my": {
+        'supported': True,
+        'name': 'Burmese',
+        'language_code_3': 'mya',
+        'language_code_2b': 'bur',
+        'alternate_names': ['Myanmar', 'Birmanie'],
+        'countries_default': 'MM',
+        'subreddits': ["r/lanl_burmese"],
+        'thanks': "ကျေးဇူးတင်ပါတယ်"
+    },
+    "na": {
+        'supported': False,
+        'name': 'Nauruan',
+        'language_code_3': 'nau',
+        'alternate_names': None
+    },
+    "nb": {
+        'supported': False,
+        'name': 'Norwegian Bokmal',
+        'language_code_3': 'nob',
+        'alternate_names': None
+    },
+    "nd": {
+        'supported': False,
+        'name': 'North Ndebele',
+        'language_code_3': 'nde',
+        'alternate_names': None
+    },
+    "ne": {
+        'supported': True,
+        'name': 'Nepali',
+        'language_code_3': 'npi',
+        'alternate_names': ['Nepalese', 'Nepal'],
+        'thanks': "धन्यवाद"
+    },
+    "ng": {
+        'supported': False,
+        'name': 'Ndonga',
+        'language_code_3': 'ndo',
+        'alternate_names': None
+    },
+    "nl": {
+        'supported': True,
+        'name': 'Dutch',
+        'language_code_3': 'nld',
+        'language_code_2b': 'dut',
+        'alternate_names': ['Nederlands', 'Holland', 'Netherlands', 'Flemish'],
+        'countries_associated': ['BE', 'SR'],
+        'subreddits': ["r/learndutch"],
+        'thanks': "Dank u"
+    },
+    "nn": {
+        'supported': False,
+        'name': 'Norwegian Nynorsk',
+        'language_code_3': 'nno',
+        'alternate_names': None
+    },
+    "no": {
+        'supported': True,
+        'name': 'Norwegian',
+        'language_code_3': 'nor',
+        'alternate_names': ['Bokmal', 'Norsk', 'Nynorsk', 'Norweigian'],
+        'subreddits': ["r/norsk"],
+        'thanks': "Takk"
+    },
+    'non': {
+        'alternate_names': ['Nordic', 'Futhark', 'Viking'],
+        'name': 'Norse',
+        'supported': True,
+        'language_code_3': 'non',
+        'thanks': "Þakka"
+    },
+    "nr": {
+        'supported': False,
+        'name': 'Southern Ndebele',
+        'language_code_3': 'nbl',
+        'alternate_names': ['Isindebele']
+    },
+    "nv": {
+        'supported': True,
+        'name': 'Navajo',
+        'language_code_3': 'nav',
+        'alternate_names': ['Navaho', 'Diné', 'Naabeehó'],
+        'thanks': "Ahéhee'"
+    },
+    "ny": {
+        'supported': False,
+        'name': 'Chichewa',
+        'language_code_3': 'nya',
+        'alternate_names': ['Chewa', 'Nyanja']
+    },
+    "oc": {
+        'supported': False,
+        'name': 'Occitan',
+        'language_code_3': 'oci',
+        'alternate_names': None,
+        'subreddits': ["r/occitan"]
+    },
+    "oj": {
+        'supported': False,
+        'name': 'Ojibwe',
+        'language_code_3': 'oji',
+        'alternate_names': ['Ojibwa']
+    },
+    "om": {
+        'supported': True,
+        'name': 'Oromo',
+        'language_code_3': 'orm',
+        'alternate_names': ['Oromoo', 'Oromiffa', 'Oromifa', 'Oromos'],
+        'countries_associated': ['ET', 'KE']
+    },
+    "or": {
+        'supported': False,
+        'name': 'Oriya',
+        'language_code_3': 'ori',
+        'alternate_names': None
+    },
+    "os": {
+        'supported': False,
+        'name': 'Ossetian',
+        'language_code_3': 'oss',
+        'alternate_names': ['Ossetic']
+    },
+    'ota': {
+        'alternate_names': ['Ottoman'],
+        'name': 'Ottoman Turkish',
+        'supported': True,
+        'language_code_3': 'ota'
+    },
+    "pa": {
+        'supported': True,
+        'name': 'Punjabi',
+        'language_code_3': 'pan',
+        'alternate_names': ['Panjabi', 'Punjab', 'Panjab'],
+        'countries_default': 'PK',
+        'subreddits': ["r/punjabi"],
+        'thanks': "ਧਨਵਾਦ"
+    },
+    "pi": {
+        'supported': True,
+        'name': 'Pali',
+        'language_code_3': 'pli',
+        'alternate_names': ['Pāli'],
+        'subreddits': ["r/pali"]
+    },
+    "pl": {
+        'supported': True,
+        'name': 'Polish',
+        'language_code_3': 'pol',
+        'alternate_names': ['Polnish', 'Polnisch', 'Poland', 'Polisch', 'Polski'],
+        'subreddits': ["r/learnpolish", "r/poland"],
+        'thanks': "Dzięki"
+    },
+    "ps": {
+        'supported': True,
+        'name': 'Pashto',
+        'language_code_3': 'pst',
+        'alternate_names': ['Pashtun', 'Pushto', 'Poshtu'],
+        'countries_default': 'AF',
+        'subreddits': ["r/pashto"],
+        'thanks': "مننه"
+    },
+    "pt": {
+        'supported': True,
+        'name': 'Portuguese',
+        'language_code_3': 'por',
+        'alternate_names': ['Portugese', 'Portugues', 'Brazilian', 'Portugais', 'Brazil', 'Brazilians', 'Portugal',
+                            'Português'],
+        'countries_associated': ['AO', 'BR', 'MZ', 'TL', 'CV'],
+        'subreddits': ["r/portuguese", "r/portugal", "r/brazil"],
+        'thanks': "Obrigado"
+    },
+    "qu": {
+        'supported': True,
+        'name': 'Quechua',
+        'language_code_3': 'que',
+        'alternate_names': ['Kichwa'],
+        'subreddits': ["r/learnquechua"],
+        'thanks': "Solpayki"
+    },
+    "rm": {
+        'supported': False,
+        'name': 'Romansh',
+        'language_code_3': 'roh',
+        'alternate_names': None
+    },
+    "rn": {
+        'supported': False,
+        'name': 'Kirundi',
+        'language_code_3': 'run',
+        'alternate_names': ['Ikirundi']
+    },
+    "ro": {
+        'supported': True,
+        'name': 'Romanian',
+        'language_code_3': 'ron',
+        'language_code_2b': 'rum',
+        'alternate_names': None,
+        'countries_associated': ['MD'],
+        'subreddits': ["r/romanian"],
+        'thanks': "Mersi"
+    },
+    "ru": {
+        'supported': True,
+        'name': 'Russian',
+        'language_code_3': 'rus',
+        'alternate_names': ['Russain', 'Russin', 'Russion', 'Rus', 'Rusian', 'Ruski', 'ру́сский', 'Русский'],
+        'subreddits': ["r/russian", "r/russia"],
+        'thanks': "Спаси́бо"
+    },
+    "rw": {
+        'supported': False,
+        'name': 'Kinyarwanda',
+        'language_code_3': 'kin',
+        'alternate_names': ['Ikinyarwanda', 'Orunyarwanda', 'Ruanda', 'Rwanda', 'Rwandan', 'Urunyaruanda'],
+        'thanks': "Murakoze"
+    },
+    "sa": {
+        'supported': True,
+        'name': 'Sanskrit',
+        'language_code_3': 'san',
+        'alternate_names': ['Samskrit', 'Sandskrit'],
+        'subreddits': ["r/sanskrit"],
+        'thanks': "धन्यवादाः"
+    },
+    "sc": {
+        'supported': True,
+        'name': 'Sardinian',
+        'language_code_3': 'sro',
+        'alternate_names': ['Sardu'],
+        'thanks': "Grazie"
+    },
+    "sd": {
+        'supported': False,
+        'name': 'Sindhi',
+        'language_code_3': 'snd',
+        'alternate_names': None
+    },
+    "se": {
+        'supported': False,
+        'name': 'Northern Sami',
+        'language_code_3': 'sme',
+        'alternate_names': None
+    },
+    "sg": {
+        'supported': False,
+        'name': 'Sango',
+        'language_code_3': 'sag',
+        'alternate_names': None,
+        'thanks': "Singîla"
+    },
+    "si": {
+        'supported': True,
+        'name': 'Sinhalese',
+        'language_code_3': 'sin',
+        'alternate_names': ['Sinhala', 'Sri Lanka', 'Sri Lankan'],
+        'countries_default': 'LK',
+        'subreddits': ["r/sinhala"],
+        'thanks': "Istuti"
+    },
+    "sk": {
+        'supported': True,
+        'name': 'Slovak',
+        'language_code_3': 'slk',
+        'language_code_2b': 'slo',
+        'alternate_names': ['Slovakian', 'Slovakia'],
+        'thanks': "Ďakujem"
+    },
+    "sl": {
+        'supported': True,
+        'name': 'Slovene',
+        'language_code_3': 'slv',
+        'alternate_names': ['Slovenian', 'Slovenski'],
+        'countries_default': 'SI',
+        'thanks': "Hvala"
+    },
+    "sm": {
+        'supported': False,
+        'name': 'Samoan',
+        'language_code_3': 'smo',
+        'alternate_names': None,
+        'thanks': "Fa'afetai"
+    },
+    "sn": {
+        'supported': False,
+        'name': 'Shona',
+        'language_code_3': 'sna',
+        'alternate_names': None,
+        'thanks': "Waita zvako"
+    },
+    "so": {
+        'supported': True,
+        'name': 'Somali',
+        'language_code_3': 'som',
+        'alternate_names': ['Somalia', 'Somalian'],
+        'thanks': "Mahadsanid"
+    },
+    "sq": {
+        'supported': True,
+        'name': 'Albanian',
+        'language_code_3': 'als',
+        'language_code_2b': 'alb',
+        'alternate_names': ['Shqip', 'Shqipe', 'Tosk'],
+        'countries_default': 'AL',
+        'countries_associated': ['XK'],
+        'subreddits': ["r/albanian"],
+        'thanks': "Falemenderit"
+    },
+    "sr": {
+        'supported': True,
+        'name': 'Serbian',
+        'language_code_3': 'srp',
+        'alternate_names': ['Yugoslavian'],
+        'countries_default': 'RS',
+        'countries_associated': ['ME'],
+        'subreddits': ["r/serbian"],
+        'thanks': "Хвала"
+    },
+    "ss": {
+        'supported': False,
+        'name': 'Swati',
+        'language_code_3': 'ssw',
+        'alternate_names': ['Swazi'],
+        'thanks': "Ngiyabonga"
+    },
+    "st": {
+        'supported': False,
+        'name': 'Sotho',
+        'language_code_3': 'sot',
+        'alternate_names': None
+    },
+    "su": {
+        'supported': False,
+        'name': 'Sundanese',
+        'language_code_3': 'sun',
+        'alternate_names': None,
+        'thanks': "Nuhun"
+    },
+    "sv": {
+        'supported': True,
+        'name': 'Swedish',
+        'language_code_3': 'swe',
+        'alternate_names': ['Svenska', 'Swede', 'Sweedish', 'Swedisch', 'Swidish', 'Gutnish', 'Sweden'],
+        'countries_default': 'SE',
+        'subreddits': ["r/svenska", "r/sweden"],
+        'thanks': "Tack"
+    },
+    "sw": {
+        'supported': True,
+        'name': 'Swahili',
+        'language_code_3': 'swh',
+        'alternate_names': ['Kiswahili'],
+        'countries_associated': ['CD', 'TZ', 'KE', 'UG'],
+        'subreddits': ["r/swahili"],
+        'thanks': "Asante"
+    },
+    'syc': {
+        'alternate_names': ['Classical Syriac'],
+        'name': 'Syriac',
+        'supported': True,
+        'language_code_3': 'syc'
+    },
+    "ta": {
+        'supported': True,
+        'name': 'Tamil',
+        'language_code_3': 'tam',
+        'alternate_names': None,
+        'countries_default': 'IN',
+        'countries_associated': ['SG'],
+        'subreddits': ["r/tamil"],
+        'thanks': "நன்றி"
+    },
+    "te": {
+        'supported': True,
+        'name': 'Telugu',
+        'language_code_3': 'tel',
+        'alternate_names': None,
+        'countries_default': 'IN',
+        'subreddits': ["r/telugu"],
+        'thanks': "ధన్యవాదములు"
+    },
+    "tg": {
+        'supported': True,
+        'name': 'Tajik',
+        'language_code_3': 'tgk',
+        'alternate_names': None,
+        'mistake_abbreviation': 'tj',
+        'thanks': "Рахмат"
+    },
+    "th": {
+        'supported': True,
+        'name': 'Thai',
+        'language_code_3': 'tha',
+        'alternate_names': ['Thailand', 'Siamese', 'Bangkok', 'Thi'],
+        'subreddits': ["r/learnthai", "r/thailand"],
+        'thanks': "ขอบคุณ"
+    },
+    "ti": {
+        'supported': False,
+        'name': 'Tigrinya',
+        'language_code_3': 'tir',
+        'alternate_names': None,
+        'thanks': "የቐንየለይ"
+    },
+    "tk": {
+        'supported': False,
+        'name': 'Turkmen',
+        'language_code_3': 'tuk',
+        'alternate_names': None,
+        'thanks': "Sag boluň"
+    },
+    "tl": {
+        'supported': True,
+        'name': 'Tagalog',
+        'language_code_3': 'tgl',
+        'alternate_names': ['Filipino', 'Fillipino', 'Philipino', 'Philippines', 'Philippine', 'Phillipene',
+                            'Phillipenes'],
+        'countries_default': 'PH',
+        'subreddits': ["r/tagalog"],
+        'thanks': "Salamat"
+    },
+    "tn": {
+        'supported': False,
+        'name': 'Tswana',
+        'language_code_3': 'tsn',
+        'alternate_names': ['Setswana']
+    },
+    "to": {
+        'supported': False,
+        'name': 'Tonga',
+        'language_code_3': 'ton',
+        'alternate_names': ['Tongan'],
+        'thanks': "Mālō"
+    },
+    "tr": {
+        'supported': True,
+        'name': 'Turkish',
+        'language_code_3': 'tur',
+        'alternate_names': ['Turkic', 'Turkce', 'Turkey', 'Türkçe'],
+        'countries_associated': ['CY'],
+        'subreddits': ["r/turkishlearning", "r/turkey"],
+        'thanks': "Teşekkür ederim"
+    },
+    "ts": {
+        'supported': False,
+        'name': 'Tsonga',
+        'language_code_3': 'tso',
+        'alternate_names': None,
+        'thanks': "Ndza nkhensa"
+    },
+    "tt": {
+        'supported': True,
+        'name': 'Tatar',
+        'language_code_3': 'tat',
+        'alternate_names': None
+    },
+    "tw": {
+        'supported': True,
+        'name': 'Twi',
+        'language_code_3': 'twi',
+        'alternate_names': None
+    },
+    "ty": {
+        'supported': False,
+        'name': 'Tahitian',
+        'language_code_3': 'tah',
+        'alternate_names': None,
+        'thanks': "Māuruuru"
+    },
+    "ug": {
+        'supported': True,
+        'name': 'Uyghur',
+        'language_code_3': 'uig',
+        'alternate_names': ['Uighur'],
+        'thanks': "رەھمەت سىزگە"
+    },
+    "uk": {
+        'supported': True,
+        'name': 'Ukrainian',
+        'language_code_3': 'ukr',
+        'alternate_names': ['Ukranian', 'Ukraine'],
+        'countries_default': 'UA',
+        'mistake_abbreviation': 'ua',
+        'subreddits': ["r/ukrainian"],
+        'thanks': "Дякую"
+    },
+    'unknown': {
+        'language_code_3': 'unknown',
+        'alternate_names': ['Unknown', 'Unkown', 'Unknow', 'Uknown', 'Unknon', 'Unsure', 'Asian', 'Asiatic',
+                            'Not Sure', "Don'T Know", 'Dont Know', 'No Idea', "I Don'T Know", 'Unk', 'Idk',
+                            'Undefined', 'Source Language', 'Mystery', 'Native American', 'Uncertain', 'Indian',
+                            'Unidentified'],
+        'name': 'Unknown',
+        'supported': True
+    },
+    "ur": {
+        'supported': True,
+        'name': 'Urdu',
+        'language_code_3': 'urd',
+        'alternate_names': ['Pakistani', 'Pakistan'],
+        'countries_default': 'PK',
+        'subreddits': ["r/urdu"],
+        'thanks':  "شكريه"
+    },
+    "uz": {
+        'supported': True,
+        'name': 'Uzbek',
+        'language_code_3': 'uzn',
+        'alternate_names': None,
+        'countries_associated': ['AF'],
+        'subreddits': ["r/learn_uzbek"],
+        'thanks': "Rahmat"
+    },
+    "ve": {
+        'supported': False,
+        'name': 'Venda',
+        'language_code_3': 'ven',
+        'alternate_names': None,
+        'thanks': "Ndo livhuwa"
+    },
+    "vi": {
+        'supported': True,
+        'name': 'Vietnamese',
+        'language_code_3': 'vie',
+        'alternate_names': ['Vietnam', 'Viet', 'Chữ Nôm', 'Annamese'],
+        'countries_default': 'VN',
+        'mistake_abbreviation': 'vn',
+        'subreddits': ["r/vietnamese", "r/vietnam", "r/learnvietnamese"],
+        'thanks': "Cảm ơn"
+    },
+    "vo": {
+        'supported': False,
+        'name': 'Volapuk',
+        'language_code_3': 'vol',
+        'alternate_names': ['Volapük'],
+        'subreddits': ["r/volapuk"],
+        'thanks': "Danö"
+    },
+    "wa": {
+        'supported': False,
+        'name': 'Walloon',
+        'language_code_3': 'wln',
+        'alternate_names': None,
+        'thanks': "Grâce"
+    },
+    "wo": {
+        'supported': False,
+        'name': 'Wolof',
+        'language_code_3': 'wol',
+        'alternate_names': None,
+        'thanks': 'Jai-rruh-jef'
+    },
+    "xh": {
+        'supported': True,
+        'name': 'Xhosa',
+        'language_code_3': 'xho',
+        'alternate_names': ['Isixhosa'],
+        'thanks': "Ndiyabulela"
+    },
+    "yi": {
+        'supported': True,
+        'name': 'Yiddish',
+        'language_code_3': 'ydd',
+        'alternate_names': ['Yidish'],
+        'subreddits': ["r/yiddish"],
+        'thanks':  "שכח"
+    },
+    "yo": {
+        'supported': True,
+        'name': 'Yoruba',
+        'language_code_3': 'yor',
+        'alternate_names': None,
+        'thanks': "O se"
+    },
+    'yue': {
+        'alternate_names': ['Cantonese Chinese', 'Chinese Cantonese', 'Canto', 'Taishanese', 'Guangzhou'],
+        'name': 'Cantonese',
+        'supported': True,
+        'language_code_3': 'yue',
+        'countries_default': 'HK',
+        'countries_associated': ['MO'],
+        'subreddits': ["r/cantonese"],
+        'thanks': "多謝"
+    },
+    "za": {
+        'supported': False,
+        'name': 'Zhuang',
+        'language_code_3': 'zyb',
+        'alternate_names': None
+    },
+    "zh": {
+        'supported': True,
+        'name': 'Chinese',
+        'language_code_3': 'cmn',
+        'language_code_2b': 'chi',
+        'alternate_names': ['Mandarin', 'Taiwanese', 'Chinease', 'Manderin', 'Zhongwen', '中文', '汉语', '漢語',
+                            '國語', 'Chinise', 'Chineese', 'Hanzi', 'Cinese', 'Mandrin', 'Mandarin Chinese',
+                            'Taiwan', 'China', 'Chn', 'Pinyin', 'Beijinghua', 'Zhongguohua', 'Putonghua', 'Guanhua'],
+        'countries_default': 'CN',
+        'countries_associated': ['TW'],
+        'mistake_abbreviation': 'cn',
+        'subreddits': ["r/chineselanguage", "r/chinese", "r/mandarin", "r/learnchinese"],
+        'thanks': "謝謝"
+    },
+    "zu": {
+        'supported': True,
+        'name': 'Zulu',
+        'language_code_3': 'zul',
+        'alternate_names': None,
+        'countries_default': 'ZA',
+        'thanks': "Ngiyabonga"
+    },
+    'zxx': {
+        'alternate_names': ["Null", "None", "Nothing", "Gibberish", "Nonsense", 'Mojibake'],
+        'name': 'Nonlanguage',
+        'supported': True,
+        'language_code_3': 'zxx'
+    },
+}
 
 # These are two-letter and three-letter English words that can be confused for ISO language codes.
 # We exclude them when processing the title.
@@ -113,8 +1664,8 @@ ENGLISH_3_WORDS = ['Abs', 'Abu',
                    'Yea', 'Yen', 'Yep', 'Yes', 'Yet', 'Yew', 'Yip', 'You', 'Yow', 'Yum', 'Yup', 'Zag', 'Zap', 'Zed',
                    'Zee', 'Zen', 'Zig', 'Zip', 'Zit', 'Zoa', 'Zoo']
 # These are words that usually get recognized as something they're not due to Fuzzywuzzy. Let's ignore them.
-FUZZ_IGNORE_WORDS = ["Javanese", "Japanese", "Romanization", "Romani", "Karen", "Morse", "Roman", "Scandinavian", "Latino",
-                     "Latina", "Romanji", 'Romanized', 'Guarani', 'Here', 'Chopstick', 'Turks', 'Romany',
+FUZZ_IGNORE_WORDS = ["Javanese", "Japanese", "Romanization", "Romani", "Karen", "Morse", "Roman", "Scandinavian",
+                     "Latino", "Latina", "Romanji", 'Romanized', 'Guarani', 'Here', 'Chopstick', 'Turks', 'Romany',
                      'Romanjin', 'Serial', 'Ancient Mayan', 'Cheese', 'Sorbian', 'Green', 'Orkish', 'Peruvian', 'Nurse',
                      'Maay', 'Canada', 'Kanada', 'Sumerian', "Classical Japanese", "Logo", "Sake", "Trail"]
 
@@ -125,169 +1676,6 @@ WRONG_BRACKETS = ["<", "〉", "›", "》", "»", "⟶", "\udcfe", "&gt;", "→"
 APP_WORDS = [" app ", "android", "game", "social network", " bot ", "crowdin", "localisation", "localize", "localise",
              "software", "crowdsourced", "localization", "addon", "add-on", "google play", 'an app', 'discord bot',
              'telegram bot', 'chatbot', "my app", 'firefox']
-
-# The following dictionary is a list of common misspellings or alternate ways of saying what a supported language is.
-# Everything should be in Title Case.
-SUPPORTED_ALTERNATE = {'am': ['Ethiopian', 'Ethiopia', 'Ethopian', 'Ethiopic', 'Abyssinian',
-                              'Amarigna', 'Amarinya', 'Amhara'],
-                       'ar': ['Arab', 'Arabian', 'Arbic', 'Aribic', 'Arabe', 'Levantine', 'Arabish', 'Arabiic',
-                              'Lebanese', 'Syrian', 'Yemeni', '3arabi', 'Msarabic', 'Moroccan', 'Arabizi', 'Tunisian'],
-                       'az': ['Azeri'],
-                       'be': ['Belarussian', 'Belorusian', 'Belorussian', 'Bielorussian', 'Byelorussian'],
-                       'bn': ['Bangala', 'Bangla'], 'bo': ['Tibetic'], 'bs': ['Bosnien'],
-                       'ca': ['Catalonian', 'Valencian', 'Catalán'],
-                       'ceb': ['Cebu', 'Visaya', 'Bisaya', 'Visayan'], 'chr': ['Tsalagi'],
-                       'co': ['Corsu', 'Corso', 'Corse'], 'cs': ['Bohemian', 'Čeština', 'Czechoslovakian'],
-                       'cu': ['Slavonic', 'Church Slavonic', 'Old Slavic'],
-                       'cy': ['Wales', 'Cymraeg', 'Gymraeg'], 'da': ['Dansk', 'Denmark', 'Rigsdansk'],
-                       'de': ['Deutsch', 'Deutsche', 'Ger', 'Deutch', 'Bavarian', 'Kurrent', 'Austrian', 'Sütterlin',
-                              'Plattdeutsch', "Suetterlin", 'Tedesco'],
-                       'egy': ['Hieroglyphs', 'Hieroglyphic', 'Hieroglyphics', 'Hyroglifics', 'Egyptian Hieroglyphs',
-                               'Egyptian Hieroglyph'], 'el': ['Hellenic', 'Greece', 'Hellas', 'Cypriot'],
-                       'es': ['Espanol', 'Spainish', 'Mexican', 'Castilian', 'Español', 'Spain', 'Esp',
-                              'Chilean', 'Castellano', 'Españo'],
-                       'et': ['Eesti'], 'eu': ['Euska', 'Euskera' 'Euskerie', 'Euskara'],
-                       'fa': ['Farsi', 'Iranian', 'Iran', 'Parsi'], 'fi': ['Finnic', 'Suomi', 'Finland'],
-                       'fr': ['Francais', 'Français', 'Quebecois', 'France', 'Québécois'], 'ga': ['Gaeilge', 'Gaelic'],
-                       'gd': ['Gaidhlig', 'Scottish Gaelic', 'Scots Gaelic'],
-                       'grc': ['Koine', 'Doric', 'Attic', 'Byzantine Greek', 'Medieval Greek', 'Classic Greek',
-                               'Classical Greek'], 'gu': ['Gujerathi', 'Gujerati', 'Gujrathi'],
-                       'he': ['Israeli', 'Hebraic', 'Jewish'], 'hi': ['Hindustani', 'Hindī'],
-                       'hr': ['Croation', 'Serbo-Croatian', 'Hrvatski'],
-                       'ht': ['Haitian', 'Kreyòl Ayisyen', 'Kreyol'],
-                       'hu': ['Magyar', 'Hungary'],
-                       'id': ['Indonesia', 'Indo'],
-                       'it': ['Italiano', 'Italiana', 'Italia', 'Italien', 'Italy'], 'iu': ['Inuit'],
-                       'ja': ['Jap', 'Jpn', 'Japenese', 'Japaneese', 'Japanes', 'Katakana', 'Hiragana', 'Japaness',
-                              'Romaji', 'Japneese', 'Japnese', 'Kanji', 'Japaese', 'Japn', 'Japonais', 'Romajin',
-                              'Nihongo', 'Kenji', 'Romanji', 'Rōmaji', '日本語', 'Japones', 'Japonés'],
-                       'ka': ['Kartvelian'],
-                       'kk': ['Kazakhstan', "Kazak", 'Kaisak', 'Kosach'],
-                       'km': ['Cambodian', 'Cambodia', 'Kampuchea'],
-                       'ko': ['Korea', 'Hangul', 'Korian', 'Kor', 'Hanguk', 'Guk-Eo', 'Hangeul', 'Hanguel'],
-                       'ku': ['Kurdi', 'Kurd'], 'la': ['Latina', 'Classical Roman'],
-                       'lo': ['Laos', 'Laotian'],
-                       'lt': ['Lithuania', 'Lietuviu', 'Litauische', 'Litewski', 'Litovskiy', 'Lith'],
-                       'lzh': ['Literary Chinese', 'Literary Sinitic', 'Classical Sinitic', '文言文', '古文'],
-                       'mg': ['Madagascar'], 'ms': ['Malaysia', 'Melayu', 'Malaysian'], 'mt': ['Malti'],
-                       'my': ['Myanmar', 'Birmanie'], 'ne': ['Nepalese', "Nepal"],
-                       'nl': ['Nederlands', 'Holland', 'Netherlands', 'Flemish'],
-                       'no': ['Bokmal', 'Norsk', 'Nynorsk', 'Norweigian'], 'non': ['Nordic', 'Futhark', 'Viking'],
-                       'nv': ['Navaho', 'Diné', 'Naabeehó'],
-                       'pa': ['Panjabi', 'Punjab', 'Panjab'],
-                       'pl': ['Polnish', 'Polnisch', 'Poland', 'Polisch', 'Polski'],
-                       'ps': ['Pashtun', 'Pushto', 'Poshtu'],
-                       'pt': ['Portugese', 'Portugues', 'Brazilian', 'Portugais',
-                              'Brazil', 'Brazilians', 'Portugal', 'Português'],
-                       'qu': ['Kichwa'],
-                       'ru': ['Russain', 'Russin', 'Russion', 'Rus', 'Rusian', 'Ruski', 'ру́сский', 'Русский'],
-                       'sa': ['Samskrit', 'Sandskrit'], 'sc': ['Sardu'],
-                       'si': ['Sinhala', 'Sri Lanka', 'Sri Lankan'],
-                       'sk': ['Slovakian', 'Slovakia'], 'sl': ['Slovenian', 'Slovenski'],
-                       'so': ['Somalia', 'Somalian'], 'sq': ['Shqip', 'Shqipe', 'Tosk'], 'sr': ['Yugoslavian'],
-                       'sv': ['Svenska', 'Swede', 'Sweedish', 'Swedisch', 'Swidish', 'Gutnish', 'Sweden'],
-                       'sw': ['Kiswahili'], 'syc': ['Classical Syriac'], 'th': ['Thailand', 'Siamese', 'Bangkok'],
-                       'tl': ['Filipino', 'Fillipino', 'Philipino', 'Philippines', 'Philippine', 'Phillipene',
-                              'Phillipenes'],
-                       'tr': ['Turkic', 'Turkce', 'Turkey', 'Türkçe'], 'uk': ['Ukranian', 'Ukraine'],
-                       'ur': ['Pakistani', 'Pakistan'],
-                       'vi': ['Vietnam', 'Viet', 'Chữ Nôm', 'Annamese'], 'xh': ['Isixhosa'], 'yi': ['Yidish'],
-                       'yue': ['Cantonese Chinese', 'Chinese Cantonese', 'Canto', 'Taishanese', 'Guangzhou'],
-                       'zh': ['Mandarin', 'Taiwanese', 'Chinease', 'Manderin', 'Zhongwen', '中文', '汉语', '漢語', '國語',
-                              'Chinise', 'Chineese', 'Hanzi', 'Cinese', 'Mandrin', 'Mandarin Chinese', 'Taiwan',
-                              'China', 'Chn', 'Pinyin', 'Beijinghua', 'Zhongguohua', 'Putonghua', 'Guanhua'],
-                       'multiple': ['Various', 'Any', 'All', 'Multi', 'Multi-language', 'Many', 'Everything', 'Anything',
-                                    'Every Language', 'Mul'],
-                       'unknown': ['Unknown', 'Unkown', 'Unknow', 'Uknown', 'Unknon', 'Unsure', 'Asian', 'Asiatic',
-                                   'Not Sure', "Don'T Know", 'Dont Know', 'No Idea', "I Don'T Know",
-                                   'Unk', 'Idk', 'Undefined', "Source Language", "Mystery", "Native American",
-                                   'Uncertain', "Indian", "Unidentified"],
-                       'art': ['Artificial', 'Conlang', 'Constructed', 'Tengwar'],
-                       'ang': ['Old English', 'Anglo Saxon', 'Anglosaxon', 'Anglisc'], 'ban': ['Bali'],
-                       'haw': ["Hawai'Ian", "Hawaii", "Hawai'I"], 'mk': ['Macedonia'],
-                       'zxx': ["Null", "None", "Nothing", "Gibberish", "Nonsense", 'Mojibake'],
-                       'br': ['Brezhoneg', 'Berton'], 'dz': ['Bhutanese', 'Zongkhar'], 'fo': ['Faeroese'],
-                       'jv': ['Djawa'], 'kl': ['Greenlandic'],
-                       'lb': ['Letzeburgesch', 'Letzburgisch', 'Luxembourgeois', 'Luxemburgian', 'Luxemburgish'],
-                       'li': ['Limburgan', 'Limburger', 'Limburgs', 'Limburgian', 'Limburgic'], 'mi': ['Māori'],
-                       'om': ['Oromoo', 'Oromiffa', 'Oromifa', 'Oromos'], 'ota': ['Ottoman'], 'pi': ['Pāli'],
-                       'ug': ['Uighur']}
-
-# Following lists are lists of ISO codes, in their ISO 639-1/3 equivalents and their names.
-ISO_639_1 = ['ab', 'aa', 'af', 'ak', 'sq', 'am', 'ar', 'an', 'hy', 'as', 'av', 'ae', 'ay', 'az', 'bm', 'ba', 'eu', 'be',
-             'bn', 'bh', 'bi', 'bs', 'br', 'bg', 'my', 'ca', 'ch', 'ce', 'ny', 'zh', 'cv', 'kw', 'co', 'cr', 'hr', 'cs',
-             'da', 'dv', 'nl', 'dz', 'en', 'eo', 'et', 'ee', 'fo', 'fj', 'fi', 'fr', 'ff', 'gl', 'ka', 'de', 'el', 'gn',
-             'gu', 'ht', 'ha', 'he', 'hz', 'hi', 'ho', 'hu', 'ia', 'id', 'ie', 'ga', 'ig', 'ik', 'io', 'is', 'it', 'iu',
-             'ja', 'jv', 'kl', 'kn', 'kr', 'ks', 'kk', 'km', 'ki', 'rw', 'ky', 'kv', 'kg', 'ko', 'ku', 'kj', 'la', 'lb',
-             'lg', 'li', 'ln', 'lo', 'lt', 'lu', 'lv', 'gv', 'mk', 'mg', 'ms', 'ml', 'mt', 'mi', 'mr', 'mh', 'mn', 'na',
-             'nv', 'nb', 'nd', 'ne', 'ng', 'nn', 'no', 'ii', 'nr', 'oc', 'oj', 'cu', 'om', 'or', 'os', 'pa', 'pi', 'fa',
-             'pl', 'ps', 'pt', 'qu', 'rm', 'rn', 'ro', 'ru', 'sa', 'sc', 'sd', 'se', 'sm', 'sg', 'sr', 'gd', 'sn', 'si',
-             'sk', 'sl', 'so', 'st', 'es', 'su', 'sw', 'ss', 'sv', 'ta', 'te', 'tg', 'th', 'ti', 'bo', 'tk', 'tl', 'tn',
-             'to', 'tr', 'ts', 'tt', 'tw', 'ty', 'ug', 'uk', 'ur', 'uz', 've', 'vi', 'vo', 'wa', 'cy', 'wo', 'fy', 'xh',
-             'yi', 'yo', 'za', 'zu', 'egy', 'arc', 'yue', 'non', 'syc', 'lzh', 'ota', 'multiple', 'unknown']
-ISO_639_3 = ['abk', 'aar', 'afr', 'aka', 'als', 'amh', 'arb', 'arg', 'hye', 'asm', 'ava', 'ave', 'ayr', 'azj', 'bam',
-             'bak', 'eus', 'bel', 'ben', 'bho', 'bis', 'bos', 'bre', 'bul', 'mya', 'cat', 'cha', 'che', 'nya', 'cmn',
-             'chv', 'cor', 'cos', 'crk', 'hrv', 'ces', 'dan', 'div', 'nld', 'dzo', 'eng', 'epo', 'ekk', 'ewe', 'fao',
-             'fij', 'fin', 'fra', 'fuf', 'glg', 'kat', 'deu', 'ell', 'grn', 'guj', 'hat', 'hau', 'heb', 'her', 'hin',
-             'hmo', 'hun', 'ina', 'ind', 'ile', 'gle', 'ibo', 'ipk', 'ido', 'isl', 'ita', 'ike', 'jpn', 'jav', 'kal',
-             'kan', 'kau', 'kas', 'kaz', 'khm', 'kik', 'kin', 'kir', 'kom', 'kon', 'kor', 'ckb', 'kua', 'lat', 'ltz',
-             'lug', 'lim', 'lin', 'lao', 'lit', 'lub', 'lvs', 'glv', 'mkd', 'bhr', 'zlm', 'mal', 'mlt', 'mri', 'mar',
-             'mah', 'khk', 'nau', 'nav', 'nob', 'nde', 'npi', 'ndo', 'nno', 'nor', 'iii', 'nbl', 'oci', 'oji', 'chu',
-             'orm', 'ori', 'oss', 'pan', 'pli', 'pes', 'pol', 'pst', 'por', 'que', 'roh', 'run', 'ron', 'rus', 'san',
-             'sro', 'snd', 'sme', 'smo', 'sag', 'srp', 'gla', 'sna', 'sin', 'slk', 'slv', 'som', 'sot', 'spa', 'sun',
-             'swh', 'ssw', 'swe', 'tam', 'tel', 'tgk', 'tha', 'tir', 'bod', 'tuk', 'tgl', 'tsn', 'ton', 'tur', 'tso',
-             'tat', 'twi', 'tah', 'uig', 'ukr', 'urd', 'uzn', 'ven', 'vie', 'vol', 'wln', 'cym', 'wol', 'fry', 'xho',
-             'yih', 'yor', 'zyb', 'zul', 'egy', 'arc', 'yue', 'non', 'syc', 'lzh', 'ota', 'multiple', 'unknown']
-ISO_639_2B = {'alb': 'sq', 'arm': 'hy', 'baq': 'eu', 'tib': 'bo', 'bur': 'my', 'cze': 'cs',
-              'chi': 'zh', 'wel': 'cy', 'ger': 'de', 'dut': 'nl', 'gre': 'el', 'per': 'fa',
-              'fre': 'fr', 'geo': 'ka', 'ice': 'is', 'mac': 'mk', 'mao': 'mi', 'may': 'ms',
-              'rum': 'ro', 'slo': 'sk'}
-ISO_NAMES = ['Abkhaz', 'Afar', 'Afrikaans', 'Akan', 'Albanian', 'Amharic', 'Arabic', 'Aragonese', 'Armenian',
-             'Assamese', 'Avar', 'Avestan', 'Aymara', 'Azerbaijani', 'Bambara', 'Bashkir', 'Basque', 'Belarusian',
-             'Bengali', 'Bihari', 'Bislama', 'Bosnian', 'Breton', 'Bulgarian', 'Burmese', 'Catalan', 'Chamorro',
-             'Chechen', 'Chichewa', 'Chinese', 'Chuvash', 'Cornish', 'Corsican', 'Cree', 'Croatian', 'Czech', 'Danish',
-             'Dhivehi', 'Dutch', 'Dzongkha', 'English', 'Esperanto', 'Estonian', 'Ewe', 'Faroese', 'Fijian', 'Finnish',
-             'French', 'Fula', 'Galician', 'Georgian', 'German', 'Greek', 'Guarani', 'Gujarati', 'Haitian Creole',
-             'Hausa', 'Hebrew', 'Herero', 'Hindi', 'Hiri Motu', 'Hungarian', 'Interlingua', 'Indonesian', 'Interlingue',
-             'Irish', 'Igbo', 'Inupiaq', 'Ido', 'Icelandic', 'Italian', 'Inuktitut', 'Japanese', 'Javanese',
-             'Kalaallisut', 'Kannada', 'Kanuri', 'Kashmiri', 'Kazakh', 'Khmer', 'Kikuyu', 'Kinyarwanda', 'Kyrgyz',
-             'Komi', 'Kongo', 'Korean', 'Kurdish', 'Kwanyama', 'Latin', 'Luxembourgish', 'Ganda', 'Limburgish',
-             'Lingala', 'Lao', 'Lithuanian', 'Luba-Kasai', 'Latvian', 'Manx', 'Macedonian', 'Malagasy', 'Malay',
-             'Malayalam', 'Maltese', 'Maori', 'Marathi', 'Marshallese', 'Mongolian', 'Nauruan', 'Navajo',
-             'Norwegian Bokmal', 'North Ndebele', 'Nepali', 'Ndonga', 'Norwegian Nynorsk', 'Norwegian', 'Nuosu',
-             'Southern Ndebele', 'Occitan', 'Ojibwe', 'Old Church Slavonic', 'Oromo', 'Oriya', 'Ossetian', 'Punjabi',
-             'Pali', 'Persian', 'Polish', 'Pashto', 'Portuguese', 'Quechua', 'Romansh', 'Kirundi', 'Romanian',
-             'Russian', 'Sanskrit', 'Sardinian', 'Sindhi', 'Northern Sami', 'Samoan', 'Sango', 'Serbian',
-             'Scottish Gaelic', 'Shona', 'Sinhalese', 'Slovak', 'Slovene', 'Somali', 'Sotho', 'Spanish', 'Sundanese',
-             'Swahili', 'Swati', 'Swedish', 'Tamil', 'Telugu', 'Tajik', 'Thai', 'Tigrinya', 'Tibetan', 'Turkmen',
-             'Tagalog', 'Tswana', 'Tonga', 'Turkish', 'Tsonga', 'Tatar', 'Twi', 'Tahitian', 'Uyghur', 'Ukrainian',
-             'Urdu', 'Uzbek', 'Venda', 'Vietnamese', 'Volapuk', 'Walloon', 'Welsh', 'Wolof', 'Frisian', 'Xhosa',
-             'Yiddish', 'Yoruba', 'Zhuang', 'Zulu', 'Ancient Egyptian', 'Aramaic', 'Cantonese', 'Norse', 'Syriac',
-             'Classical Chinese', 'Ottoman Turkish', 'Multiple Languages', 'Unknown']
-
-# The following is a dictionary to add misspellings or alternate names for non-supported ISO 639-1 languages.
-# Non-supported ISO 639-3 language names must be added to the CSV listed at the top of this file.
-# The ISO 639-3 macro-languages are mapped to their biggest component languages.
-# Some function category titles are irregular and are listed on the end (like "Multiple").
-ISO_639_1_ALTERNATE = {'aa': ['Afaraf'], 'ab': ['Abxazo', 'Abkhazian'], 'ae': ['Avesta'],
-                       'as': ['Asamiya', 'Asambe', 'Asami'], 'av': ['Avaro', 'Avaric'],
-                       'bi': ['Bichelamar'],
-                       'bh': ['Bhojpuri', 'Maithili', 'Magahi'], 'cv': ["Bulgar"],
-                       'dv': ['Divehi', 'Maldivian', 'Divehli'],
-                       'en': ['Ingles', 'Inggeris', 'Englisch', 'Inglese', 'Inglesa', 'Engrish', 'Enlighs', 'Engilsh',
-                              'Enlish', 'Englishe', 'Engish', 'Engelish', 'Engliah', 'Englisg', 'Englsih',
-                              'Englkish', 'Engilish', 'Enlglish', 'Englsh', 'Enghlish', 'Engligh', 'Englist', 'Engkish',
-                              'Ensglish', 'Enhlish', 'Английский', 'Inggris', 'Englische', '英語', '영어',
-                              'Anglais', 'Engels', 'Engelsk', 'İngilizce', '英文'],
-                       'ff': ['Fulah'], 'gl': ['Gallego'],
-                       'gv': ['Gailck', 'Manx Gaelic'], 'ha': ['Haoussa', 'Hausawa'], 'ig': ['Ibo'],
-                       'ik': ['Inupiat'], 'kg': ['Kikongo'], 'ki': ['Gikuyu'], 'kj': ['Kuanyama'],
-                       'ks': ['Kacmiri', 'Kaschemiri', 'Keshur', 'Koshur'],
-                       'ky': ['Kirghiz', 'Kirgiz'], 'lg': ['Kiganda'], 'nr': ['Isindebele'],
-                       'ny': ['Chewa', 'Nyanja'], 'oj': ['Ojibwa'],
-                       'os': ['Ossetic'], 'rn': ['Ikirundi'],
-                       'rw': ['Ikinyarwanda', 'Orunyarwanda', 'Ruanda', 'Rwanda', 'Rwandan', 'Urunyaruanda'],
-                       'ss': ['Swazi'], 'tn': ['Setswana'], 'to': ['Tongan'], 'vo': ['Volapük']}
 
 # A manually populated dictionary that matches ISO macrolanguages with their most prominent consituent language
 ISO_MACROLANGUAGES = {
@@ -344,7 +1732,6 @@ ISO_MACROLANGUAGES = {
     "ori": ("ory", ["ory", "spv"]),
     "orm": ("gaz", ["gaz", "gax", "hae", "orc"]),
     "pus": ("pst", ["pbt", "pbu", "pst"]),
-    "pus": ("pst", ["pbt", "pbu", "pst"]),
     "que": ("quh", ["cqu", "qub", "qud", "quf", "qug", "quh", "quk", "qul", "qup", "qur", "qus", "quw", "qux", "quy",
                     "quz", "qva", "qvc", "qve", "qvh", "qvi", "qvj", "qvl", "qvm", "qvn", "qvo", "qvp", "qvs", "qvw",
                     "qvz", "qwa", "qwc", "qwh", "qws", "qxa", "qxc", "qxh", "qxl", "qxn", "qxo", "qxp", "qxr", "qxt",
@@ -376,87 +1763,6 @@ CJK_LANGUAGES = {"Chinese": ['Chinese', 'Min Dong Chinese', 'Classical Chinese',
                               'Yaeyama', 'Yonaguni', 'Hira', 'Jpan', 'Kana'],
                  "Korean": ['Korean', 'Middle Korean', 'Old Korean', 'Jejueo', 'Hang', 'Kore']}
 
-# These are lists of language learning or country subreddits associated with a specific language.
-# The language learning one should be the FIRST one in the list. The rest can be country or cultural ones.
-# These subreddits are included in the language reference data.
-LANGUAGE_SUBREDDITS = {"Afrikaans": ["r/afrikaans"], "Albanian": ["r/albanian"], "Amharic": ["r/amharic"],
-                       "American Sign Language": ["r/asl"], "Ancient Egyptian": ["r/ancientegypt"],
-                       "Ancient Greek": ["r/ancientgreek"],
-                       "Arabic": ["r/learn_arabic", "r/arabic", "r/arabs", "r/learnarabic"],
-                       "Aramaic": ["r/aramaic"], "Armenian": ["r/hayeren"], "Assamese": ["r/assam"],
-                       "Avestan": ["r/avestan"], "Basque": ["r/basque"], "Belarusian": ["r/belarusian"],
-                       "Bengali": ["r/bengalilanguage"],
-                       "Breton": ["r/breton"], "Burmese": ["r/lanl_burmese"], "Cantonese": ["r/cantonese"],
-                       "Catalan": ["r/catalan"], "Chechen": ["r/chechnya"],
-                       "Chinese": ["r/chineselanguage", "r/chinese", "r/mandarin", "r/learnchinese"],
-                       "Cornish": ["r/kernowek"], "Croatian": ["r/croatian"], "Danish": ["r/danishlanguage"],
-                       "Czech": ["r/learnczech"], "Dutch": ["r/learndutch"], "English": ["r/englishlearning"],
-                       "Esperanto": ["r/esperanto"], "Estonian": ["r/eesti"], "Faroese": ["r/faroese"],
-                       "Finnish": ["r/learnfinnish"], "French": ["r/french", "r/france", "r/frenchimmersion"],
-                       "German": ["r/german", "r/de", "r/germany"], "Greek": ["r/greek"], "Haitian Creole": ["r/haiti"],
-                       "Hawaiian": ["r/learn_hawaiian"], "Hebrew": ["r/hebrew", "r/israel"], "Hindi": ["r/hindi"],
-                       "Hungarian": ["r/hungarian", "r/hungary"], "Icelandic": ["r/learnicelandic"], "Ido": ["r/ido"],
-                       "Indonesian": ["r/indonesian"], "Interlingua": ["r/interlingua"],
-                       "Interlingue": ["r/interlingue"], "Inuktitut": ["r/inuktitut"], "Irish": ["r/gaeilge"],
-                       "Italian": ["r/italianlearning"],
-                       "Japanese": ["r/learnjapanese", "r/japan", "r/japanese", "r/nihongo"],
-                       "Kalaallisut": ["r/kalaallisut"], "Kannada": ["r/kannada"], "Khmer": ["r/learnkhmer"],
-                       "Klingon": ['r/tlhinganhol'],
-                       "Korean": ["r/korean", "r/korea", "r/koreantranslate"], "Kyrgyz": ["r/learnkyrgyz"],
-                       "Lao": ["r/laos"], "Latin": ["r/latin", "r/mylatintattoo", "r/latina"],
-                       "Latvian": ["r/learnlatvian"], "Luxembourgish": ["r/luxembourg"], "Malagasy": ["r/madagascar"],
-                       "Manx": ["r/gaelg"], "Maori": ["r/maori"], "Malay": ["r/bahasamelayu"],
-                       "Malayalam": ['r/malayalam'], "Marathi": ["r/marathi"],
-                       "Mongolian": ["r/mongolian"], "Norwegian": ["r/norsk"], "Occitan": ["r/occitan"],
-                       "Pali": ["r/pali"], "Pashto": ["r/pashto"],
-                       "Persian": ["r/farsi", "r/iran", "r/learnfarsi", "r/persian"],
-                       "Polish": ["r/learnpolish", "r/poland"],
-                       "Portuguese": ["r/portuguese", "r/portugal", "r/brazil"], "Punjabi": ["r/punjabi"],
-                       "Quechua": ["r/learnquechua"], "Romanian": ["r/romanian"], "Russian": ["r/russian", "r/russia"],
-                       "Sanskrit": ["r/sanskrit"], "Scottish Gaelic": ["r/gaidhlig"], " Serbian": ["r/serbian"],
-                       "Sinhalese": ["r/sinhala"], "Spanish": ["r/spanish", "r/learnspanish", "r/argentina"],
-                       "Swahili": ["r/swahili"], "Swedish": ["r/svenska", "r/sweden"], "Tagalog": ["r/tagalog"],
-                       "Tamil": ["r/tamil"], "Telugu": ["r/telugu"], "Thai": ["r/learnthai", "r/thailand"],
-                       "Tibetan": ["r/tibet", "r/tibetanlanguage"], "Turkish": ["r/turkishlearning", "r/turkey"],
-                       "Ukrainian": ["r/ukrainian"], "Urdu": ["r/urdu"], "Uzbek": ["r/learn_uzbek"],
-                       "Vietnamese": ["r/vietnamese", "r/vietnam", "r/learnvietnamese"], "Volapuk": ["r/volapuk"],
-                       "Welsh": ["r/learnwelsh", "r/cymru", "r/wales"], "Yiddish": ["r/yiddish"]}
-
-# Keywords used for thanks. This is included in the crosspost responses and the notifications sign ups.
-THANKS_WORDS = {"Afrikaans": "Dankie", "Albanian": "Falemenderit", "Amharic": "አመሰግናለሁ", "Ancient Egyptian": "Dua",
-                "Ancient Greek": "Ἐπαινῶ",
-                "Anglo-Saxon": "Þancas", "Arabic": "ﺷﻜﺮﺍﹰ", "Aramaic": "Yishar", "Armenian": "մերսի",
-                "Azerbaijani": "Təşəkkür edirəm",
-                "Balinese": "Suksma", "Basque": "Eskerrik asko", "Belarusian": "Дзякуй", "Bengali": "ধন্যবাদ",
-                "Bosnian": "Hvala", "Bulgarian": "благодаря", "Burmese": "Cè-zù tin-ba-deh", "Breton": "Trugarez",
-                "Cantonese": "多謝",
-                "Catalan": "Gràcies", "Cebuano": "Salamat", "Cherokee": "ᏩᏙ", "Chinese": "謝謝",
-                "Coptic": 'Sephmot',
-                "Corsican": "À ringraziavvi",
-                "Croatian": "Hvala", "Czech": "Dík", "Danish": "Tak", "Dutch": "Dank u", "Esperanto": "Dankon",
-                "Estonian": "Tänan", "Faroese": "Takk",
-                "Finnish": "Kiitos", "French": "Merci", "German": "Danke", "Georgian": "გმადლობთ", "Greek": "Ευχαριστώ",
-                "Gujarati": "ધન્યવાદ", "Haitian Creole": "Mesi", "Hawaiian": "Mahalo",
-                "Hebrew": "תודה רבה", "Hindi": "धन्यवाद",
-                "Hungarian": "Köszi", "Icelandic": "Takk", "Indonesian": "Terima kasih", "Inuktitut": "ᖁᔭᓇᐃᓐᓂ",
-                "Irish": "Go raibh míle maith agat", "Italian": "Grazie", "Japanese": "ありがとう",
-                "Kalaallisut": "Qujan", "Kazakh": "Рахмет",
-                "Khmer": "ឣរគុណ", "Korean": "감사합니다", "Kurdish": "سوپاس", "Lao": "ຂອບໃຈ", "Latin": "Grātiās tibi agō",
-                "Latvian": "Paldies", "Lithuanian": "Ačiū", "Macedonian": "Благодарам",
-                "Malagasy": "Misaotra",
-                "Malay": "Terima kasih", "Malayalam": "നന്ദി", "Maltese": "Grazzi", "Maori": "Kia ora",
-                "Marathi": "आभारी आहे", "Mongolian": "Баярлалаа", "Navajo": "Ahéhee'",
-                "Nepali": "धन्यवाद", "Norse": "Þakka",
-                "Norwegian": "Takk", "Pashto": "مننه", "Persian": "ممنونم", "Polish": "Dzięki",
-                "Portuguese": "Obrigado", "Punjabi": "ਧਨਵਾਦ", "Quechua": "Solpayki",
-                "Romanian": "Mersi", "Russian": "Спаси́бо",
-                "Sanskrit": "धन्यवादाः", "Sardinian": "Grazie", "Scottish Gaelic": "Tapadh leat", "Serbian": "Хвала",
-                "Sinhalese": "Istuti", "Slovak": "Ďakujem", "Slovene": "Hvala", "Somali": "Mahadsanid",
-                "Spanish": "Gracias", "Swahili": "Asante", "Swedish": "Tack", "Tagalog": "Salamat",
-                "Tamil": "நன்றி", "Telugu": "ధన్యవాదములు", "Thai": "ขอบคุณ", "Tibetan": "ཐུགས་རྗེ་ཆེ་།",
-                "Turkish": "Teşekkür ederim", "Ukrainian": "Дякую", "Urdu": "شكريه", "Uzbek": "Rahmat",
-                "Vietnamese": "Cảm ơn", "Welsh": "Diolch", "Xhosa": "Ndiyabulela", "Yoruba": "O se",
-                "Yiddish": "שכח", "Zulu": "Ngiyabonga"}
 
 # An ISO 3166 list of countries and their equivalent codes and words. Used for determining regional dialects.
 COUNTRY_LIST = [
@@ -670,45 +1976,7 @@ COUNTRY_LIST = [
     ("Zambia", "ZM", "ZMB", "894", ["Zambian"]),
     ("Zimbabwe", "ZW", "ZWE", "716")]
 
-LANGUAGE_COUNTRY_ASSOCIATED = {
-    "af": ["NA"],
-    "ar": ["AE", "CY", "DZ", "BH", "DJ", "EG", "IL", "IQ", "JO", "KW", "LB", "LY", "MA", "ML", "OM", "PS", "SA", "SO",
-           "SD", "SS",
-           "SY", "TD", "TN", "YE"],
-    "ay": ["PE", "CL", "BO"],
-    "de": ["AT", "BE", "CH"],
-    "el": ["CY"],
-    # "en": ["AU", "GB", "US"],  # We do not use the regional language associations for English
-    "es": ["MX", "VE", "AR", "BO", "CL", "CO", "CR", "CU", "DO", "EC", "SV", "GQ", "GT", "HN", "NI", "PA",
-           "PY", "PE", "PR", "UY"],
-    "fa": ["AF"],
-    "ff": ["SN", "GM", "MR", "SL", "GN", "GW", "ML", "GH", "TG", "BJ", "BF", "NE", "SD", "TD", "CM", "CF", "NG"],
-    "fr": ["BE", "CA", "CF", "CD", "DJ", "GQ", "HT", "ML", "NE", "SN", "CH", "TG"],
-    "gn": ["PY", "AR", "BO"],
-    "ha": ["NE", "NG", "TD"],
-    "hi": ["FJ"],
-    "kw": ["AO", "NA"],
-    "ms": ["BN", "SG"],
-    "nl": ["BE", "SR"],
-    "om": ["ET", "KE"],
-    "pt": ["AO", "BR", "MZ", "TL", "CV"],
-    "ro": ["MD"],
-    "sq": ["XK"],
-    "sr": ["ME"],
-    "sw": ["CD", "TZ", "KE", "UG"],
-    "ta": ["SG"],
-    "tr": ["CY"],
-    "uz": ["AF"],
-    "yue": ["HK", "MO"],
-    "zh": ["TW"]
-}
-# For now we hard-code these specific languages and the countries in which their varieties are spoken.
-ISO_DEFAULT_ASSOCIATED = ['af-ZA', 'sq-AL', 'am-ET', 'hy-AM', 'eu-ES', 'be-BY', 'bn-BD', 'bs-BA', 'my-MM', 'yue-HK',
-                          'ca-ES', 'zh-CN', 'cs-CZ', 'da-DK', 'et-EE', 'ka-GE', 'el-GR', 'gu-IN', 'he-IL', 'hi-IN',
-                          'hu-HU', 'ga-IE', 'ja-JP', 'kk-KZ', 'km-KH', 'ko-KR', 'ku-IQ', 'ms-MY', 'mr-IN', 'ps-AF',
-                          'fa-IR', 'pa-PK', 'sr-RS', 'si-LK', 'sl-SI', 'sv-SE', 'tl-PH', 'ta-IN', 'te-IN', 'uk-UA',
-                          'ur-PK', 'vi-VN', 'zu-ZA']
-# A dictionary with languages as keys and country codes as values. 
+# A dictionary with languages as keys and country codes as values.
 ISO_LANGUAGE_COUNTRY_ASSOCIATED = {
     "ar-CY": "acy",
     "ar-DZ": "arq",
@@ -757,10 +2025,59 @@ ISO_LANGUAGE_COUNTRY_ASSOCIATED = {
     "uz-AF": "uzs",
     "sq-XK": "aln"
 }
-# Commonly confused country codes with language codes. (country code: language code)
-# ONLY use ISO-3166 country codes that do not correspond to an ISO 639-1 code.
-MISTAKE_ABBREVIATIONS = {'jp': 'ja', 'cz': 'cs', 'cn': 'zh', 'dk': 'da', 'gr': 'el', 
-                         'kh': 'km', 'tj': 'tg', 'ua': 'uk', 'vn': 'vi'}
+
+
+def language_lists_generator():
+    """
+    A routine that creates a bunch of the old lists that used to power `converter()`
+
+    :return: Nothing, but it declares a bunch of global variables.
+    """
+
+    global SUPPORTED_CODES, SUPPORTED_LANGUAGES, ISO_DEFAULT_ASSOCIATED, ISO_639_1, ISO_639_2B, ISO_639_3, ISO_NAMES, \
+        MISTAKE_ABBREVIATIONS, LANGUAGE_COUNTRY_ASSOCIATED
+
+    SUPPORTED_CODES = []
+    SUPPORTED_LANGUAGES = []
+    ISO_DEFAULT_ASSOCIATED = []
+    ISO_639_1 = []
+    ISO_639_2B = {}
+    ISO_639_3 = []
+    ISO_NAMES = []
+    MISTAKE_ABBREVIATIONS = {}
+    LANGUAGE_COUNTRY_ASSOCIATED = {}
+
+    for language_code, language_module in MAIN_LANGUAGES.items():
+
+        ISO_639_1.append(language_code)
+        ISO_639_3.append(language_module['language_code_3'])
+        ISO_NAMES.append(language_module['name'])
+        if 'alternate_names' in language_module:
+            if language_module['alternate_names'] is not None:
+                for item in language_module['alternate_names']:
+                    ISO_NAMES.append(item)
+
+        if language_module['supported']:
+            SUPPORTED_CODES.append(language_code)
+            SUPPORTED_LANGUAGES.append(language_module['name'])
+
+        if 'countries_default' in language_module:
+            ISO_DEFAULT_ASSOCIATED.append("{}-{}".format(language_code, language_module['countries_default']))
+
+        if 'countries_associated' in language_module:
+            LANGUAGE_COUNTRY_ASSOCIATED[language_code] = language_module['countries_associated']
+
+        if 'mistake_abbreviation' in language_module:
+            MISTAKE_ABBREVIATIONS[language_module['mistake_abbreviation']] = language_code
+
+        if 'language_code_2b' in language_module:
+            ISO_639_2B[language_module['language_code_2b']] = language_code
+
+    return
+
+
+# Form the lists from the dictionary that are needed for compatibility.
+language_lists_generator()
 
 
 def fuzzy_text(word):
@@ -774,32 +2091,33 @@ def fuzzy_text(word):
 
     for language in SUPPORTED_LANGUAGES:
         closeness = fuzz.ratio(language, word)
+
         if closeness > 75:
             return str(language)
 
+    return None
 
-def alternate_search(searchfor, is_supported):
+
+def language_name_search(search_term):
     """
-    Values should be a dictionary. This allows us to look for alternate names of a language.
+    Function that searches for a language name or its mispellings/alternate names. It will only return the code if it's
+    an *exact* match. There's a separate module in `fuzzy_text` above and in `converter` that will take care of
+    misspellings or other issues for the main supported languages.
 
-    :param searchfor: language name that we are interested in.
-    :param is_supported: Whether or not it's a supported language on r/translator.
-    :return:
+    :param search_term: The term we're looking to check, most likely a language name.
+    :return: The equivalent language code if found, a blank string otherwise.
     """
 
-    if is_supported:
-        for k in SUPPORTED_ALTERNATE:
-            for v in SUPPORTED_ALTERNATE[k]:
-                if searchfor in v:
-                    if v == searchfor:  # The two are exactly identical.
-                        return k
-                    else:
-                        continue  # Try again
-    elif not is_supported:
-        for k in ISO_639_1_ALTERNATE:
-            for v in ISO_639_1_ALTERNATE[k]:
-                if searchfor in v:
-                    return k
+    for key in MAIN_LANGUAGES:
+        if search_term == MAIN_LANGUAGES[key]['name']:
+            return key
+        elif MAIN_LANGUAGES[key]['alternate_names'] is not None:
+            for alternate_name in MAIN_LANGUAGES[key]['alternate_names']:
+                if search_term == alternate_name:
+                    return key
+        else:
+            continue
+
     return ""
 
 
@@ -836,9 +2154,7 @@ def lang_code_search(search_term, script_search):
     :return:
     """
 
-    codes_list = []
-    names_list = []
-    alternate_names_list = []  # List of alternate names for languages in ISO 639-3
+    master_dict = {}
     is_script = False
 
     if len(search_term) == 4:
@@ -846,54 +2162,65 @@ def lang_code_search(search_term, script_search):
 
     csv_file = csv.reader(open(FILE_ADDRESS_ISO_ALL, "rt", encoding="utf-8"), delimiter=",")
     for row in csv_file:
-        codes_list.append(row[0])
-        names_list.append(row[2:][0])  # It is normally returned as a list, so we need to convert into a string.
-        alternate_names_list.append(row[3:][0])
+        # We have a master dictionary. Index by code. Tuple has: (language name, language name (lower), alt names lower)
+        master_dict[row[0]] = (row[2:][0], row[2:][0].lower(), row[3:][0].lower())
 
     if len(search_term) == 3:  # This is a ISO 639-3 code
-        if search_term in codes_list:
-            item_index = codes_list.index(search_term)
-            item_name = names_list[item_index]
+        if search_term.lower() in master_dict:
+            item_name = master_dict[search_term.lower()][0]
             # Since the first two rows are the language code and 639-1 code, we take it from the third.
             return item_name, is_script
         else:
             return "", False
     elif len(search_term) == 4 and script_search is True:  # This is a script
-        if search_term in codes_list:
-            item_index = codes_list.index(search_term)
-            item_name = names_list[
-                item_index]  # Since the first two rows are the language code and 639-1 code, we take it from the third.
+        if search_term.lower() in master_dict:
+            # Since the first two rows are the language code and 639-1 code, we take it from the third row.
+            item_name = master_dict[search_term.lower()][0]
             is_script = True
             return item_name, is_script
-    elif len(search_term) > 3 and script_search is False:  # Probably a name, so let's get the code
-        if search_term in names_list:  # The name is in the code list
-            item_index = names_list.index(search_term)
-            item_code = codes_list[item_index]
-            item_code = str(item_code)
-            if len(item_code) == 3:  # This is a language code
-                return item_code, False
-            else:  # probably a script, then
-                return item_code, True
-        else:  # No name was found, let's check alternates.
-            item_code = ""
-            for name in alternate_names_list:
-                if ';' in name:  # There are multiple alternate names here
-                    sorted_alternate = name.split('; ')
-                else:
-                    sorted_alternate = [name]  # Convert into an iterable list.
+    elif len(search_term) > 3:  # Probably a name, so let's get the code
+        item_code = ""
+        for key, value in master_dict.items():
+            if search_term.lower() == value[1]:
+                if len(key) == 3 and not script_search:  # This is a language code
+                    item_code = key
+                elif len(key) == 4:
+                    item_code = key
+                    is_script = True
+                return item_code, is_script
 
-                for alternate in sorted_alternate:
-                    if search_term == alternate.title().strip():  # We found an alternate
-                        item_index = alternate_names_list.index(name)
-                        item_code = str(codes_list[item_index])
-                        break  # We're done. We can exit
+        # No name was found, let's check alternates.
+        for key, value in master_dict.items():
+            if ';' in value[2]:  # There are multiple alternate names here
+                sorted_alternate = value[2].split('; ')
+            else:
+                sorted_alternate = [value[2]]  # Convert into an iterable list.
 
-            if len(item_code) == 3:
-                return item_code, False
-            elif len(item_code) == 4:
-                return item_code, True
-            else:  # No matches whatsoever, let's exit, returning blank.
-                return "", False
+            if search_term.lower() in sorted_alternate:
+                if len(key) == 3:  # This is a language code
+                    item_code = key
+                elif len(key) == 4:
+                    item_code = key
+                    is_script = True
+                return item_code, is_script
+
+    return "", False
+
+
+def iso639_3_to_iso639_1(specific_code):
+    """
+    Function to get the equivalent ISO 639-1 code from an ISO 639-3 code if it exists.
+
+    :param specific_code: An ISO 639-3 code.
+    :return:
+    """
+
+    for key, value in MAIN_LANGUAGES.items():
+        module_iso3 = value['language_code_3']
+        if specific_code == module_iso3:
+            return key
+
+    return None
 
 
 def country_converter(text_input, abbreviations_okay=True):
@@ -954,12 +2281,12 @@ def country_converter(text_input, abbreviations_okay=True):
     return country_code, country_name
 
 
-def converter(language):
+def converter(input_text):
     """
     A function that can convert between language names and codes, and also parse additional data.
     This is one of the most crucial components of Ziwen and is very commonly used.
 
-    :param language: Any string that may be a language name or code.
+    :param input_text: Any string that may be a language name or code.
     :return: A tuple with Code, Name, Supported (boolean), country (if present).
     """
 
@@ -971,13 +2298,14 @@ def converter(language):
     regional_case = False
     is_script = False
     country_code = None
-    targeted_language = str(language)
+    targeted_language = str(input_text)
 
-    if "-" in language and "Anglo" not in language and "Komi" not in language:  # There's a hyphen... probably a special code.
+    # There's a hyphen... probably a special code.
+    if "-" in input_text and "Anglo" not in input_text:
         broader_code = targeted_language.split("-")[0]  # Take only the language part (ar).
         specific_code = targeted_language.split("-")[1]  # Get the specific code.
         if len(specific_code) <= 1:  # If it's just a letter it cannot be valid.
-            language = broader_code
+            input_text = broader_code
             specific_code = None
     else:  # Normal code
         broader_code = specific_code = None
@@ -987,7 +2315,7 @@ def converter(language):
         # This takes a code and returns a name ar-LB becomes Arabic <Lebanon> and unknown-CYRL becomes Cyrillic (Script)
         if broader_code == "unknown":  # This is going to be a script.
             try:
-                language = lang_code_search(specific_code, script_search=True)[0]  # Get the script name.
+                input_text = lang_code_search(specific_code, script_search=True)[0]  # Get the script name.
                 is_script = True
             except TypeError:  # Not a valid code. 
                 pass
@@ -995,153 +2323,95 @@ def converter(language):
             regional_case = True
             country_code = country_converter(specific_code, True)[0].upper()
             country_name = country_converter(country_code, True)[1]
-            language = broader_code
-            if ("{}-{}".format(language, country_code) in ISO_DEFAULT_ASSOCIATED or
-                    country_code.lower() == language.lower()):  # Something like de-DE or zh-CN
+            input_text = broader_code
+            if ("{}-{}".format(input_text, country_code) in ISO_DEFAULT_ASSOCIATED or
+                    country_code.lower() == input_text.lower()):  # Something like de-DE or zh-CN
                 regional_case = False
                 country_code = None
                 # We don't want to mark the default countries as too granular ones.
             if len(country_name) == 0:  # There's no valid country from the converter. Reset it.
-                language = targeted_language  # Redefine the language as the original (pre-split)
+                input_text = targeted_language  # Redefine the language as the original (pre-split)
                 regional_case = False
                 country_code = None
-    elif "{" in language and len(language) > 3:  # This may have a country tag. Let's be sure to remove it.
+    elif "{" in input_text and len(input_text) > 3:  # This may have a country tag. Let's be sure to remove it.
         regional_case = True
-        country_name = language.split("{")[1]
+        country_name = input_text.split("{")[1]
         country_name = country_name[:-1]
         country_code = country_converter(country_name)[0]
-        language = language.split("{")[0]  # Get just the language. 
+        input_text = input_text.split("{")[0]  # Get just the language.
 
     # Make a special exemption for COUNTRY CODES because people keep messing that up.
     for key, value in MISTAKE_ABBREVIATIONS.items():
-        if len(language) == 2 and language.lower() == key:
+        if len(input_text) == 2 and input_text.lower() == key:
             # If it's the same, let's replace it with the proper one.
-            language = value
+            input_text = value
             continue
 
     # We also want to help convert ISO 639-2B codes (there are twenty of them)
     for key, value in ISO_639_2B.items():
-        if len(language) == 3 and language.lower() == key:
+        if len(input_text) == 3 and input_text.lower() == key:
             # If it's the same, let's replace it with the proper one.
-            language = value
+            input_text = value
             continue
 
+    # Convert and reassign special-reserved ISO 639-3 codes to their r/translator equivalents.
+    if input_text in ['mis', 'und', 'mul', 'qnp']:  # These are special codes that we reassign
+        supported = True
+        if input_text == "mul":
+            input_text = "multiple"
+        elif input_text in ['mis', 'und', 'qnp']:  # These are assigned to "unknown"
+            input_text = "unknown"
+
     # Start processing the string.
-    if len(language) < 2:
+    if len(input_text) < 2:  # This is too short.
         language_code = ""
         language_name = ""
-        supported = False
-    if len(language) == 2 and language.lower() in SUPPORTED_CODES:
-        language_code = language.lower()
-        language_name = SUPPORTED_LANGUAGES[SUPPORTED_CODES.index(language.lower())]
-        supported = True
-    elif len(language) == 2 and language.lower() not in SUPPORTED_CODES:
-        try:
-            language_code = language.lower()
-            language_name = ISO_NAMES[ISO_639_1.index(language.lower())]
-        except ValueError:  # Code is not ISO 639-1
-            language_code = ""  # Just give blank ones.
-            language_name = ""
-        supported = False
-    elif len(language) == 3 and language.lower() in SUPPORTED_CODES:
-        language_code = language.lower()
-        language_name = SUPPORTED_LANGUAGES[SUPPORTED_CODES.index(language.lower())]
-        supported = True
-    elif len(language) > 2 and language.lower() not in SUPPORTED_CODES and not is_script:
-        language_name = language.title()
-        try:  # First we check to see if it's name of a supported language
-            try:
-                language_code = SUPPORTED_CODES[SUPPORTED_LANGUAGES.index(language_name)]
-                language_name = language_name
-                supported = True
-            except ValueError:  # Could not find a valid standard name for this language.
-                try:  # Supported Misspelling?
-                    language_code = alternate_search(searchfor=language_name, is_supported=True)
-                    language_name = SUPPORTED_LANGUAGES[SUPPORTED_CODES.index(language_code)]
-                    supported = True
-                except ValueError:  # Try to use fuzzy matching
-                    if language_name not in FUZZ_IGNORE_WORDS:  # We want to ignore some words that are misinterpreted
-                        fuzzy_result = fuzzy_text(language_name)
-                        language_code = SUPPORTED_CODES[SUPPORTED_LANGUAGES.index(fuzzy_result)]
-                        language_name = fuzzy_result
-                        supported = True
-                    else:
-                        raise ValueError  # Cause a fault so it kicks it down
-        except ValueError:  # Okay, so it's not a name of a language that's supported.
-            try:  # Next we check to see if it's in one of our non-supported languages, using regular names.
-                language_code = ISO_639_1[ISO_NAMES.index(language.title())]
-                if len(language_code) != 0:  # If it finds something, check back to see if it's a supported language.
-                    try:
-                        language_code = SUPPORTED_CODES[SUPPORTED_LANGUAGES.index(language.title())]
-                        supported = True
-                    except ValueError:
-                        pass
-            except ValueError:
-                # Next we see if it's another misspelling for a non-supported language.
-                try:
-                    language_code = alternate_search(searchfor=language_name, is_supported=False)
-                    language_name = ISO_NAMES[ISO_639_1.index(language_code)]
-                    supported = False
-                except ValueError:
-                    if len(language_name) == 3:
-                        # If it's a three-letter code passed by the title function, we assume it's a proper code...
-                        # Lastly, we check to see if it's one of our ISO 639-3 languages set.
+    elif input_text.lower() in ISO_639_1:  # This is a supported ISO 639-1 code.
+        language_code = input_text.lower()
+        language_name = MAIN_LANGUAGES[language_code]['name']
+        supported = MAIN_LANGUAGES[language_code]['supported']
+    elif len(input_text) == 3 and input_text.lower() in ISO_639_3:  # This is equivalent to a supported one, eg 'cmn'.
+        for key, value in MAIN_LANGUAGES.items():
+            if input_text.lower() == value['language_code_3']:
+                language_code = key
+                language_name = MAIN_LANGUAGES[language_code]['name']
+                supported = MAIN_LANGUAGES[language_code]['supported']
+    elif len(input_text) == 3 and len(language_name_search(input_text.title())) != 0:  # This is three letters and name.
+        language_code = language_name_search(input_text.title())  # An example of this is 'Any'.
+        language_name = MAIN_LANGUAGES[language_code]['name']
+    elif len(input_text) == 3 and input_text.lower() not in ISO_639_3:  # This may be a non-supported ISO 639-3 code.
+        results = lang_code_search(input_text, False)[0]  # Consult the CSV file.
+        if len(results) != 0:  # We found a matching language name.
+            language_code = input_text.lower()
+            language_name = results
+    elif len(input_text) > 3:  # Not a code, let's look for names.
+        if input_text.title() in ISO_NAMES:  # This is a defined language with a name.
+            language_code = language_name_search(input_text.title())  # This searches both regular and alternate names.
+            language_name = MAIN_LANGUAGES[language_code]['name']
+        elif input_text.title() not in ISO_NAMES:
+            if input_text.title() not in FUZZ_IGNORE_WORDS:
+                # No name found. Apply fuzzy matching.
+                fuzzy_result = fuzzy_text(input_text.title())
+            else:
+                fuzzy_result = None
 
-                        language_code = language.lower()
-                        if language_code in ISO_639_3:  # This is a code with 639-1 equiv.
-                            language_code = ISO_639_1[ISO_639_3.index(language_code)]
-                            # print(language_code)
-                            language_name = ISO_NAMES[ISO_639_1.index(language_code)]
-                            # We fetch the ISO 639-1 equivalent. 
-                            if language_code in SUPPORTED_CODES:  # Is a supported lang. 
-                                supported = True
-                            else:
-                                supported = False
-                        elif language_code in ['mis', 'und', 'mul', 'qnp']:  # These are special codes that we reassign
-                            supported = True
-                            if language_code == "mul":
-                                language_code = "multiple"
-                                language_name = "Multiple Languages"
-                            elif language_code in ['mis', 'und', 'qnp']:  # These are assigned to "unknown"
-                                language_code = "unknown"
-                                language_name = "Unknown"
-                        else:
-                            language_name = lang_code_search(language_code, False)[0]
-                            supported = False
-                            if len(language_name) == 0:  # There was no match as the function above returns an empty str
-                                language_code = ""
-                    else:  # Otherwise it's a name for an ISO 639-3 language?
-                        # Now we check DB to see if it's a name for an ISO 639-3 language
-                        # Note: We use capwords() because it can account for quotes.
-                        iso_data = lang_code_search(string.capwords(language_name), False)
-                        language_code = iso_data[0]
-                        if len(language_code) == 0:  # There was no match
-                            language_name = ""
-                        else:  # There was a match.
-                            returned_language_name = language_name  # Default value is the same.
-                            if len(language_code) == 3:
-                                returned_language_name = lang_code_search(language_code, False)[0]
-                            elif len(language_code) == 4:  # Script
-                                returned_language_name = lang_code_search(language_code, True)[0]
-                            # Get the language name as returned by the converter for THAT CODE
-                            if language_name != returned_language_name:
-                                # The entered language name is an alternate name
-                                # So we want to return the defined name as in the ISO file.
-                                language_name = returned_language_name
-                            supported = False  # Anything that didn't match the supported codes is not supported.
-    elif len(language) > 2 and language.lower() in SUPPORTED_CODES and not is_script:
-        # Basically for Multiple, App, and Unknown posts
-        language_code = language.lower()
-        try:
-            language_name = SUPPORTED_LANGUAGES[SUPPORTED_CODES.index(language_code)]
-            supported = True
-        except ValueError:
-            language_code = ""
-            language_name = ""
-            supported = False
+            if fuzzy_result is not None:  # We found a language that this is close to in spelling.
+                language_code = language_name_search(fuzzy_result.title())
+                language_name = str(fuzzy_result)
+            else:  # No fuzzy. Now we're going to check if it's the name of an ISO 639-3 language or script.
+                total_results = lang_code_search(input_text, False)
+                specific_results = total_results[0]
+                if len(specific_results) != 0:
+                    language_code = specific_results
+                    language_name = lang_code_search(language_code, total_results[1])[0]
+                elif len(specific_results) == 0 and len(input_text) == 4:  # Check for a script code.
+                    script_results = lang_code_search(input_text, True)[0]
+                    if len(script_results) != 0:
+                        language_name = script_results
+                        language_code = lang_code_search(script_results, True)[0]
     elif is_script:  # This is a script.
         language_code = specific_code
-        language_name = language
+        language_name = input_text
 
     if "<" in language_name:  # Strip the brackets from ISO 639-3 languages.
         language_name = language_name.split("<")[0].strip()  # Remove the country name in brackets
@@ -1156,7 +2426,7 @@ def converter(language):
 
 def country_validator(word_list, language_list):
     """
-    Takes a list of words, check for a country and a matching language. This allows us to find combinations like de-AO.
+    Takes a list of words, check for a country and a matching language. This allows us to find combinations like de-AT.
 
     :param word_list: A list of words that may contain a country name.
     :param language_list: A list of words that may contain a language name.
@@ -1640,7 +2910,7 @@ def title_format(title, display_process=False):
     if "(x-post" in title:
         title = title.split("(x-post")[0].strip()
 
-    for spelling in ISO_639_1_ALTERNATE['en']:  # Replace typos or misspellings in the title for English.
+    for spelling in MAIN_LANGUAGES['en']['alternate_names']:  # Replace typos or misspellings in the title for English.
         if spelling in title.title():  # Misspelling is in the title.
             title = title.replace(spelling, "English")
 
@@ -2112,12 +3382,6 @@ def main_posts_filter_required_keywords():
 
     # Create a master list of words for "English"
     words_for_english = ['english', 'en', 'eng', 'englisch', 'англи́йский', '英語', '英文']
-    '''
-    words_for_english_more = []  # If we want to add the misspellings as well.
-    for word in ISO_639_1_ALTERNATE['en']:  # Fetch data from the alternate spelling dictionary.
-        words_for_english_more.append(word.lower())
-    words_for_english += words_for_english_more
-    '''
 
     # Create a list of connecting words between languages.
     words_connection = [">", "to", "<", "〉", "›", "》", "»", "⟶", "→", "~"]
@@ -2149,6 +3413,7 @@ def main_posts_filter_required_keywords():
 
     # Function tags.
     possible_strings['total'] += ['>', '[unknown]', '[community]', '[meta]']
+    possible_strings['total'] += ENGLISH_DASHES
 
     return possible_strings
 

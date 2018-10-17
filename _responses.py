@@ -16,11 +16,15 @@ MSG_UNSUBSCRIBE_BUTTON = (" ^| ^[Points](https://www.reddit.com/message/compose?
 
 # An addition to the notifications message about NSFW content
 MSG_NSFW_WARNING = "\n\n(Just FYI, this *is* an NSFW post.)"
-MSG_SUBSCRIBE_LINK = 'https://www.reddit.com/message/compose?to=translator-BOT&subject=Subscribe&message=%23%23+Sign+up+for+notifications+about+new+requests+for+your+language%21%0A%23%23+List+language+codes+or+names+after+the+colon+below+and+separate+languages+with+commas.%0A%23%23+You+can+sign+up+for+one+language+or+as+many+as+you%27d+like.%0ALANGUAGES%3A+'
-MSG_REMOVAL_LINK = "https://www.reddit.com/message/compose?to=translator-BOT&subject=Unsubscribe&message=%23%23+Please+unsubscribe+me+from+the+following+languages.%0ALANGUAGES%3A+{language_name}"
+MSG_SUBSCRIBE_LINK = ('https://www.reddit.com/message/compose?to=translator-BOT&subject=Subscribe&message='
+                      '%23%23+Sign+up+for+notifications+about+new+requests+for+your+language%21%0A%23%23+List+'
+                      'language+codes+or+names+after+the+colon+below+and+separate+languages+with+commas.'
+                      '%0A%23%23+You+can+sign+up+for+one+language+or+as+many+as+you%27d+like.%0ALANGUAGES%3A+')
+MSG_REMOVAL_LINK = ("https://www.reddit.com/message/compose?to=translator-BOT&subject=Unsubscribe&message="
+                    "%23%23+Please+unsubscribe+me+from+the+following+languages.%0ALANGUAGES%3A+{language_name}")
 MSG_NO_SUBSCRIPTIONS = ("Sorry, you're not currently subscribed to notifications for any [language posts]"
-                        "(https://www.reddit.com/r/translatorBOT/wiki/ziwen#wiki_language_codes.2Fnames_syntax) on r/translator. "
-                        "Would you like to [sign up]({})?")
+                        "(https://www.reddit.com/r/translatorBOT/wiki/ziwen#wiki_language_codes.2Fnames_syntax) "
+                        "on r/translator. Would you like to [sign up]({})?")
 MSG_CANNOT_PROCESS = ("Sorry, but I couldn't process the [language/language codes]"
                       "(https://www.reddit.com/r/translatorBOT/wiki/ziwen#wiki_language_codes.2Fnames_syntax) "
                       "in your message. Please double-check your message to make sure they're accurate and "
@@ -37,7 +41,7 @@ Feel free to disregard the post or [message Ziwen]({removal_link}) if you wish t
 MSG_MISSING_ASSETS = '''
 Hey there u/{oauthor},
 
-Another community member has marked **[your post]({opermalink})** as missing assets (text, images, etc) to be translated. 
+Another community member marked **[your post]({opermalink})** as missing assets (text, images, etc) to be translated. 
 
 Please update your post with content, or delete it and resubmit it with the material you want translated.
 
@@ -54,9 +58,10 @@ If your request has been fulfilled, please leave a comment thanking the translat
 MSG_SHORT_THANKS_TRANSLATED = '''
 Hey there u/{0},
 
-Thanks for submitting to r/translator! It looks like you left a short "thank you" comment on **[your post]({1})**. Consequently, I've automatically marked your request as translated. 
+Thanks for submitting to r/translator! It looks like you left a short "thank you" comment on **[your post]({1})**. 
+Consequently, I've automatically marked your request as translated. 
 
-If this in error, please comment `!reset` on your post or message the r/translator moderators [here](https://www.reddit.com/message/compose?to=r/translator&subject=Please+reset+this+post&message=https://www.reddit.com{1}). Thank you.
+If this is in error, please comment `!reset` on your post or message the r/translator moderators [here](https://www.reddit.com/message/compose?to=r/translator&subject=Please+reset+this+post&message=https://www.reddit.com{1}). Thank you.
 '''
 MSG_NOTIFY = '''
 Hey there u/{username},
@@ -265,8 +270,8 @@ ZWS_COMMENT_XPOST = '''
 *Please post any translations or commands here on r/translator.*
 '''
 ZWS_COMMENT_ALREADY_POSTED = "It appears that this link has already been posted as a translation request."
-ZWS_COMMENT_XPOST_THANKS = ("{}. I've [crossposted](https://www.reddit.com/r/translatorBOT/wiki/ziwen#wiki_cross-posting) "
-                            "this link as a [{} translation request here]({}).")
+ZWS_COMMENT_XPOST_THANKS = ("{}. I've [crossposted](https://www.reddit.com/r/translatorBOT/wiki/ziwen#"
+                            "wiki_cross-posting) this link as a [{} translation request here]({}).")
 ZWS_COMMENT_WRONG_SUBREDDIT = "Sorry, but did you mean r/translator?\n\n^(Note: I can't detect edits.)"
 ZWS_COMMENT_ENGLISH_ONLY = ('It appears that this is an English-only "translation" crosspost request. English-only '
                             'posts are better suited for r/EnglishLearning.')

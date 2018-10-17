@@ -42,7 +42,7 @@ as they define many of the basic functions of the bot.
 '''
 
 BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.7.51'
+VERSION_NUMBER = '1.7.53'
 USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator. '
               'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
@@ -296,9 +296,9 @@ def ajo_defined_multiple_flair_former(flairdict):
 
     for key, value in flairdict.items():  # Iterate over each item in the dictionary.
 
-        try:  # Try to get the ISO 639-1 if possible
-            language_code = ISO_639_1[ISO_639_3.index(key)]
-        except ValueError:  # No ISO 639-1 code
+        # Try to get the ISO 639-1 if possible
+        language_code = iso639_3_to_iso639_1(key)
+        if language_code is None:  # No ISO 639-1 code
             language_code = key
 
         status = value
@@ -565,8 +565,8 @@ class Ajo:
 
                     self.is_supported = converter_data[2]
 
-                    if len(converter_data[0]) == 2:  # Find the matching ISO 639-1 code
-                        self.language_code_3 = ISO_639_3[ISO_639_1.index(converter_data[0])]
+                    if len(converter_data[0]) == 2:  # Find the matching ISO 639-3 code.
+                        self.language_code_3 = MAIN_LANGUAGES[converter_data[0]]['language_code_3']
                     else:
                         self.language_code_1 = None
                 else:  # Does have a language tag.
@@ -578,7 +578,7 @@ class Ajo:
                         self.is_supported = converter_data[2]
                         if len(language_tag) == 2:
                             self.language_code_1 = language_tag
-                            self.language_code_3 = ISO_639_3[ISO_639_1.index(language_tag)]
+                            self.language_code_3 = MAIN_LANGUAGES[language_tag]['language_code_3']
                         elif len(language_tag) == 3:
                             self.language_code_1 = None
                             self.language_code_3 = language_tag
@@ -640,7 +640,7 @@ class Ajo:
                         multi_language_code = converter(language)[0]
                         if len(multi_language_code) == 2:
                             self.language_code_1.append(multi_language_code)
-                            self.language_code_3.append(ISO_639_3[ISO_639_1.index(converter(language)[0])])
+                            self.language_code_3.append(MAIN_LANGUAGES[converter(language)[0]]['language_code_3'])
                         elif len(multi_language_code) == 3:
                             self.language_code_1.append(None)
                             self.language_code_3.append(multi_language_code)
@@ -763,19 +763,19 @@ class Ajo:
             if len(new_language_code) == 2:
                 self.language_name = converter(new_language_code)[1]
                 self.language_code_1 = new_language_code
-                self.language_code_3 = ISO_639_3[ISO_639_1.index(new_language_code)]
+                self.language_code_3 = MAIN_LANGUAGES[new_language_code]['language_code_3']
                 self.is_supported = converter(new_language_code)[2]
-            elif len(new_language_code) == 3 and new_language_code not in SUPPORTED_CODES:
+            elif len(new_language_code) == 3:
+
                 self.language_name = converter(new_language_code)[1]
                 self.language_code_1 = None
                 self.language_code_3 = new_language_code
-                self.is_supported = False
-            elif len(new_language_code) == 3 and new_language_code in SUPPORTED_CODES:
-                # These are supported ISO 639-3 codes
-                self.language_name = converter(new_language_code)[1]
-                self.language_code_1 = None
-                self.language_code_3 = new_language_code
-                self.is_supported = True
+
+                # Check to see if this is a supported language.
+                if new_language_code in MAIN_LANGUAGES:
+                    self.is_supported = MAIN_LANGUAGES[new_language_code]['supported']
+                else:
+                    self.is_supported = False
             elif new_language_code == "unknown":  # Reset everything
                 self.language_name = "Unknown"
                 self.language_code_1 = self.is_script = self.script_code = self.script_name = None
@@ -871,7 +871,7 @@ class Ajo:
         for code in set_languages_processed_codes:
             if len(code) == 2:
                 self.language_code_1.append(code)  # self
-                code_3 = ISO_639_3[ISO_639_1.index(code)]
+                code_3 = MAIN_LANGUAGES[code]['language_code_3']
                 self.language_code_3.append(code_3)
             elif len(code) == 3:
                 self.language_code_3.append(code)
@@ -952,7 +952,7 @@ class Ajo:
             self.type = "single"
             if len(provisional_code) == 2:  # ISO 639-1 language
                 self.language_code_1 = provisional_code
-                self.language_code_3 = ISO_639_3[ISO_639_1.index(provisional_code)]
+                self.language_code_3 = MAIN_LANGUAGES[provisional_code]['language_code_3']
                 self.country_code = provisional_country
             elif len(provisional_code) == 3 or provisional_code == "unknown" and provisional_code != "app":
                 # ISO 639-3 language or Unknown post.
@@ -1942,7 +1942,7 @@ def messaging_user_statistics_writer(body_text, username):
     """
     Function that records which commands are written by whom, cumulatively, and stores it into an SQLite file.
     Takes the body text of their comment as an input.
-    The database used is the same one as the points one, but on a different table.
+    The database used is the main one but with a different table.
     
     :param body_text: The content of a comment, likely containing r/translator commands.
     :param username: The username of a Reddit user.
@@ -1977,9 +1977,9 @@ def messaging_user_statistics_writer(body_text, username):
             else:  # Regular command
                 keyword_count = body_text.count(keyword)
 
-            try:
+            if keyword in commands_dictionary:
                 commands_dictionary[keyword] += keyword_count
-            except KeyError:
+            else:
                 commands_dictionary[keyword] = keyword_count
 
     # Save to the database if there's stuff.
@@ -2005,7 +2005,7 @@ def messaging_user_statistics_loader(username):
     If they have data, it will return a nicely formatted table.
 
     :param username: The username of a Reddit user.
-    :return: None if the user has no data (commands that they called), a sorted table otherwise.
+    :return: None if the user has no data (no commands that they called), a sorted table otherwise.
     """
 
     lines_to_post = []
@@ -2017,14 +2017,25 @@ def messaging_user_statistics_loader(username):
 
     if len(username_commands_data) == 0:  # There is no data for this user.
         return None
-    else:  # There's data
+    else:  # There's data. Get the data and format it line-by-line.
         commands_dictionary = eval(username_commands_data[0][1])  # We only want the stored dict here.
 
         for key, value in sorted(commands_dictionary.items()):
             command_type = key
-            if command_type == '`':
-                command_type = '`lookup`'
-            formatted_line = "{} | {}".format(command_type, value)
+            if command_type != 'Notifications':  # This is a regular command.
+                if command_type == '`':
+                    command_type = '`lookup`'
+                formatted_line = "{} | {}".format(command_type, value)
+            else:  # These are notifications records, the value stored as a dictionary.
+                # Get the dictionary of notifications that were sent.
+                stored_text = value
+                notification_dict = eval(stored_text)
+                formatted_line = []
+
+                # Iterate over the dictionary of notifications, creating a new line per language code.
+                for language_code, notification_num in sorted(notification_dict.items()):
+                    formatted_line.append("Notifications (`{}`) | {}".format(language_code, notification_num))
+
             lines_to_post.append(formatted_line)
 
         # Format everything together
@@ -2376,9 +2387,9 @@ def notifier_limit_writer(username, language_code, num_notifications=1):
     else:  # Update an existing one.
 
         # Attempt to update the dictionary value.
-        try:
+        if language_code in monthly_limit_dictionary:
             monthly_limit_dictionary[language_code] += num_notifications
-        except KeyError:
+        else:
             monthly_limit_dictionary[language_code] = num_notifications
 
         # Write to the database.
@@ -2414,9 +2425,10 @@ def notifier_limit_over_checker(username, language_code, hard_limit):
     else:  # There's data already for this username.
         monthly_limit_dictionary = eval(user_data[1])
 
-        try:  # Attempt to get the number of notifications user has received for this language.
+        # Attempt to get the number of notifications user has received for this language.
+        if language_code in monthly_limit_dictionary:
             current_number_notifications = monthly_limit_dictionary[language_code]
-        except KeyError:  # There is no entry, so this must be zero.
+        else:  # There is no entry, so this must be zero.
             current_number_notifications = 0
 
         if current_number_notifications > hard_limit:  # Over the limit
@@ -2771,10 +2783,8 @@ def ziwen_messages():
                         conn_main.commit()
 
                 # Try to get a custom thank you phrase, often in the language that was subscribed to.
-                if converter(final_match_codes[0])[1] in THANKS_WORDS:  # Do we have a thank you word for this lang?
-                    thanks_phrase = THANKS_WORDS.get(converter(final_match_codes[0])[1])  # If we do let's choose it.
-                else:  # Couldn't find an equivalent thank you in another language. Just choose english
-                    thanks_phrase = "Thank you"
+                # It will default to 'Thank you' if that phrase is not recorded in the main language dictionary.
+                thanks_phrase = MAIN_LANGUAGES.get(final_match_codes[0], {}).get('thanks', 'Thank you')
 
                 main_body = thanks_phrase + "! You have been subscribed to r/translator notifications for:\n\n* {}"
                 main_body = main_body.format("\n* ".join(final_match_names))
@@ -4176,7 +4186,7 @@ def ja_word(japanese_word):
     word_data = returned_data.json()
     main_data = word_data['data']
 
-    # Attempt to get the reading of it in hiragana. If there is an KeyError, then it's not a real Jisho entry.
+    # Attempt to get the reading of it in hiragana. If there is an Key Error, then it's not a real Jisho entry.
     try:
         main_data = main_data[0]  # Choose the first result.
         word_reading = main_data['japanese'][0]['reading']
@@ -4788,9 +4798,8 @@ def reference_search(language_match):
         to_post = COMMENT_INVALID_REFERENCE
         return to_post
     elif count == 2:
-        try:
-            language_iso3 = ISO_639_3[ISO_639_1.index(language_match)]
-        except ValueError:  # Not a valid 2-letter code.
+        language_iso3 = MAIN_LANGUAGES[language_match]['language_code_3']
+        if language_iso3 is None:  # Not a valid 2-letter code.
             to_post = COMMENT_INVALID_REFERENCE
             return to_post
     elif count == 3:
@@ -4902,15 +4911,18 @@ def reference_search(language_match):
             wf_link = base_link.format(language_classification)
 
         lookup_line_1 = str('\n**Language Name**: ' + language_name + '\n\n')
-        if language_iso3 in ISO_639_3:
+        if language_iso3 in MAIN_LANGUAGES:
             # Here we try to get the ISO 639-1 code if possible for inclusion, checking it against a list of ISO codes.
-            language_iso1 = ISO_639_1[ISO_639_3.index(language_iso3)]  # Find the matching 639-1 code
+            language_iso1 = iso639_3_to_iso639_1(language_iso3)
             cache_code = language_iso1
-            if converter(language_iso1)[1] in LANGUAGE_SUBREDDITS:  # The language name has a subreddit listed.
-                # Get the first value, which should be a language learning one.
-                language_subreddit = LANGUAGE_SUBREDDITS.get(converter(language_iso1)[1])[0]
-                lookup_line_1a = "**Subreddit**: {}\n\n".format(language_subreddit)
-                lookup_line_1a += "**ISO 639-1 Code**: {}\n\n".format(language_iso1)
+            if language_iso1 in MAIN_LANGUAGES:  # The language name has a subreddit listed.
+                if 'subreddits' in MAIN_LANGUAGES[language_iso1]:
+                    # Get the first value, which should be a language learning one.
+                    language_subreddit = MAIN_LANGUAGES[language_iso1]['subreddits'][0]
+                    lookup_line_1a = "**Subreddit**: {}\n\n".format(language_subreddit)
+                    lookup_line_1a += "**ISO 639-1 Code**: {}\n\n".format(language_iso1)
+                else:
+                    lookup_line_1a = "**ISO 639-1 Code**: {}\n\n".format(language_iso1)
             else:  # No subreddit listed.
                 lookup_line_1a = "**ISO 639-1 Code**: {}\n\n".format(language_iso1)
 
@@ -5356,7 +5368,7 @@ def ziwen_posts():
                             final_css_text += " (Long)"
                             post.reply(COMMENT_LONG + BOT_DISCLAIMER)
                 except (ValueError, TypeError, UnicodeEncodeError, youtube_dl.utils.ExtractorError,
-                        youtube_dl.utils.RegexNotFoundError):
+                        youtube_dl.utils.RegexNotFoundError, OSError, IOError):
                     # The pafy routine cannot make sense of it.
                     logger.debug("[ZW] Posts: Unable to process this YouTube link.")
                 else:
@@ -6218,7 +6230,7 @@ def verification_parser():
         osave = comment.saved  # Should be True if processed, False otherwise.
         current_time = int(time.time())
 
-        if current_time - ocreated >= 300:  # Comment is old let's not do it.
+        if current_time - ocreated >= 300:  # Comment is too old; let's not do it.
             continue
 
         if osave:  # Comment has been processed already.

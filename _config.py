@@ -24,44 +24,39 @@ else:  # sys.platform == "darwin":     # macOS
     SUBREDDIT = "trntest"
     TARGET_FOLDER = "/Users/qzlau/Desktop/Box/Data Backup/{}"
 
-# Set up the directories
+# Set up the directories based on the current location of the bots.
 script_directory = os.path.dirname(__file__)  # Fetch the absolute directory the script is in.
 script_directory += "/Data/"  # Where the main files are kept.
 SOURCE_FOLDER = script_directory
     
-# Ziwen database files (either static files or files that will be written to)
+# Ziwen main database files (either static files or files that will be written to).
 FILE_ADDRESS_CREDENTIALS = os.path.join(script_directory, "_login.json")
 FILE_ADDRESS_UA = os.path.join(script_directory, "_ua.json")
-
 FILE_ADDRESS_AJO_DB = os.path.join(script_directory, '_database_ajo.db')
 FILE_ADDRESS_MAIN = os.path.join(script_directory, "_database_main.db")
-'''
-FILE_ADDRESS_PROCESSED = os.path.join(script_directory, "_database_processed.db")
-FILE_ADDRESS_NOTIFY = os.path.join(script_directory, "_database_notify.db")
-FILE_ADDRESS_POINTS = os.path.join(script_directory, "_database_points.db")
-FILE_ADDRESS_REFERENCE = os.path.join(script_directory, "_database_reference.db")
-'''
+
+# Ziwen SQLite3 cache file (cache file data is generated as the bot runs and is volatile).
+FILE_ADDRESS_CACHE = os.path.join(script_directory, "_cache_main.db")
+
+# Ziwen language database files (reference files for language-related functions)
 FILE_ADDRESS_OLD_CHINESE = os.path.join(script_directory, "_database_old_chinese.csv")
 FILE_ADDRESS_ZH_ROMANIZATION = os.path.join(script_directory, "_database_romanization_chinese.csv")
 FILE_ADDRESS_ZH_BUDDHIST = os.path.join(script_directory, "_database_buddhist_chinese.md")
 FILE_ADDRESS_ZH_CCCANTO = os.path.join(script_directory, "_database_cccanto.md")
 FILE_ADDRESS_MECAB = os.path.join(script_directory, "mecab-ipadic-neologd")  # Folder where MeCab dict files are
 
-# Ziwen SQLite3 cache file (cache file data is generated as the bot runs and is volatile).
-FILE_ADDRESS_CACHE = os.path.join(script_directory, "_cache_main.db")
-
-# Ziwen Markdown output files (text files for saving information)
+# Ziwen Markdown output files (text files for saving information).
 FILE_ADDRESS_ERROR = os.path.join(script_directory, "_log_error.md")
 FILE_ADDRESS_COUNTER = os.path.join(script_directory, "_log_counter.md")
 FILE_ADDRESS_FILTER = os.path.join(script_directory, "_log_filter.md")
 FILE_ADDRESS_EVENTS = os.path.join(script_directory, "_log_events.md")
 
-# Wenyuan Markdown output files (text files for saving information)
+# Wenyuan Markdown output files (text files for saving information).
 FILE_ADDRESS_STATISTICS = os.path.join(script_directory, "wy_statistics_output.md")
 FILE_ADDRESS_TITLE_LOG = os.path.join(script_directory, "wy_title_test_output.md")
 FILE_ADDRESS_WEEKLY_CHALLENGE = os.path.join(script_directory, "wy_weekly_challenge.md")
 
-# Huiban database files
+# Huiban database files (unused for now).
 FILE_ADDRESS_NOTIFY_EXCHANGE = os.path.join(script_directory, "hb_exchangelist.db")
 FILE_ADDRESS_HUIBAN_OLDPOSTS = os.path.join(script_directory, "hb_processed.db")
 
@@ -195,13 +190,16 @@ def action_counter(messages_number, action_type):
     if new_messages_number == 0:  # There's nothing to add. Don't do anything.
         return
 
+    # Convert !id: into its full synonym for consistenc.
     if action_type == "!id:":
         action_type = "!identify:"
 
+    # Format the current day as a string.
     current_day = strftime("%Y-%m-%d")
     current_test = "{} | {}".format(strftime("%Y-%m-%d"), action_type)  # The current day as a formatted string
 
-    f = open(FILE_ADDRESS_COUNTER, 'r+', encoding='utf-8')  # Open the file for reading.
+    # Open the file for reading and access its content.
+    f = open(FILE_ADDRESS_COUNTER, 'r+', encoding='utf-8')
     current_logs_lines = f.read()  # Take the file's current contents
     f.close()  # Close the file
 
@@ -233,9 +231,11 @@ def action_counter(messages_number, action_type):
                                             str(new_recorded_total))  # Format the last line as an entry.
         new_logs_lines = current_logs_lines + new_entry
 
-    open(FILE_ADDRESS_COUNTER, "w", encoding='utf-8').close()  # Delete the contents
+    # Delete the contents of the counter file by opening it and then closing it.
+    open(FILE_ADDRESS_COUNTER, "w", encoding='utf-8').close()
 
-    f = open(FILE_ADDRESS_COUNTER, 'w', encoding='utf-8')  # Last open for writing the contents.
+    # Last time, open the file for writing the contents en masse.
+    f = open(FILE_ADDRESS_COUNTER, 'w', encoding='utf-8')
     f.write(new_logs_lines)
     f.close()
 

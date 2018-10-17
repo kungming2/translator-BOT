@@ -39,7 +39,7 @@ EXCLUDED_MENTION_USERS = ["AutoModerator", "translator-BOT", "kungming2", "Image
                           "TotesMessenger", "sneakpeekbot", "ContentForager", "transcribot", "SmallSubBot"]
 
 BOT_NAME = 'Ziwen Streamer'
-VERSION_NUMBER = '1.1.21'
+VERSION_NUMBER = '1.1.23'
 USER_AGENT = ('{} {}, a runtime to watch comments on Reddit for reposting translation requests to r/translator. '
               'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
@@ -196,7 +196,7 @@ def ziwen_streamer():
 
     logger.info("[ZWS] Streamer routine starting up...")
 
-    for comment in reddit.subreddit('all').stream.comments():  # Watching the stream...
+    for comment in reddit.subreddit('all').stream.comments(skip_existing=True):  # Watching the stream...
 
         pbody = comment.body.lower()
 
@@ -355,15 +355,21 @@ def ziwen_streamer():
                 else:
                     # Can't find a language in the title.
                     # Let's check source against a hard list of language subreddits, or call it unknown.
-                    keys = [key for key, value in LANGUAGE_SUBREDDITS.items() if
-                            oreddit.lower() in value]  # check to see if subreddit is in our list.
+                    targeted_name = None
+                    for key, value in MAIN_LANGUAGES.items():  # Iterate over the main languages dictionary.
+                        specific_language_data = value
 
-                    if len(keys) != 0:  # We have a match.
-                        language_name = keys[0]  # Get the language name as the key of the dictionary listing
+                        if 'subreddits' in specific_language_data:
+                            if oreddit in specific_language_data['subreddits']:  # We found the current subreddit.
+                                targeted_name = specific_language_data['name']
+                                break
+
+                    if targeted_name is not None:  # We have a match.
+                        language_name = targeted_name  # Get the language name as the key of the dictionary listing
                         logger.info("[ZWS] >> Post is on {}. Classifying as {}.".format(oreddit, language_name))
-                        new_title = "[" + language_name + " > English] " + otitle
-                    else:
-                        new_title = "[Unknown > English] " + otitle  # + " (x-post " + oreddit + ")"
+                        new_title = "[{} > English] {}".format(language_name, otitle)
+                    else:  # Otherwise, make it Unknown.
+                        new_title = "[Unknown > English] {}".format(otitle)
                         language_name = "Unknown"
 
             if len(new_title) > 299:  # If the title is too long and will bump up against the limit, shorten it.
@@ -410,29 +416,21 @@ def ziwen_streamer():
 
             # Distinguish the comment and make it nice and green.
             cross_post_note.mod.distinguish(how="yes", sticky=False)
+            logger.info("[ZWS] >> Added a comment crediting the OP u/" + oauthor + ".")
 
             # Write to the action log.
             action_counter(1, "Crosspost")
             logger.info("[ZWS] > Cross-posted to r/" + SUBREDDIT + ".")
 
             # Find native-language thanks and such.
-            if language_name in THANKS_WORDS:  # Do we have a thank you word for this?
-                thanks_phrase = THANKS_WORDS.get(language_name)  # Get the custom thank you phrase.
-                try:
-                    comment.reply(ZWS_COMMENT_XPOST_THANKS.format(thanks_phrase, language_name, xlink) + BOT_DISCLAIMER)
-                    # Put the reply last in case of ban
-                    logger.debug("[ZWS] >> Replied with a custom confirmation comment to the requester.")
-                except praw.exceptions.APIException:  # The comment was deleted
-                    logger.error("[ZWS] >> The original command appears to have been deleted.")
-            else:
-                try:
-                    thanks_phrase = "Thank you"
-                    comment.reply(ZWS_COMMENT_XPOST_THANKS.format(thanks_phrase, language_name, xlink) + BOT_DISCLAIMER)
-                    # Put the reply last in case of ban
-                    logger.debug("[ZWS] >> Replied with a confirmation comment to the requester.")
-                except praw.exceptions.APIException:  # The comment was deleted
-                    logger.error("[ZWS] >> The original command appears to have been deleted.")
-            logger.info("[ZWS] >> Added a comment crediting the OP u/" + oauthor + ".")
+            thanks_phrase = MAIN_LANGUAGES.get(converter(language_name)[0], {}).get('thanks', 'Thank you')
+            try:
+                comment.reply(ZWS_COMMENT_XPOST_THANKS.format(thanks_phrase, language_name, xlink) + BOT_DISCLAIMER)
+                # Put the reply last in case of ban
+                logger.debug("[ZWS] >> Replied with a custom confirmation comment to the requester.")
+            except praw.exceptions.APIException:  # The comment was deleted
+                logger.error("[ZWS] >> The original command appears to have been deleted.")
+
         elif STREAMER_KEYWORDS[2] in pbody:  # Someone accidentally referenced r/translate instead (this is a redirect).
             # Double check to make sure it's actually a mistaken link to our subreddit.
             # Run a regex search to see if it's a right and proper mention.
