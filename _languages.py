@@ -10,7 +10,7 @@ import itertools
 
 from fuzzywuzzy import fuzz  # When installing, use fuzzywuzzy[speedup]
 
-VERSION_NUMBER_LANGUAGES = "1.7"
+VERSION_NUMBER_LANGUAGES = "1.7.1"
 
 # Access the CSV with ISO 639-3 and ISO 15924 data.
 lang_script_directory = os.path.dirname(__file__)  # <-- absolute dir the script is in
@@ -2388,6 +2388,7 @@ def converter(input_text):
         if input_text.title() in ISO_NAMES:  # This is a defined language with a name.
             language_code = language_name_search(input_text.title())  # This searches both regular and alternate names.
             language_name = MAIN_LANGUAGES[language_code]['name']
+            supported = MAIN_LANGUAGES[language_code]['supported']
         elif input_text.title() not in ISO_NAMES:
             if input_text.title() not in FUZZ_IGNORE_WORDS:
                 # No name found. Apply fuzzy matching.
@@ -2398,17 +2399,21 @@ def converter(input_text):
             if fuzzy_result is not None:  # We found a language that this is close to in spelling.
                 language_code = language_name_search(fuzzy_result.title())
                 language_name = str(fuzzy_result)
-            else:  # No fuzzy. Now we're going to check if it's the name of an ISO 639-3 language or script.
+                supported = MAIN_LANGUAGES[language_code]['supported']
+            else:  # No fuzzy match. Now we're going to check if it's the name of an ISO 639-3 language or script.
                 total_results = lang_code_search(input_text, False)
                 specific_results = total_results[0]
                 if len(specific_results) != 0:
                     language_code = specific_results
                     language_name = lang_code_search(language_code, total_results[1])[0]
-                elif len(specific_results) == 0 and len(input_text) == 4:  # Check for a script code.
+                    if language_code in MAIN_LANGUAGES:
+                        supported = MAIN_LANGUAGES[language_code]['supported']
+                elif len(specific_results) == 0 and len(input_text) == 4:  # This is a script code.
                     script_results = lang_code_search(input_text, True)[0]
                     if len(script_results) != 0:
                         language_name = script_results
                         language_code = lang_code_search(script_results, True)[0]
+
     elif is_script:  # This is a script.
         language_code = specific_code
         language_name = input_text
