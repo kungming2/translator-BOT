@@ -10,7 +10,7 @@ import itertools
 
 from fuzzywuzzy import fuzz  # When installing, use fuzzywuzzy[speedup]
 
-VERSION_NUMBER_LANGUAGES = "1.7.1"
+VERSION_NUMBER_LANGUAGES = "1.7.4"
 
 # Access the CSV with ISO 639-3 and ISO 15924 data.
 lang_script_directory = os.path.dirname(__file__)  # <-- absolute dir the script is in
@@ -18,16 +18,17 @@ lang_script_directory += "/Data/"  # Where the main files are kept.
 FILE_ADDRESS_ISO_ALL = os.path.join(lang_script_directory, '_database_iso_codes.csv')
 
 '''LANGUAGE CODE LISTS'''
-# These are symbols used to indicate states in defined multiple posts.
+# These are symbols used to indicate states in defined multiple posts. The last two are currently used.
 DEFINED_MULTIPLE_LEGEND = {'⍉': 'missing', '¦': 'inprogress', '✓': 'doublecheck', '✔': 'translated'}
 
-# This is our main dictionary.
+# This is our main dictionary for languages.
 MAIN_LANGUAGES = {
     "aa": {
         'supported': False,
         'name': 'Afar',
         'language_code_3': 'aar',
-        'alternate_names': ['Afaraf']
+        'alternate_names': ['Afaraf'],
+        'thanks': "Gadda ge"
     },
     "ab": {
         'supported': False,
@@ -57,7 +58,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Akan',
         'language_code_3': 'aka',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Meda wo ase"
     },
     "am": {
         'supported': True,
@@ -113,6 +115,7 @@ MAIN_LANGUAGES = {
         'name': 'Conlang',
         'supported': True,
         'alternate_names': ['Artificial', 'Conlang', 'Constructed', 'Tengwar'],
+        'thanks': "There is no word for 'thank you' in Dothraki"
     },
     "as": {
         'supported': False,
@@ -125,7 +128,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Avar',
         'language_code_3': 'ava',
-        'alternate_names': ['Avaro', 'Avaric']
+        'alternate_names': ['Avaro', 'Avaric'],
+        'thanks': "	Баркала"
     },
     "ay": {
         'supported': False,
@@ -176,7 +180,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Bihari',
         'language_code_3': 'bho',
-        'alternate_names': ['Bhojpuri', 'Maithili', 'Magahi']
+        'alternate_names': ['Bhojpuri', 'Maithili', 'Magahi'],
+        'thanks': 'धन्वाद'
     },
     "bi": {
         'supported': False,
@@ -189,7 +194,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Bambara',
         'language_code_3': 'bam',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "I ni ce"
     },
     "bn": {
         'supported': True,
@@ -253,7 +259,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Chamorro',
         'language_code_3': 'cha',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Si yu'os ma'åse'"
     },
     "chr": {
         'supported': True,
@@ -280,7 +287,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Cree',
         'language_code_3': 'crk',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': 'ᐊᕀᐦᐊᕀ'
     },
     "cs": {
         'supported': True,
@@ -347,7 +355,8 @@ MAIN_LANGUAGES = {
         'supported': True,
         'name': 'Dzongkha',
         'language_code_3': 'dzo',
-        'alternate_names': ['Bhutanese', 'Zongkhar']
+        'alternate_names': ['Bhutanese', 'Zongkhar'],
+        'thanks': "བཀའ་དྲིན་ཆེ་ལགས།"
     },
     "ee": {
         'supported': False,
@@ -482,7 +491,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Frisian',
         'language_code_3': 'fry',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Tankewol"
     },
     "ga": {
         'supported': True,
@@ -519,7 +529,8 @@ MAIN_LANGUAGES = {
         'name': 'Guarani',
         'language_code_3': 'grn',
         'alternate_names': None,
-        'countries_associated': ['PY', 'AR', 'BO']
+        'countries_associated': ['PY', 'AR', 'BO'],
+        'thanks': "Aguyje"
     },
     "grc": {
         'supported': True,
@@ -543,7 +554,8 @@ MAIN_LANGUAGES = {
         'name': 'Manx',
         'language_code_3': 'glv',
         'alternate_names': ['Gailck', 'Manx Gaelic'],
-        'subreddits': ["r/gaelg"]
+        'subreddits': ["r/gaelg"],
+        'thanks': "Gura mie ayd"
     },
     "ha": {
         'supported': False,
@@ -584,7 +596,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Hiri Motu',
         'language_code_3': 'hmo',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Tanikiu"
     },
     "hr": {
         'supported': True,
@@ -625,14 +638,16 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Herero',
         'language_code_3': 'her',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Okuhepa"
     },
     "ia": {
         'supported': False,
         'name': 'Interlingua',
         'language_code_3': 'ina',
         'alternate_names': None,
-        'subreddits': ["r/interlingua"]
+        'subreddits': ["r/interlingua"],
+        'thanks': "Gratias"
     },
     "id": {
         'supported': True,
@@ -647,7 +662,8 @@ MAIN_LANGUAGES = {
         'name': 'Interlingue',
         'language_code_3': 'ile',
         'alternate_names': None,
-        'subreddits': ["r/interlingue"]
+        'subreddits': ["r/interlingue"],
+        'thanks': "Mersi"
     },
     "ig": {
         'supported': False,
@@ -660,20 +676,23 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Nuosu',
         'language_code_3': 'iii',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Kax sha w"
     },
     "ik": {
         'supported': False,
         'name': 'Inupiaq',
         'language_code_3': 'ipk',
-        'alternate_names': ['Inupiat']
+        'alternate_names': ['Inupiat', 'Iñupiaq'],
+        'thanks': "Quyanaq"
     },
     "io": {
         'supported': False,
         'name': 'Ido',
         'language_code_3': 'ido',
         'alternate_names': None,
-        'subreddits': ["r/ido"]
+        'subreddits': ["r/ido"],
+        'thanks': "Danko"
     },
     "is": {
         'supported': True,
@@ -681,7 +700,7 @@ MAIN_LANGUAGES = {
         'language_code_3': 'isl',
         'language_code_2b': 'ice',
         'alternate_names': None,
-        'subreddits': ["r/learnicelandic"],
+        'subreddits': ["r/learnicelandic", "r/iceland"],
         'thanks': "Takk"
     },
     "it": {
@@ -689,7 +708,7 @@ MAIN_LANGUAGES = {
         'name': 'Italian',
         'language_code_3': 'ita',
         'alternate_names': ['Italiano', 'Italiana', 'Italia', 'Italien', 'Italy'],
-        'subreddits': ["r/italianlearning"],
+        'subreddits': ["r/italianlearning", "r/italy"],
         'thanks': "Grazie"
     },
     "iu": {
@@ -706,17 +725,18 @@ MAIN_LANGUAGES = {
         'language_code_3': 'jpn',
         'alternate_names': ['Jap', 'Jpn', 'Japenese', 'Japaneese', 'Japanes', 'Katakana', 'Hiragana', 'Japaness',
                             'Romaji', 'Japneese', 'Japnese', 'Kanji', 'Japaese', 'Japn', 'Japonais', 'Romajin',
-                            'Nihongo', 'Kenji', 'Romanji', 'Rōmaji', '日本語', 'Japones', 'Japonés'],
+                            'Nihongo', 'Kenji', 'Romanji', 'Rōmaji', '日本語', 'Japones', 'Japonés', 'Japnese'],
         'countries_default': 'JP',
         'mistake_abbreviation': 'jp',
-        'subreddits': ["r/learnjapanese", "r/japan", "r/japanese", "r/nihongo", "r/kanji"],
+        'subreddits': ["r/learnjapanese", "r/japan", "r/japanese", "r/nihongo", "r/kanji", "r/japanlife"],
         'thanks': "ありがとう"
     },
     "jv": {
         'supported': True,
         'name': 'Javanese',
         'language_code_3': 'jav',
-        'alternate_names': ['Djawa']
+        'alternate_names': ['Djawa'],
+        'thanks': "Trim"
     },
     "ka": {
         'supported': True,
@@ -743,7 +763,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Kwanyama',
         'language_code_3': 'kua',
-        'alternate_names': ['Kuanyama']
+        'alternate_names': ['Kuanyama'],
+        'thanks': "Tangi"
     },
     "kk": {
         'supported': True,
@@ -776,7 +797,8 @@ MAIN_LANGUAGES = {
         'name': 'Kannada',
         'language_code_3': 'kan',
         'alternate_names': None,
-        'subreddits': ["r/kannada"]
+        'subreddits': ["r/kannada"],
+        'thanks': "ಧನ್ಯವಾದಗಳು"
     },
     "ko": {
         'supported': True,
@@ -811,7 +833,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Komi',
         'language_code_3': 'kom',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Аттьӧ"
     },
     "kw": {
         'supported': False,
@@ -826,7 +849,8 @@ MAIN_LANGUAGES = {
         'name': 'Kyrgyz',
         'language_code_3': 'kir',
         'alternate_names': ['Kirghiz', 'Kirgiz'],
-        'subreddits': ["r/learnkyrgyz"]
+        'subreddits': ["r/learnkyrgyz"],
+        'thanks': "Рахмат"
     },
     "la": {
         'supported': True,
@@ -841,25 +865,29 @@ MAIN_LANGUAGES = {
         'name': 'Luxembourgish',
         'language_code_3': 'ltz',
         'alternate_names': ['Letzeburgesch', 'Letzburgisch', 'Luxembourgeois', 'Luxemburgian', 'Luxemburgish'],
-        'subreddits': ["r/luxembourg"]
+        'subreddits': ["r/luxembourg"],
+        'thanks': "Merci"
     },
     "lg": {
         'supported': False,
         'name': 'Ganda',
         'language_code_3': 'lug',
-        'alternate_names': ['Kiganda']
+        'alternate_names': ['Kiganda'],
+        'thanks': "Weebale"
     },
     "li": {
         'supported': True,
         'name': 'Limburgish',
         'language_code_3': 'lim',
-        'alternate_names': ['Limburgan', 'Limburger', 'Limburgs', 'Limburgian', 'Limburgic']
+        'alternate_names': ['Limburgan', 'Limburger', 'Limburgs', 'Limburgian', 'Limburgic'],
+        'thanks': "Danke"
     },
     "ln": {
         'supported': True,
         'name': 'Lingala',
         'language_code_3': 'lin',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Botondi"
     },
     "lo": {
         'supported': True,
@@ -1040,8 +1068,8 @@ MAIN_LANGUAGES = {
         'supported': True,
         'name': 'Norwegian',
         'language_code_3': 'nor',
-        'alternate_names': ['Bokmal', 'Norsk', 'Nynorsk', 'Norweigian'],
-        'subreddits': ["r/norsk"],
+        'alternate_names': ['Bokmal', 'Norsk', 'Nynorsk', 'Norway', 'Norweigian'],
+        'subreddits': ["r/norsk", "r/norway"],
         'thanks': "Takk"
     },
     'non': {
@@ -1600,8 +1628,8 @@ MAIN_LANGUAGES = {
 }
 
 # These are two-letter and three-letter English words that can be confused for ISO language codes.
-# We exclude them when processing the title.
-ENGLISH_2_WORDS = ['As', 'He', 'My', 'It', 'Be', 'No', 'Am', 'So', 'Is', 'To', 'An', 'Or', 'Se', 'Br', 'Tw', 'El']
+# We exclude them when processing the title. When adding new ones, add them in title case.
+ENGLISH_2_WORDS = ['Am', 'An', 'As', 'Be', 'Br', 'El', 'He', 'Is', 'It', 'My', 'No', 'Or', 'Se', 'So', 'To', 'Tw']
 ENGLISH_3_WORDS = ['Abs', 'Abu',
                    'Aby', 'Ace', 'Act', 'Add', 'Ado', 'Ads', 'Aft', 'Age', 'Ago', 'Aid', 'Ail', 'Aim', 'Air',
                    'Ait', 'Ale', 'Amp', 'And', 'Ant', 'Ape', 'App', 'Apt', 'Arc', 'Are', 'Ark', 'Arm',
@@ -1633,7 +1661,8 @@ ENGLISH_3_WORDS = ['Abs', 'Abu',
                    'Lei', 'Let', 'Lew', 'Lid', 'Lie', 'Lip', 'Lit', 'Lob', 'Log', 'Lol', 'Loo', 'Lop', 'Los',
                    'Lot', 'Low',
                    'Lug', 'Lux', 'Lye', 'Mac', 'Mad', 'Mag', 'Man', 'Mao', 'Map', 'Mar', 'Mat', 'Maw', 'Max', 'May',
-                   'Men', 'Met', 'Mic', 'Mid', 'Min', 'Mit', 'Mix', 'Mob', 'Mod', 'Mog', 'Mom', 'Mon', 'Moo', 'Mop',
+                   'Men', 'Met', 'Mex',
+                   'Mic', 'Mid', 'Min', 'Mit', 'Mix', 'Mob', 'Mod', 'Mog', 'Mom', 'Mon', 'Moo', 'Mop',
                    'Mow', 'Mud', 'Mug', 'Mum', 'Nab', 'Nag', 'Nap', 'Nay', 'Nee', 'Neo', 'Net', 'New', 'Nib', 'Nil',
                    'Nip', 'Nit', 'Nix', 'Nob', 'Nod', 'Nog', 'Non', 'Nor', 'Not',
                    'Now', 'Nub', 'Nun', 'Nut', 'Oaf', 'Oak',
@@ -1651,33 +1680,35 @@ ENGLISH_3_WORDS = ['Abs', 'Abu',
                    'Shy', 'Sic', 'Sim', 'Sin', 'Sip', 'Sir', 'Sis', 'Sit', 'Six', 'Ski', 'Sky', 'Sly', 'Sob',
                    'Sod', 'Som', 'Son', 'Sop', 'Sot', 'Sow', 'Soy', 'Spa', 'Spy', 'Sty', 'Sub', 'Sue', 'Sum', 'Sun',
                    'Sun', 'Sup', 'Tab', 'Tad', 'Tag', 'Tam', 'Tan', 'Tae',
-                   'Tap', 'Tar', 'Tat', 'Tax', 'Tea', 'Tee', 'Ten',
-                   'The', 'Thx',
+                   'Tap', 'Tar', 'Tat', 'Tax', 'Tea', 'Tee', 'Ten', 'The', 'Thx',
                    'Tic', 'Tie', 'Til', 'Tin', 'Tip', 'Tit', 'Toe', 'Toe', 'Tom', 'Ton', 'Too', 'Top', 'Tot',
                    'Tow', 'Toy', 'Try', 'Tub', 'Tug', 'Tui', 'Tut', 'Two', 'Txt', 'Ugh', 'Uke', 'Ump', 'Urn', 'Usa',
                    'Use',
                    'Van', 'Vat', 'Vee', 'Vet', 'Vex', 'Via', 'Vie', 'Vig', 'Vim', 'Voe', 'Vow', 'Wad', 'Wag', 'Wan',
                    'War', 'Was', 'Wax', 'Way', 'Web', 'Wed', 'Wee', 'Wel', 'Wen', 'Wet', 'Who', 'Why', 'Wig', 'Win',
-                   'Wit',
-                   'Wiz', 'Woe', 'Wog', 'Wok', 'Won', 'Woo', 'Wow', 'Wry', 'Wwi',
+                   'Wit', 'Wiz', 'Woe', 'Wog', 'Wok', 'Won', 'Woo', 'Wow', 'Wry', 'Wwi',
                    'Wye', 'Yak', 'Yam', 'Yap', 'Yaw', 'Yay',
                    'Yea', 'Yen', 'Yep', 'Yes', 'Yet', 'Yew', 'Yip', 'You', 'Yow', 'Yum', 'Yup', 'Zag', 'Zap', 'Zed',
                    'Zee', 'Zen', 'Zig', 'Zip', 'Zit', 'Zoa', 'Zoo']
 # These are words that usually get recognized as something they're not due to Fuzzywuzzy. Let's ignore them.
-FUZZ_IGNORE_WORDS = ["Javanese", "Japanese", "Romanization", "Romani", "Karen", "Morse", "Roman", "Scandinavian",
-                     "Latino", "Latina", "Romanji", 'Romanized', 'Guarani', 'Here', 'Chopstick', 'Turks', 'Romany',
-                     'Romanjin', 'Serial', 'Ancient Mayan', 'Cheese', 'Sorbian', 'Green', 'Orkish', 'Peruvian', 'Nurse',
-                     'Maay', 'Canada', 'Kanada', 'Sumerian', "Classical Japanese", "Logo", "Sake", "Trail"]
+FUZZ_IGNORE_WORDS = ['Ancient Mayan', 'Base', 'Canada', 'Cheese', 'Chopstick', 'Classical Japanese', 'Creek', 'Dish',
+                     'Green', 'Guarani', 'Here', 'Horse', 'Japanese', 'Javanese', 'Kanada', 'Karen', 'Latina', 'Ladino',
+                     'Latino', 'Lmao', 'Logo', 'Maay', 'Major', 'Maria', 'Mario', 'Morse', 'Nosey', 'Nurse', 'Orkish',
+                     'Past', 'Person', 'Peruvian', 'Roman', 'Romani', 'Romanization', 'Romanized', 'Romanji',
+                     'Romanjin', 'Romany', 'Sake', 'Scandinavian', 'Serial', 'Sorbian', 'Sumerian', 'Titan',
+                     'Trail', 'Trench', 'Turks']
 
-# Title formatting words
+# Title formatting words.
 ENGLISH_DASHES = ['English -', 'English-', '-English', '- English', '-Eng', 'Eng-', '- Eng', 'Eng -', 'ENGLISH-',
                   'ENGLISH -', 'EN-', 'ENG-', 'ENG -', '-ENG', '- ENG', '-ENGLISH', '- ENGLISH']
-WRONG_BRACKETS = ["<", "〉", "›", "》", "»", "⟶", "\udcfe", "&gt;", "→", "←", "~"]
-APP_WORDS = [" app ", "android", "game", "social network", " bot ", "crowdin", "localisation", "localize", "localise",
-             "software", "crowdsourced", "localization", "addon", "add-on", "google play", 'an app', 'discord bot',
-             'telegram bot', 'chatbot', "my app", 'firefox']
+WRONG_DIRECTIONS = ["<", "〉", "›", "》", "»", "⟶", "\udcfe", "&gt;", "→", "←", "~"]
+WRONG_BRACKETS_LEFT = ['［', '〚', '【 ', '〔', '〖', '⟦', '｟', '《']
+WRONG_BRACKETS_RIGHT = ['］', '〛', '】', '〕', '〗', '⟧', '｠', '》']
+APP_WORDS = [' app ', ' bot ', 'add-on', 'addon', 'an app', 'android', 'chatbot', 'crowdin', 'crowdsourced',
+             'discord bot', 'firefox', 'game', 'google play', 'localisation', 'localise', 'localization', 'localize',
+             'my app', 'social network', 'software', 'telegram bot']
 
-# A manually populated dictionary that matches ISO macrolanguages with their most prominent consituent language
+# A manually populated dictionary that matches ISO macrolanguages with their most prominent consituent language.
 ISO_MACROLANGUAGES = {
     "aka": ("twi", ["fat", "twi"]),
     "ara": ("arb", ["aao", "abh", "abv", "acm", "acq", "acw", "acx", "acy", "adf", "aeb", "aec", "afb", "ajp", "apc",
@@ -1757,7 +1788,8 @@ ISO_MACROLANGUAGES = {
 CJK_LANGUAGES = {"Chinese": ['Chinese', 'Min Dong Chinese', 'Classical Chinese', 'Jinyu Chinese', 'Mandarin Chinese',
                              'Pu-Xian Chinese', 'Huizhou Chinese', 'Min Zhong Chinese', 'Gan Chinese', 'Hakka Chinese',
                              'Xiang Chinese', 'Min Bei Chinese', 'Min Nan Chinese', 'Wu Chinese', 'Yue Chinese',
-                             'Cantonese', 'Late Middle Chinese', 'Old Chinese', 'Hani', 'Hanb', 'Hans', 'Hant'],
+                             'Cantonese', 'Late Middle Chinese', 'Old Chinese', 'Hani', 'Hanb', 'Hans', 'Hant',
+                             "Traditional Han", "Simplified Han", "Han Characters", 'Unknown'],
                  "Japanese": ['Japanese', 'Old Japanese', 'Northern Amami-Oshima', 'Southern Amami-Oshima', 'Kikai',
                               'Toku-No-Shima', 'Kunigami', 'Oki-No-Erabu', 'Central Okinawan', 'Yoron', 'Miyako',
                               'Yaeyama', 'Yonaguni', 'Hira', 'Jpan', 'Kana'],
@@ -2514,14 +2546,15 @@ def comment_info_parser(pbody, command):
     longer_search = False
     match = ""
 
-    if 'id:' in pbody:  # Allows for a synonym
-        pbody = pbody.replace("id:", "identify:")
+    if '!id:' in pbody:  # Allows for a synonym
+        pbody = pbody.replace("!id:", "!identify:")
 
     if '\n' in pbody:  # Replace linebreaks
         pbody = pbody.replace("\n", " ")
 
-    if ": " in pbody:  # Fix in case there's a space after the colon
-        pbody = pbody.replace(": ", ":")
+    command_w_space = command + " "
+    if command_w_space in pbody:  # Fix in case there's a space after the colon
+        pbody = pbody.replace(command_w_space, command)
     elif ":[" in pbody:  # There are square brackets in here... let's replace them
         for character in ['[', ']']:
             pbody = pbody.replace(character, '"')  # Change them to quotes.
@@ -2535,9 +2568,11 @@ def comment_info_parser(pbody, command):
 
     if command in pbody:  # Check to see the command and test the remainder.
         pbody_test = pbody.split(command)[1]
+        print(pbody_test)
         if "!" in pbody_test[:5]:
-            match = re.search(':(.*?)!', pbody)
-            match = str(match.group(0))[1:-1].lower()  # Trim the punctuation, convert to string
+            match = re.search(command + '(.*?)!', pbody)
+            match = str(match.group(1)).lower()  # Convert it to a string.
+            print(match)
             if " " not in match and "\n" not in match:  # This is actually an advanced one.
                 advanced_mode = True
             else:  # Maybe stacked two commands
@@ -2551,7 +2586,7 @@ def comment_info_parser(pbody, command):
             except AttributeError:  # Error for some reason.
                 pass
 
-    if not longer_search:  # There are no quotes
+    if not longer_search:  # There are no quotes, so this is for just one word.
         if advanced_mode is not True:
             if command in pbody:  # there is a language specified
                 match = re.search('(?<=' + command + ')[\w\-<^\'+]+', pbody)
@@ -2929,10 +2964,16 @@ def title_format(title, display_process=False):
     elif "Scots Gaelic" in title:
         title = title.replace("Scots Gaelic", "Scottish Gaelic")
 
-    # Let's replace any problematic characters or formatting early.
-    if any(keyword in title for keyword in WRONG_BRACKETS):  # Fix for some Unicode bracket-looking thingies.
-        for keyword in WRONG_BRACKETS:
+    # Let's replace any problematic characters or formatting early. Especially those that are important to splitting.
+    if any(keyword in title for keyword in WRONG_DIRECTIONS):  # Fix for some Unicode arrow-looking thingies
+        for keyword in WRONG_DIRECTIONS:
             title = title.replace(keyword, " > ")
+    if any(keyword in title for keyword in WRONG_BRACKETS_LEFT):  # Fix for some Unicode left bracket-looking thingies
+        for keyword in WRONG_BRACKETS_LEFT:
+            title = title.replace(keyword, " [")
+    if any(keyword in title for keyword in WRONG_BRACKETS_RIGHT):  # Fix for some Unicode right bracket-looking thingies
+        for keyword in WRONG_BRACKETS_RIGHT:
+            title = title.replace(keyword, "] ")
 
     if ">" not in title and " to " in title.lower():
         title = title.replace(" To ", " to ")
@@ -3416,9 +3457,15 @@ def main_posts_filter_required_keywords():
                 possible_strings['to_phrases'] += temporary_list
             possible_strings['total'] += temporary_list
 
+    # Add to the list combinations with just dashes.
+    added_hyphens = []
+    for item in ENGLISH_DASHES:
+        added_hyphens.append(item.lower())
+    added_hyphens = list(sorted(added_hyphens))
+
     # Function tags.
     possible_strings['total'] += ['>', '[unknown]', '[community]', '[meta]']
-    possible_strings['total'] += ENGLISH_DASHES
+    possible_strings['total'] += added_hyphens
 
     return possible_strings
 

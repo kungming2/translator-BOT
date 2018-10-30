@@ -192,6 +192,46 @@ COMMENT_INVALID_SCRIPT = ("Sorry, but the script code `{}` doesn't look like any
 COMMENT_INVALID_ZH_CHARACTER = ("**There were no results for {}**. Please check to make sure it is a valid Chinese "
                                 "character. Alternatively, it may be an uncommon variant that is not in "
                                 "online dictionaries.")
+REFERENCE_TEMPLATE_MAIN = '''## [{0}](https://www.ethnologue.com/language/{1})
+
+**Language Name**: {0}
+
+{2}{3}
+
+**ISO 639-3 Code**: {1}
+
+**Alternate Names**: {4}
+
+**Population**: {5}
+
+**Location**: {6}; {7}
+
+**Classification**: {8}
+
+**Writing system**: {9}
+
+**[Wikipedia Entry]({10})**:
+
+> {11}
+
+^Information ^from ^[Ethnologue](https://www.ethnologue.com/language/{1}) ^| ^[Glottolog](http://glottolog.org/glottolog?iso={1}) ^| ^[MultiTree](http://multitree.org/codes/{1}.html) ^| ^[ScriptSource](http://scriptsource.org/cms/scripts/page.php?item_id=language_detail&key={1}) ^| ^[Wikipedia]({10})
+'''
+REFERENCE_TEMPLATE_OTHER = '''## [{0}](https://www.multitree.org/codes/{1})
+
+**Language Name**: {0}
+
+**ISO 639-3 Code**: {1}
+
+**Alternate Names**: {2}
+
+**Classification**: {3}
+
+**[Wikipedia Entry]({4})**:
+
+> {5}
+
+^Information ^from ^[MultiTree](http://multitree.org/codes/{1}.html) ^| ^[Glottolog](http://glottolog.org/glottolog?iso={1}) ^| ^[ScriptSource](http://scriptsource.org/cms/scripts/page.php?item_id=language_detail&key={1}) ^| ^[Wikipedia]({4})
+'''
 
 '''WENYUAN RESPONSES'''
 

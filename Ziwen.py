@@ -22,9 +22,10 @@ import jieba  # Segmenter for Mandarin Chinese.
 import tinysegmenter  # Basic segmenter for Japanese; not used on Windows.
 import MeCab  # Advanced segmenter for Japanese.
 import wikipedia  # Needed to include Wikipedia content.
+import lxml
+import google
 
 from bs4 import BeautifulSoup as Bs
-from google import search
 from lxml import html
 from mafan import simplify, tradify
 from wiktionaryparser import WiktionaryParser
@@ -42,9 +43,11 @@ as they define many of the basic functions of the bot.
 '''
 
 BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.7.53'
+VERSION_NUMBER = '1.7.54'
 USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator. '
               'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
+SUBREDDIT = "translator"
+TESTING_MODE = False
 
 # This is how many posts Ziwen will retrieve all at once. PRAW can download 100 at a time.
 MAXPOSTS = 100
@@ -93,6 +96,14 @@ cursor_main = conn_main.cursor()
 # This connects to the database for Ajos, objects that the bot generates for posts.
 conn_ajo = sqlite3.connect(FILE_ADDRESS_AJO_DB)
 cursor_ajo = conn_ajo.cursor()
+
+if len(sys.argv) > 1:  # This is a new startup with additional parameters for modes.
+    specific_mode = sys.argv[1].lower()
+    if specific_mode == 'test':
+        TESTING_MODE = True
+        SUBREDDIT = "trntest"
+        MESSAGES_OKAY = False
+        logger.info("[ZW] Startup: Starting up in TESTING MODE for r/{}...".format(SUBREDDIT))
 
 # Connecting to the Reddit API via OAuth.
 logger.info('[ZW] Startup: Logging in as u/{}...'.format(USERNAME))
@@ -2002,44 +2013,54 @@ def messaging_user_statistics_loader(username):
     """
     Function that pairs with messaging_user_statistics_writer. Takes a username and looks up what commands they have
     been recorded as using.
-    If they have data, it will return a nicely formatted table.
+    If they have data, it will return a nicely formatted table. Since the notifications data is also recorded in the
+    same database, this function will also format the data in that dictionary and integrate it into the table.
 
     :param username: The username of a Reddit user.
     :return: None if the user has no data (no commands that they called), a sorted table otherwise.
     """
 
-    lines_to_post = []
-    header = "Command | Times \n--------|------\n"
+    commands_lines_to_post = []
+    notifications_lines_to_post = []
+    header = "| Command | Times |\n|---------|-------|\n"
 
+    # Get commands data.
     sql_us = "SELECT * FROM total_commands WHERE username = ?"
     cursor_main.execute(sql_us, (username,))
-    username_commands_data = cursor_main.fetchall()
+    username_commands_data = cursor_main.fetchone()
 
-    if len(username_commands_data) == 0:  # There is no data for this user.
-        return None
+    # Get notifications data.
+    sql_us = "SELECT * FROM notify_monthly_limit WHERE username = ?"
+    cursor_main.execute(sql_us, (username,))
+    notifications_commands_data = cursor_main.fetchone()
+
+    # Iterate over commands data.
+    if username_commands_data is None:  # There is no data for this user.
+        commands_lines_to_post = None
     else:  # There's data. Get the data and format it line-by-line.
-        commands_dictionary = eval(username_commands_data[0][1])  # We only want the stored dict here.
-
+        commands_dictionary = eval(username_commands_data[1])  # We only want the stored dict here.
         for key, value in sorted(commands_dictionary.items()):
             command_type = key
             if command_type != 'Notifications':  # This is a regular command.
                 if command_type == '`':
                     command_type = '`lookup`'
-                formatted_line = "{} | {}".format(command_type, value)
-            else:  # These are notifications records, the value stored as a dictionary.
-                # Get the dictionary of notifications that were sent.
-                stored_text = value
-                notification_dict = eval(stored_text)
-                formatted_line = []
+                formatted_line = "| {} | {} |".format(command_type, value)
+                commands_lines_to_post.append(formatted_line)
 
-                # Iterate over the dictionary of notifications, creating a new line per language code.
-                for language_code, notification_num in sorted(notification_dict.items()):
-                    formatted_line.append("Notifications (`{}`) | {}".format(language_code, notification_num))
+    # Iterate over notifications data. Get the dictionary of notifications that were sent.
+    if notifications_commands_data is None:
+        notifications_lines_to_post = None
+    else:  # There's data
+        notification_dict = eval(notifications_commands_data[1])
+        for language_code, notification_num in sorted(notification_dict.items()):
+            formatted_line = "| Notifications (`{}`) | {} |".format(language_code, notification_num)
+            notifications_lines_to_post.append(formatted_line)  # Reform it as a string from a list.
 
-            lines_to_post.append(formatted_line)
-
+    if username_commands_data is None and notifications_commands_data is None:  # Absolutely no information.
+        return None
+    else:
         # Format everything together
-        to_post = header + "\n".join(lines_to_post)
+        to_post = header + "\n".join(commands_lines_to_post + notifications_lines_to_post)
         return to_post
 
 
@@ -3572,8 +3593,11 @@ def zh_word_tea_dictionary_search(chinese_word):
     # Conduct a search
     web_search = "http://babelcarp.org/babelcarp/babelcarp.cgi?phrase={}&define=1".format(chinese_word)
     eth_page = requests.get(web_search, headers=ZW_USERAGENT)
-    tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
-    word_content = tree.xpath('//fieldset[contains(@id,"translation")]//text()')
+    try:
+        tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
+        word_content = tree.xpath('//fieldset[contains(@id,"translation")]//text()')
+    except lxml.etree.ParserError:
+        return None
 
     # Get the headword of the entry.
     head_word = word_content[2].strip()
@@ -3673,7 +3697,8 @@ def zh_word_chengyu(chengyu):
         results.encoding = "gb2312"
         r_tree = html.fromstring(results.text)  # now contains the whole HTML page
         chengyu_exists = r_tree.xpath('//td[contains(@bgcolor,"#B4D8F5")]/text()')
-    except (UnicodeEncodeError, UnicodeDecodeError):  # There may be an issue with the conversion.
+    except (UnicodeEncodeError, UnicodeDecodeError, requests.exceptions.ConnectionError):
+        # There may be an issue with the conversion. Skip if so.
         logger.error("[ZW] ZH-Chengyu: Unicode encoding error.")
         chengyu_exists = ["", '找到 0 个成语']  # Tell it to exit later.
 
@@ -4688,273 +4713,191 @@ All reference functions are prefixed with `reference` in their name.
 '''
 
 
-def reference_other_search(string_text):
+def reference_search(lookup_term):
     """
-    Function to look up languages that might be dead and hence not on Ethnologue
-    This is the second version of this function - streamlined to be more effective.
+    Function to look up reference languages on Ethnologue and Wikipedia. This also searches MultiTree (no longer a
+    separate function).
 
-    :param string_text: The language or language code we are looking for.
-    """
-    no_results_comment = ('Sorry, there were no valid results on [Ethnologue](https://www.ethnologue.com/) '
-                          'or [MultiTree](http://multitree.org/) for "{}."'.format(string_text))
-    multitree_link = None
-    language_iso3 = None
-
-    if len(string_text) == 3:  # If the input string is 3 characters, Ziwen assumes it's a ISO 639-3 code.
-        multitree_link = 'http://multitree.org/codes/' + string_text
-        language_iso3 = string_text
-    elif len(string_text) >= 4:
-        # If the input string is 4 or more characters, Ziwen runs a Google search to try and identify it.
-        language_match = string_text.rpartition(':')[-1]
-        google_url = []  # Runs a Google search on MultiTree
-        for url in search(language_match + ' site:multitree.org/codes/', num=2, stop=2):
-            google_url.append(url)
-        if len(google_url) == 0:
-            # MultiTree does not have any information on this code.
-            multitree_link = None
-        else:
-            # MultiTree does have information on this code
-            language_iso3 = google_url[0][-3:]  # Takes only the part of the URL that contains the ISO 639-3 code
-            multitree_link = 'http://multitree.org/codes/' + language_iso3
-
-    # Exit early if we have no results. 
-    if multitree_link is None or language_iso3 is None:
-        logger.info("[ZW] No results for the reference search term {} on Multitree.".format(string_text))
-        return no_results_comment
-
-    # By now we should have a MultiTree link and can get info from it.
-    fetch_page = requests.get('http://multitree.org/codes/' + string_text, headers=ZW_USERAGENT)
-    tree = html.fromstring(fetch_page.content)
-    page_title = tree.xpath('//title/text()')
-    if "We're sorry" in page_title:
-        # MultiTree does not have any information on this code.
-        logger.info("[ZW] reference_other_search: No results for reference term {} on Multitree.".format(string_text))
-        return no_results_comment  # Exit earlu
-    else:  # We do have results.
-        language_name = tree.xpath('//*[@id="code-info"]/div[1]/div[1]/span[2]/text()')
-        alt_names = tree.xpath('//*[@id="code-info"]/div[1]/div[1]/span[6]/text()')
-        language_classification = tree.xpath('//*[@id="code-info"]/div[1]/div[1]/span[14]/text()')
-        lookup_line_1 = ('\n**Language Name**: {}\n\n**ISO 639-3 Code**: {}'
-                         '\n\n**Alternate Names**: {}\n\n**Classification**: {}')
-        lookup_line_1 = lookup_line_1.format(language_name[0], language_iso3, alt_names[0], language_classification[0])
-
-        # Fetch Wikipedia information, using the ISO code.
-        wk_to_get = wikipedia.search("ISO_639:{}".format(language_iso3))[0]
-        wk_page = wikipedia.page(title=wk_to_get, auto_suggest=True,
-                                 redirect=True, preload=False)
-        try:  # Try to get the first four sentences
-            wk_summary = re.match(r'(?:[^.]+[.]){4}', wk_page.summary).group()  # + ".." Regex to get first four sen
-            if len(wk_summary) < 500:  # This summary is too short.
-                wk_summary = wk_page.summary[0:500].rsplit(".", 1)[0] + "."  # Take the first 500 chars, split.
-        except AttributeError:  # Maybe too short of an article. Regex can't get that many.
-            wk_summary = wk_page.summary
-
-        if "\n" in wk_summary:  # Take out line breaks from the wikipedia summary.
-            wk_summary = wk_summary.replace("\n", " ")
-
-        wk_chunk = str('\n\n**[Wikipedia Entry](' + wk_page.url + ')**:\n\n> ' + wk_summary)
-        lookup_line_2 = '\n\n\n^Information ^from ^[MultiTree]({}.html) ^| ' \
-                        '[^Glottolog](http://glottolog.org/glottolog?iso={}) ^| [^Wikipedia]({})'
-        lookup_line_2 = lookup_line_2.format(multitree_link, language_iso3, wk_page.url)
-
-        to_post = str("## [{}]({})\n{}{}{}".format(language_name[0], multitree_link,
-                                                   lookup_line_1, wk_chunk, lookup_line_2))
-
-        return to_post
-
-
-def reference_search(language_match):
-    """
-    Function to look up reference languages on Ethnologue and Wikipedia.
-
-    :param language_match: The language code or text we're looking for.
+    :param lookup_term: The language code or text we're looking for.
     :return: A formatted string regardless of whether it found an appropriate match.
     """
-
-    language_iso3 = None  # default that doesn't match anything.
-    count = len(language_match)
-
-    # Code to check from the cache to see if we have that information stored first!
-    check_code = converter(language_match)[0]
+    ref_data = {}
 
     # Regex to check if code is in the private use area qaa-qtz
-    private_check = re.search('^q[a-t][a-z]$', check_code)
+    private_check = re.search('^q[a-t][a-z]$', lookup_term)
     if private_check is not None:  # This is a private use code. If it's None, it did not match.
-        return  # Just exit.
+        return None  # Just exit.
 
-    if len(check_code) != 0:   # There is actually a code from our converter for this.
-        logger.debug("[ZW] Run_Reference Code: {}".format(check_code))
+    # Get the language code (specifically the ISO 639-3 one)
+    language_code = converter(lookup_term)[0]
+    language_lookup_code = str(language_code)
+    if len(language_code) == 2:  # This appears to be an ISO 639-1 code.
+        language_code = MAIN_LANGUAGES[language_code]['language_code_3']  # Get the ISO 639-3 version.
+    if len(language_code) == 4:  # This is a script code.
+        return None
+
+    # Correct for macrolanguages. There is frequently no data for their broad codes.
+    if language_code in ISO_MACROLANGUAGES:
+        # We replace the macrolanguage with the most frequent individual language code. (e.g. 'zho' becomes 'cmn'.)
+        language_code = ISO_MACROLANGUAGES[language_code][0]
+
+    # Now we check the database to see if it has data.
+    if len(language_code) != 0:  # There's a valid code here.
+        logger.info("[ZW] reference_search Code: {}".format(language_lookup_code))
         sql_command = "SELECT * FROM language_cache WHERE language_code = ?"
-        # We try to retrieve the language in question.
-        cursor_main.execute(sql_command, (check_code,))
-        reference_results = cursor_main.fetchall()
+        cursor_main.execute(sql_command, (language_lookup_code,))
+        reference_results = cursor_main.fetchone()
 
-        if len(reference_results) != 0:  # We could find a cached value for this language
-            reference_cached_info = reference_results[0][1]
-            logger.debug("[ZW] Reference: Retrieved the cached reference information for {}.".format(language_match))
+        if reference_results is not None:  # We found a cached value for this language
+            reference_cached_info = reference_results[1]
+            print(reference_cached_info)
+            logger.info(
+                "[ZW] Reference: Retrieved the cached reference information for {}.".format(language_lookup_code))
             return reference_cached_info
+        else:  # No cached value found.
+            conduct_search = True
+    else:
+        conduct_search = True
 
-    if count <= 1:
-        to_post = COMMENT_INVALID_REFERENCE
-        return to_post
-    elif count == 2:
-        language_iso3 = MAIN_LANGUAGES[language_match]['language_code_3']
-        if language_iso3 is None:  # Not a valid 2-letter code.
-            to_post = COMMENT_INVALID_REFERENCE
-            return to_post
-    elif count == 3:
-        language_iso3 = language_match
-        eth_page = requests.get('https://www.ethnologue.com/language/' + language_iso3, headers=ZW_USERAGENT)
-        tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
-        # language_population = tree.xpath('//div[contains(@class,"field-population")]/div[2]/div/p/text()')
-        language_exist = tree.xpath('//div[contains(@class,"view-display-id-page")]/div/text()')
-        if 'Ethnologue has no page for' in str(language_exist):  # Check to see if the page exists at all
-            to_post = reference_other_search(language_iso3)
-            reference_to_store = (language_iso3, to_post)
-            cursor_main.execute("INSERT INTO language_cache VALUES (?, ?)", reference_to_store)
-            conn_main.commit()
-            return to_post
-        if language_iso3 in ISO_MACROLANGUAGES:  # If it's a macrolanguage let's take a look.
-            logger.debug("[ZW] Reference: '{}' is a macrolanguage.".format(language_match))
-            macro_data = ISO_MACROLANGUAGES.get(language_iso3)
-            language_iso3 = macro_data[0]  # Get the most popular language of the macro lang
+    if conduct_search:  # We should conduct a web search for this.
 
-    elif count >= 4:
-        language_match = language_match.rpartition(':')[-1]
-        google_url = []
-        for url in search(language_match + ' site:ethnologue.com/language', num=2, stop=2):
-            google_url.append(url)
-        if len(google_url) == 0:
-            to_post = reference_other_search(language_match)
-            return to_post
-        language_iso3 = google_url[0][-3:]
-        eth_page = requests.get('https://www.ethnologue.com/language/' + language_iso3, headers=ZW_USERAGENT)
-        tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
-        language_population = tree.xpath('//div[contains(@class,"field-population")]/div[2]/div/p/text()')
-        language_exist = tree.xpath('//div[contains(@class,"view-display-id-page")]/div/text()')
-        if 'Ethnologue has no page for' in str(language_exist):  # Check to see if the page exists at all
-            to_post = reference_other_search(language_iso3)
-            return to_post
-        if 'macrolanguage' in str(language_population):  # If it's a macrolanguage take the second result
-            language_iso3 = google_url[1][-3:]
+        # We try to determine the proper page to access.
+        if len(language_code) == 3:
+            url_to_access = 'https://www.ethnologue.com/language/' + language_code
+        else:
+            google_url = []
+            for url in google.search(lookup_term + ' site:ethnologue.com/language', num=2, stop=2):
+                google_url.append(url)
+            url_to_access = google_url[0]
 
-    if language_iso3 is not None:
-        eth_page = requests.get('https://www.ethnologue.com/language/' + language_iso3, headers=ZW_USERAGENT)
-        tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
+        # Actually access the page.
+        my_page = requests.get(url_to_access, headers=ZW_USERAGENT)
+        tree = html.fromstring(my_page.content)  # now contains the whole HTML page
+        language_exist = tree.xpath('//div[contains(@class,"view-display-id-page")]/div/text()')[0]
 
-        # This will create a list of the language:
-        language_name = tree.xpath('//h1[@id="page-title"]/text()')
-        alt_names = tree.xpath('//div[contains(@class,"alternate-names")]/div[2]/div/text()')
-        language_population = tree.xpath('//div[contains(@class,"field-population")]/div[2]/div/p/text()')
-        language_country = tree.xpath('//div[contains(@class,"a-language-of")]/div/div/h2/a/text()')
-        language_location = tree.xpath('//div[contains(@class,"name-field-region")]/div[2]/div/p/text()')
-        language_classification = tree.xpath('//div[contains(@class,"language-classification")]/div[2]/div/a/text()')
-        language_writing = "".join(tree.xpath('//div[contains(@class,"name-field-writing")]/div[2]/div/p/text()'))
-        language_writing = language_writing.replace(' , ', ', ')
-        language_writing = language_writing.replace(' .', '.')
-        if len(language_population) == 0:
-            language_population = "---"
-        if len(language_writing) == 0:
-            language_writing = "---"
-        if len(alt_names) == 0:
-            alt_names = ["---"]
-        if len(language_location) == 0:
-            language_location = ["---"]
+        # This wasn't found on Ethnologue. Let's check MultiTree.
+        if 'Ethnologue has no page for' in language_exist:  # Check to see if the page exists at all
+            fetch_page = requests.get('http://multitree.org/codes/' + language_code, headers=ZW_USERAGENT)
+            mt_tree = html.fromstring(fetch_page.content)
+            page_title = mt_tree.xpath('//title/text()')
 
-        eth_link = 'https://www.ethnologue.com/language/{}'.format(language_iso3)
+            # There is nothing.
+            if "We're sorry" in page_title:
+                # MultiTree does not have any information on this code.
+                logger.info("Reference_other_search: No results for reference {} on Multitree.".format(language_code))
+                return None
+            else:  # There are results on MultiTree.
+                # Collate the data.
+                mt_ref_data = {'name': mt_tree.xpath('//*[@id="code-info"]/div[1]/div[1]/span[2]/text()')[0],
+                               'alternate_names': mt_tree.xpath('//*[@id="code-info"]/div[1]/div[1]/span[6]/text()')[0],
+                               'classification': mt_tree.xpath('//*[@id="code-info"]/div[1]/div[1]/span[14]/text()')[0]}
 
-        try:
-            language_name = str(language_name[0])
-        except IndexError:  # No page listed still
-            to_post = COMMENT_INVALID_REFERENCE
-            return to_post
+                # Access Wikipedia for language family link.
+                if "(" in mt_ref_data['classification']:
+                    mt_ref_data['classification'] = mt_ref_data['classification'].split('(', 1)[0].strip()
+                try:  # Try to get the link to the language family page.
+                    family_search_term = mt_ref_data['classification'] + ' languages'
+                    wf_pg = wikipedia.page(title=family_search_term, auto_suggest=True, redirect=True, preload=False)
+                    mt_ref_data['classification'] = "[{}]({})".format(mt_ref_data['classification'].strip(), wf_pg.url)
+                except wikipedia.exceptions.PageError:
+                    base_link = "[{0}](https://en.wikipedia.org/w/index.php?search={0} language family)"
+                    mt_ref_data['classification'] = base_link.format(mt_ref_data['classification'].strip())
 
-        if "," in language_name:  # Try to reformat language names with a comma so that it looks better.
-            # More consistent with our internal usage too.
-            part_a, part_b = language_name.split(",")
-            language_name = part_b.strip() + " " + part_a  # Reconstitute the name
+                # Access Wikipedia for language summary data.
+                wk_title = wikipedia.search(str("ISO_639:" + language_code))  # Returns a list, we need the first item
+                wk_page = wikipedia.page(title=wk_title[0], auto_suggest=True, redirect=True, preload=False)
+                mt_ref_data['wikipedia_link'] = wk_page.url
+                try:  # Try to get the first four sentences
+                    wk_summary = re.match(r'(?:[^.]+[.]){4}', wk_page.summary).group()
+                    if len(wk_summary) < 500:  # This summary is too short.
+                        wk_summary = wk_page.summary[0:500].rsplit(".", 1)[0] + "."  # Take the first 500 chars, split.
+                except AttributeError:  # Maybe too short of an article. Regex can't get that many.
+                    wk_summary = wk_page.summary
+                mt_ref_data['wikipedia_summary'] = wk_summary.replace("\n", " ")
 
-        try:
-            wk_page = wikipedia.page(title=language_name.split(',', 1)[0] + ' language', auto_suggest=True,
-                                     redirect=True, preload=False)
-            wk_link = wk_page.url
+                # Create the output comment.
+                formatted_data = REFERENCE_TEMPLATE_OTHER.format(mt_ref_data['name'], language_code,
+                                                                 mt_ref_data['alternate_names'],
+                                                                 mt_ref_data['classification'],
+                                                                 mt_ref_data['wikipedia_link'],
+                                                                 mt_ref_data['wikipedia_summary'])
+        else:  # This was found on Ethnologue.
+            # Language name.
+            language_name = tree.xpath('//h1[@id="page-title"]/text()')[0]
+            if "," in language_name:  # Try to reformat language names with a comma so that it looks better.
+                # More consistent with our internal usage too.
+                part_a, part_b = language_name.split(",")
+                language_name = part_b.strip() + " " + part_a  # Reconstitute the name
+            ref_data['name'] = language_name
+            ref_data['alternate_names'] = tree.xpath('//div[contains(@class,"alternate-names")]/div[2]/div/text()')[0]
+            ref_data['population'] = tree.xpath('//div[contains(@class,"field-population")]/div[2]/div/p/text()')[0]
+            ref_data['country'] = tree.xpath('//div[contains(@class,"a-language-of")]/div/div/h2/a/text()')[0]
+            ref_data['location'] = tree.xpath('//div[contains(@class,"name-field-region")]/div[2]/div/p/text()')[0]
+            ref_data['classification'] = tree.xpath('//div[contains(@class,"language-classification")]/div[2]/div/a/text()')[0]
+            language_writing = "".join(tree.xpath('//div[contains(@class,"name-field-writing")]/div[2]/div/p/text()'))
+            language_writing = language_writing.replace(' , ', ', ')
+            language_writing = language_writing.replace(' .', '.')
+            ref_data['writing'] = language_writing
+
+            # Structure the classification to include the language family link.
+            if "," in ref_data['classification']:
+                ref_data['classification'] = ref_data['classification'].split(',', 1)[0]
+            try:  # Try to get the link to the language family page.
+                family_search_term = ref_data['classification'] + ' languages'
+                wf_page = wikipedia.page(title=family_search_term, auto_suggest=True, redirect=True, preload=False)
+                ref_data['classification'] = "[{}]({})".format(ref_data['classification'], wf_page.url)
+            except wikipedia.exceptions.PageError:
+                base_link = "[{0}](https://en.wikipedia.org/w/index.php?search={0} language family)"
+                ref_data['classification'] = base_link.format(ref_data['classification'])
+
+            # Get the Wikipedia entry.
+            wk_title = wikipedia.search(str("ISO_639:" + language_code))  # Returns a list, we need the first item
+            wk_page = wikipedia.page(title=wk_title[0], auto_suggest=True, redirect=True, preload=False)
+            ref_data['wikipedia_link'] = wk_page.url
             try:  # Try to get the first four sentences
                 wk_summary = re.match(r'(?:[^.]+[.]){4}', wk_page.summary).group()  # + ".." Regex to get first four sen
                 if len(wk_summary) < 500:  # This summary is too short.
                     wk_summary = wk_page.summary[0:500].rsplit(".", 1)[0] + "."  # Take the first 500 chars, split.
             except AttributeError:  # Maybe too short of an article. Regex can't get that many.
                 wk_summary = wk_page.summary
-        except (wikipedia.exceptions.PageError, wikipedia.exceptions.DisambiguationError):  # Not found, use ISO 639-3
-            # Since a name search doesn't work we need to use the wikipedia search function for this.
-            wk_title = wikipedia.search(str("ISO_639:" + language_iso3))  # Returns a list, we need the first item
-            wk_page = wikipedia.page(title=wk_title[0], auto_suggest=True, redirect=True, preload=False)
-            wk_link = wk_page.url
-            wk_summary = wk_page.summary
+            ref_data['wikipedia_summary'] = wk_summary.replace("\n", " ")
 
-        if "\n" in wk_summary:  # Take out line breaks from the wikipedia summary.
-            wk_summary = wk_summary.replace("\n", " ")
+            # Structure the data.
+            if language_lookup_code in MAIN_LANGUAGES:  # Check to see if there's a subreddit for this.
+                ref_data['subreddit'] = MAIN_LANGUAGES[language_lookup_code].get('subreddits', '')
+                if len(ref_data['subreddit']) != 0:
+                    ref_data['subreddit'] = '**Subreddit** {}'.format(ref_data['subreddit'][0])
+            else:
+                ref_data['subreddit'] = ''
+            if len(language_lookup_code) == 2:
+                ref_data['language_code_1'] = '**ISO 639-1 Code**: {}'.format(language_lookup_code)
+            else:
+                ref_data['language_code_1'] = ''
 
-        try:
-            if "," in language_classification[0]:  # This is part of an extended lang family. Indo-Eur, Germanic, etc.
-                language_classification = str(language_classification[0]).split(',', 1)[0]
-            else:  # Single only, like Japonic
-                language_classification = str(language_classification[0])
-        except IndexError:  # There may be an issue with this particular code.
-            language_classification = "N/A"
+            # Create the output comment.
+            formatted_data = REFERENCE_TEMPLATE_MAIN.format(ref_data['name'], language_code, ref_data['subreddit'],
+                                                            ref_data['language_code_1'], ref_data['alternate_names'],
+                                                            ref_data['population'], ref_data['country'],
+                                                            ref_data['location'], ref_data['classification'],
+                                                            ref_data['writing'], ref_data['wikipedia_link'],
+                                                            ref_data['wikipedia_summary'])
+            formatted_data = formatted_data.replace('\n\n\n', '\n')
 
-        try:  # Try to get the link to the language family page.
-            wf_page = wikipedia.page(title=language_classification + ' languages',
-                                     auto_suggest=True, redirect=True, preload=False)
-            wf_link = "[" + language_classification + "](" + wf_page.url + ")"
-        except wikipedia.exceptions.PageError:
-            base_link = "[{0}](https://en.wikipedia.org/w/index.php?search={0} language family)"
-            wf_link = base_link.format(language_classification)
-
-        lookup_line_1 = str('\n**Language Name**: ' + language_name + '\n\n')
-        if language_iso3 in MAIN_LANGUAGES:
-            # Here we try to get the ISO 639-1 code if possible for inclusion, checking it against a list of ISO codes.
-            language_iso1 = iso639_3_to_iso639_1(language_iso3)
-            cache_code = language_iso1
-            if language_iso1 in MAIN_LANGUAGES:  # The language name has a subreddit listed.
-                if 'subreddits' in MAIN_LANGUAGES[language_iso1]:
-                    # Get the first value, which should be a language learning one.
-                    language_subreddit = MAIN_LANGUAGES[language_iso1]['subreddits'][0]
-                    lookup_line_1a = "**Subreddit**: {}\n\n".format(language_subreddit)
-                    lookup_line_1a += "**ISO 639-1 Code**: {}\n\n".format(language_iso1)
-                else:
-                    lookup_line_1a = "**ISO 639-1 Code**: {}\n\n".format(language_iso1)
-            else:  # No subreddit listed.
-                lookup_line_1a = "**ISO 639-1 Code**: {}\n\n".format(language_iso1)
-
+        # Check to see if data is stored. If not, store it.
+        sql_command = "SELECT * FROM language_cache WHERE language_code = ?"
+        cursor_main.execute(sql_command, (language_lookup_code,))
+        reference_results = cursor_main.fetchone()
+        if reference_results is None:  # There is nothing stored in the database for this language.
+            reference_to_store = (language_lookup_code, formatted_data)
+            cursor_main.execute("INSERT INTO language_cache VALUES (?, ?)", reference_to_store)
+            conn_main.commit()
+            logger.info("[Reference] Retrieved and saved reference data for '{}'.".format(language_lookup_code))
         else:
-            cache_code = language_iso3
-            lookup_line_1a = ""  # Can't find a matching code, just return nothing.
+            logger.debug('[Reference] Language data already stored.')
 
-        lookup_line_1b = str('**ISO 639-3 Code**: ' + language_iso3 + '\n\n**Alternate Names**: ' + alt_names[0])
-        try:  # Temporary logging to figure out our issue, it'll log the next time something happens
-            lookup_line_2 = str('\n\n**Population**: ' + language_population[0] + '\n\n**Location**: ' +
-                                language_country[0] + '; ' + language_location[0] + '\n\n**Classification**: ' +
-                                wf_link + '\n\n**Writing system**: ' + language_writing)
-        except IndexError:
-            error_log_basic(language_match, "Ziwen #REFERENCE")
-            return COMMENT_INVALID_REFERENCE
-        lookup_line_3 = str('\n\n**[Wikipedia Entry](' + wk_link + ')**:\n\n> ' + wk_summary)
-        lookup_line_4 = ('\n^Information ^from ^[Ethnologue]({0}) '
-                         '^| [^Glottolog](http://glottolog.org/glottolog?iso={1}) '
-                         '^| [^MultiTree](http://multitree.org/codes/{1}.html) '
-                         '^| [^ScriptSource](http://scriptsource.org/cms/scripts/page.php'
-                         '?item_id=language_detail&key={1}) ^| [^Wikipedia]({2})')
-        lookup_line_4 = lookup_line_4.format(eth_link, language_iso3, wk_link)
-        to_post = str("## [" + language_name + "](" + eth_link + ")\n" + lookup_line_1 + lookup_line_1a +
-                      lookup_line_1b + lookup_line_2 + lookup_line_3 + "\n\n" + lookup_line_4)
-
-        reference_to_store = (cache_code, to_post)
-        cursor_main.execute("INSERT INTO language_cache VALUES (?, ?)", reference_to_store)
-        conn_main.commit()
-
-        logger.info("[ZW] Retrieved and saved reference information about '{}' as a language.".format(language_match))
-
-        return to_post
+        return formatted_data
+    else:
+        return None
 
 
 def reference_reformatter(original_entry):
@@ -5538,7 +5481,7 @@ def ziwen_bot():
         if KEYWORDS[4] in pbody or KEYWORDS[10] in pbody:  # This is the general !identify command (synonym: !id)
 
             determined_data = comment_info_parser(pbody, "!identify:")
-            # This should return what was actually identified. Normally will be a Tuple or None
+            # This should return what was actually identified. Normally will be a tuple or None.
             if determined_data is None:  # The command is problematic. Wrong punctuation, not enough arguments
                 logger.debug('[ZW] Bot: !identify data is invalid.')
                 continue
@@ -5550,12 +5493,13 @@ def ziwen_bot():
 
             # If it's not none, we got proper data.
             match = determined_data[0]
-            advanced_mode = comment_info_parser(pbody, "!identify:")[1]
+            advanced_mode = determined_data[1]
             language_country = None  # Default value
             o_language_name = str(oajo.language_name)  # Store the original language defined in the Ajo
             # This should return a boolean as to whether or not it's in advanced mode.
 
             logger.info("[ZW] Bot: COMMAND: !identify, from u/{}.".format(pauthor))
+            logger.info('[ZW] Bot: !identify data is: {}'.format(determined_data))
 
             if "+" not in match:  # This is just a regular single !identify command.
                 if not advanced_mode:  # This is the regular results conversion
@@ -5574,6 +5518,7 @@ def ziwen_bot():
                             # is_supported = False
                     elif len(match) == 4:  # This is a script, resets it to an Unknown state.
                         language_data = lang_code_search(match, True)  # Run a search for the specific script
+                        logger.info("[ZW] Bot: Returned script data is for {}.".format(language_data))
                         if language_data is None:  # Probably an invalid script.
                             bad_script_reply = COMMENT_INVALID_SCRIPT + BOT_DISCLAIMER
                             post.reply(bad_script_reply.format(match))
@@ -5653,14 +5598,17 @@ def ziwen_bot():
 
                     # Get the newest data
                     to_post = reference_search(language_code)
-                    to_post = reference_reformatter(to_post)  # Simplify the information that's returned
-                    if 'Ethnologue' in to_post or 'MultiTree' in to_post:
-                        # Add the header for Unknown posts that get identified
-                        to_post = COMMENT_REFERENCE_HEADER + to_post + BOT_DISCLAIMER
+                    if to_post is None:  # There is no good data here.
+                        continue
+                    else:  # We have gotten good data.
+                        to_post = reference_reformatter(to_post)  # Simplify the information that's returned
+                        if 'Ethnologue' in to_post or 'MultiTree' in to_post:
+                            # Add the header for Unknown posts that get identified
+                            to_post = COMMENT_REFERENCE_HEADER + to_post + BOT_DISCLAIMER
 
-                        # Add language reference data
-                        osubmission.reply(to_post)
-                        logger.info("[ZW] Bot: Added reference information for {}.".format(language_name))
+                            # Add language reference data
+                            osubmission.reply(to_post)
+                            logger.info("[ZW] Bot: Added reference information for {}.".format(language_name))
 
         if KEYWORDS[0] in pbody:  # This is the basic paging !page function.
 
@@ -5754,8 +5702,10 @@ def ziwen_bot():
                 # We are just not going to reply if there is literally nothing found.
                 continue
 
+            logger.info("[ZW] Bot: >> Determined Lookup Dictionary: {}".format(total_matches))
             for key, value in total_matches.items():
                 if key in CJK_LANGUAGES['Chinese']:
+                    logger.info("[ZW] Bot: >> Conducting lookup search in Chinese.")
                     for match in total_matches[key]:
                         match_length = len(match)
                         if match_length == 1:  # Single-character
@@ -5769,6 +5719,7 @@ def ziwen_bot():
                         wait_sec = random.randint(3, 12)
                         time.sleep(wait_sec)
                 elif key in CJK_LANGUAGES['Japanese']:
+                    logger.info("[ZW] Bot: >> Conducting lookup search in Japanese.")
                     for match in total_matches[key]:
                         match_length = len(str(match))
                         if match_length == 1:
@@ -5778,10 +5729,12 @@ def ziwen_bot():
                             find_word = str(match)
                             post_content.append(ja_word(find_word))
                 elif key in CJK_LANGUAGES['Korean']:
+                    logger.info("[ZW] Bot: >> Conducting lookup search in Korean.")
                     for match in total_matches[key]:
                         find_word = str(match)
                         post_content.append(lookup_ko_word(find_word))
                 else:  # Wiktionary search
+                    logger.info("[ZW] Bot: >> Conducting Wiktionary lookup search.")
                     for match in total_matches[key]:
                         find_word = str(match)
                         wiktionary_results = lookup_wiktionary_search(find_word, key)
@@ -5817,6 +5770,8 @@ def ziwen_bot():
             language_match = determined_data[0]
             logger.info("[ZW] Bot: COMMAND: !reference, from u/{}.".format(pauthor))
             post_content = reference_search(language_match)
+            if post_content is None:  # There was no good data. We return the invalid comment.
+                post_content = COMMENT_INVALID_REFERENCE
             post.reply(post_content)
             logger.info("[ZW] Bot: Posted the reference results for '{}'.".format(language_match))
 
@@ -5835,7 +5790,7 @@ def ziwen_bot():
             reddit_id = []
             reply_body = []
 
-            for url in search(search_term + ' site:reddit.com/r/translator', num=4, stop=4):
+            for url in google.search(search_term + ' site:reddit.com/r/translator', num=4, stop=4):
                 if 'comments' not in url:
                     continue
                 google_url.append(url)
@@ -6191,7 +6146,7 @@ def ziwen_bot():
         if oflair_css not in ["community", "meta"]:  # There's nothing to change for these
             oajo.update_reddit()  # Push all changes to the server
             ajo_writer(oajo)  # Write the Ajo to the local database
-            logger.debug("[ZW] Bot: Ajo updated and saved to the local database.")
+            logger.info("[ZW] Bot: Ajo for {} updated and saved to the local database.".format(oid))
             messaging_user_statistics_writer(pbody, pauthor)  # Record data on user commands.
             logger.debug("[ZW] Bot: Recorded user commands in database.")
 

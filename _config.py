@@ -10,20 +10,6 @@ import logging
 import json
 from time import strftime
 
-# Check to see which OS we're running on and change it dynamically. Needed for dependent files. 
-if sys.platform == "linux":  # Linux
-    TESTING_MODE = False
-    SUBREDDIT = "translator"
-    TARGET_FOLDER = "/home/pi/Box/Data Backup/{}"
-elif sys.platform == "win32":  # Windows
-    TESTING_MODE = True
-    SUBREDDIT = "trntest"
-    TARGET_FOLDER = "C:/Users/qinzh/Desktop/Box/Data Backup/{}"
-else:  # sys.platform == "darwin":     # macOS
-    TESTING_MODE = True
-    SUBREDDIT = "trntest"
-    TARGET_FOLDER = "/Users/qzlau/Desktop/Box/Data Backup/{}"
-
 # Set up the directories based on the current location of the bots.
 script_directory = os.path.dirname(__file__)  # Fetch the absolute directory the script is in.
 script_directory += "/Data/"  # Where the main files are kept.
@@ -32,6 +18,7 @@ SOURCE_FOLDER = script_directory
 # Ziwen main database files (either static files or files that will be written to).
 FILE_ADDRESS_CREDENTIALS = os.path.join(script_directory, "_login.json")
 FILE_ADDRESS_UA = os.path.join(script_directory, "_ua.json")
+FILE_ADDRESS_ALL_STATISTICS = os.path.join(script_directory, "_statistics.json")
 FILE_ADDRESS_AJO_DB = os.path.join(script_directory, '_database_ajo.db')
 FILE_ADDRESS_MAIN = os.path.join(script_directory, "_database_main.db")
 

@@ -39,7 +39,7 @@ EXCLUDED_MENTION_USERS = ["AutoModerator", "translator-BOT", "kungming2", "Image
                           "TotesMessenger", "sneakpeekbot", "ContentForager", "transcribot", "SmallSubBot"]
 
 BOT_NAME = 'Ziwen Streamer'
-VERSION_NUMBER = '1.1.23'
+VERSION_NUMBER = '1.1.24'
 USER_AGENT = ('{} {}, a runtime to watch comments on Reddit for reposting translation requests to r/translator. '
               'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 
@@ -196,7 +196,7 @@ def ziwen_streamer():
 
     logger.info("[ZWS] Streamer routine starting up...")
 
-    for comment in reddit.subreddit('all').stream.comments(skip_existing=True):  # Watching the stream...
+    for comment in reddit.subreddit('all').stream.comments():  # Watching the stream...
 
         pbody = comment.body.lower()
 
@@ -448,9 +448,11 @@ def ziwen_streamer():
                     # Just in case they also mentioned the proper subreddit.
                     time.sleep(180)  # Wait for 3-minutes in case of edit
                     print(">> Waiting 3 minutes for possible edits...")
+
+                    # Reload the comment text.
                     new_comment = reddit.comment(cid)
                     new_comment = new_comment.body.lower()
-                    if "r/translator" not in new_comment:
+                    if "r/translator" not in new_comment and "r/translation" not in new_comment:
                         try:
                             comment.reply(ZWS_COMMENT_WRONG_SUBREDDIT)
                             logger.info("[ZWS] >> Posted a correction reply.")
