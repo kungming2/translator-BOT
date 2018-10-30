@@ -725,7 +725,8 @@ MAIN_LANGUAGES = {
         'language_code_3': 'jpn',
         'alternate_names': ['Jap', 'Jpn', 'Japenese', 'Japaneese', 'Japanes', 'Katakana', 'Hiragana', 'Japaness',
                             'Romaji', 'Japneese', 'Japnese', 'Kanji', 'Japaese', 'Japn', 'Japonais', 'Romajin',
-                            'Nihongo', 'Kenji', 'Romanji', 'Rōmaji', '日本語', 'Japones', 'Japonés', 'Japnese'],
+                            'Nihongo', 'Kenji', 'Romanji', 'Rōmaji', '日本語', 'Japones', 'Japonés', 'Japnese',
+                            'Japanase'],
         'countries_default': 'JP',
         'mistake_abbreviation': 'jp',
         'subreddits': ["r/learnjapanese", "r/japan", "r/japanese", "r/nihongo", "r/kanji", "r/japanlife"],
@@ -1021,19 +1022,22 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Nauruan',
         'language_code_3': 'nau',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Itûba"
     },
     "nb": {
         'supported': False,
         'name': 'Norwegian Bokmal',
         'language_code_3': 'nob',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Takk"
     },
     "nd": {
         'supported': False,
         'name': 'North Ndebele',
         'language_code_3': 'nde',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Ngiyabonga"
     },
     "ne": {
         'supported': True,
@@ -1062,7 +1066,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Norwegian Nynorsk',
         'language_code_3': 'nno',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Takk"
     },
     "no": {
         'supported': True,
@@ -1083,7 +1088,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Southern Ndebele',
         'language_code_3': 'nbl',
-        'alternate_names': ['Isindebele']
+        'alternate_names': ['Isindebele'],
+        'thanks': "Ngiyabonga"
     },
     "nv": {
         'supported': True,
@@ -1096,39 +1102,45 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Chichewa',
         'language_code_3': 'nya',
-        'alternate_names': ['Chewa', 'Nyanja']
+        'alternate_names': ['Chewa', 'Nyanja'],
+        'thanks': "Zikomo"
     },
     "oc": {
         'supported': False,
         'name': 'Occitan',
         'language_code_3': 'oci',
         'alternate_names': None,
-        'subreddits': ["r/occitan"]
+        'subreddits': ["r/occitan"],
+        'thanks': "Mercés"
     },
     "oj": {
         'supported': False,
         'name': 'Ojibwe',
         'language_code_3': 'oji',
-        'alternate_names': ['Ojibwa']
+        'alternate_names': ['Ojibwa'],
+        'thanks': "Miigwech"
     },
     "om": {
         'supported': True,
         'name': 'Oromo',
         'language_code_3': 'orm',
         'alternate_names': ['Oromoo', 'Oromiffa', 'Oromifa', 'Oromos'],
-        'countries_associated': ['ET', 'KE']
+        'countries_associated': ['ET', 'KE'],
+        'thanks': "Galatoomi"
     },
     "or": {
         'supported': False,
         'name': 'Oriya',
         'language_code_3': 'ori',
-        'alternate_names': None
+        'alternate_names': ['Odia'],
+        'thanks': "ଧନ୍ୟବାଦ୍"
     },
     "os": {
         'supported': False,
         'name': 'Ossetian',
         'language_code_3': 'oss',
-        'alternate_names': ['Ossetic']
+        'alternate_names': ['Ossetic'],
+        'thanks': "Бузныг"
     },
     'ota': {
         'alternate_names': ['Ottoman'],
@@ -1191,13 +1203,15 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Romansh',
         'language_code_3': 'roh',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Grazia"
     },
     "rn": {
         'supported': False,
         'name': 'Kirundi',
         'language_code_3': 'run',
-        'alternate_names': ['Ikirundi']
+        'alternate_names': ['Ikirundi'],
+        'thanks': "Urakoze"
     },
     "ro": {
         'supported': True,
@@ -1243,13 +1257,15 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Sindhi',
         'language_code_3': 'snd',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Mehrbani"
     },
     "se": {
         'supported': False,
         'name': 'Northern Sami',
         'language_code_3': 'sme',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Giitu"
     },
     "sg": {
         'supported': False,
@@ -1336,7 +1352,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Sotho',
         'language_code_3': 'sot',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Ke a leboha"
     },
     "su": {
         'supported': False,
@@ -1432,7 +1449,8 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Tswana',
         'language_code_3': 'tsn',
-        'alternate_names': ['Setswana']
+        'alternate_names': ['Setswana'],
+        'thanks': "Ke itumetse"
     },
     "to": {
         'supported': False,
@@ -1461,13 +1479,15 @@ MAIN_LANGUAGES = {
         'supported': True,
         'name': 'Tatar',
         'language_code_3': 'tat',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Räxmät"
     },
     "tw": {
         'supported': True,
         'name': 'Twi',
         'language_code_3': 'twi',
-        'alternate_names': None
+        'alternate_names': None,
+        'thanks': "Meda wo ase"
     },
     "ty": {
         'supported': False,
