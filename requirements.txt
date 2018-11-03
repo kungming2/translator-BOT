@@ -1,5 +1,5 @@
 bs4
-fuzzywuzzy
+fuzzywuzzy[speedup]
 google
 hangul_romanize
 itertools

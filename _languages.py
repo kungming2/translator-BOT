@@ -10,7 +10,7 @@ import itertools
 
 from fuzzywuzzy import fuzz  # When installing, use fuzzywuzzy[speedup]
 
-VERSION_NUMBER_LANGUAGES = "1.7.4"
+VERSION_NUMBER_LANGUAGES = "1.7.6"
 
 # Access the CSV with ISO 639-3 and ISO 15924 data.
 lang_script_directory = os.path.dirname(__file__)  # <-- absolute dir the script is in
@@ -338,7 +338,7 @@ MAIN_LANGUAGES = {
         'name': 'German',
         'language_code_3': 'deu',
         'language_code_2b': 'ger',
-        'alternate_names': ['Deutsch', 'Deutsche', 'Ger', 'Deutch', 'Bavarian', 'Kurrent', 'Austrian', 'Sütterlin',
+        'alternate_names': ['Deutsch', 'Deutsche', 'Ger', 'Deutch', 'Kurrent', 'Austrian', 'Sütterlin',
                             'Plattdeutsch', 'Suetterlin', 'Tedesco'],
         'countries_associated': ['AT', 'BE', 'CH'],
         'subreddits': ["r/german", "r/de", "r/germany"],
@@ -1712,9 +1712,9 @@ ENGLISH_3_WORDS = ['Abs', 'Abu',
                    'Zee', 'Zen', 'Zig', 'Zip', 'Zit', 'Zoa', 'Zoo']
 # These are words that usually get recognized as something they're not due to Fuzzywuzzy. Let's ignore them.
 FUZZ_IGNORE_WORDS = ['Ancient Mayan', 'Base', 'Canada', 'Cheese', 'Chopstick', 'Classical Japanese', 'Creek', 'Dish',
-                     'Green', 'Guarani', 'Here', 'Horse', 'Japanese', 'Javanese', 'Kanada', 'Karen', 'Latina', 'Ladino',
-                     'Latino', 'Lmao', 'Logo', 'Maay', 'Major', 'Maria', 'Mario', 'Morse', 'Nosey', 'Nurse', 'Orkish',
-                     'Past', 'Person', 'Peruvian', 'Roman', 'Romani', 'Romanization', 'Romanized', 'Romanji',
+                     'Green', 'Guarani', 'Here', 'Horse', 'Japanese', 'Javanese', 'Kanada', 'Karen', 'Latina', 'Ladin',
+                     'Ladino', 'Latino', 'Lmao', 'Logo', 'Maay', 'Major', 'Maria', 'Mario', 'Morse', 'Nosey', 'Nurse',
+                     'Orkish', 'Past', 'Person', 'Peruvian', 'Roman', 'Romani', 'Romanization', 'Romanized', 'Romanji',
                      'Romanjin', 'Romany', 'Sake', 'Scandinavian', 'Serial', 'Sorbian', 'Sumerian', 'Titan',
                      'Trail', 'Trench', 'Turks']
 
@@ -2418,7 +2418,10 @@ def converter(input_text):
     if len(input_text) < 2:  # This is too short.
         language_code = ""
         language_name = ""
-    elif input_text.lower() in ISO_639_1:  # This is a supported ISO 639-1 code.
+    elif is_script:  # This is a script.
+        language_code = specific_code
+        language_name = input_text
+    elif input_text.lower() in ISO_639_1:  # Everything below is accessing languages. This is a ISO 639-1 code.
         language_code = input_text.lower()
         language_name = MAIN_LANGUAGES[language_code]['name']
         supported = MAIN_LANGUAGES[language_code]['supported']
@@ -2465,10 +2468,6 @@ def converter(input_text):
                     if len(script_results) != 0:
                         language_name = script_results
                         language_code = lang_code_search(script_results, True)[0]
-
-    elif is_script:  # This is a script.
-        language_code = specific_code
-        language_name = input_text
 
     if "<" in language_name:  # Strip the brackets from ISO 639-3 languages.
         language_name = language_name.split("<")[0].strip()  # Remove the country name in brackets
@@ -2588,11 +2587,9 @@ def comment_info_parser(pbody, command):
 
     if command in pbody:  # Check to see the command and test the remainder.
         pbody_test = pbody.split(command)[1]
-        print(pbody_test)
         if "!" in pbody_test[:5]:
             match = re.search(command + '(.*?)!', pbody)
             match = str(match.group(1)).lower()  # Convert it to a string.
-            print(match)
             if " " not in match and "\n" not in match:  # This is actually an advanced one.
                 advanced_mode = True
             else:  # Maybe stacked two commands
@@ -3433,6 +3430,72 @@ def title_format(title, display_process=False):
 
     return d_source_languages, d_target_languages, final_css, final_css_text, \
         actual_title, processed_title, notify_languages, language_country, direction
+
+
+def language_list_splitter(list_string):
+    """
+    A function to help split up lists of codes or names of languages with different delimiters.
+    An example would be a string like `ar, latin, yi` or `ko+lo`. This function will be able to split it no matter what.
+
+    :param: A possible list of languages as a string.
+    :return: A list of language codes that were determined from the string. None if there are no valid ones found.
+    """
+
+    final_codes = []
+
+    if 'LANGUAGES:' in list_string:  # Remove colon, partition the part we need.
+        list_string = list_string.rpartition('LANGUAGES:')[-1].strip()
+    else:
+        list_string = list_string.strip()  # Remove spaces.
+
+    # Set delimiters and divide. Delimiters: `+`, `,`, `/`, `\n`, ` `. The space is the last resort.
+    standard_delimiters = ['+', '\n', '/', ':', ';']
+    for character in standard_delimiters:  # Iterate over our list.
+        if character in list_string:
+            list_string = list_string.replace(character, ',')
+
+    # Special case if there's only spaces - check to see if the whole thing
+    if ',' not in list_string and ' ' in list_string:
+        # Assess whether the whole thing is a multi-word language itself.
+        all_match = converter(list_string)[0]
+        if len(all_match) == 0:  # No match
+            temporary_list = list_string.split(' ')  # Separate by spaces
+        else:  # There is a match.
+            temporary_list = [all_match]
+
+    else:
+        # Get the individual elements with a first pass.
+        temporary_list = list_string.split(',')
+
+    temporary_list = [x.strip() for x in temporary_list if x]  # Remove blank strings.
+    utility_codes = ['meta', 'community']
+    # Clean up and get the codes.
+    for item in temporary_list:
+        item = item.lower()  # Remove spaces.
+
+        # Get the code.
+        converted_data = converter(item)
+
+        if converted_data[3] is None:  # This has no country data attached to it.
+            code = converted_data[0]
+        else:
+            code = "{}-{}".format(converted_data[0], converted_data[3])
+
+        if len(code) != 0 and item != 'all':
+            final_codes.append(code)
+        elif item == 'all':  # This is to help process 'all' unsubscription requests.
+            final_codes.append(item)
+        elif item in utility_codes:
+            final_codes.append(item)
+
+    # Remove duplicates and alphabetize.
+    final_codes = list(set(final_codes))
+    final_codes = sorted(final_codes, key=str.lower)
+
+    if len(final_codes) == 0:
+        return None
+    else:
+        return final_codes
 
 
 def main_posts_filter_required_keywords():

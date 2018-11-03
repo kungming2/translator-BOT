@@ -25,7 +25,7 @@ FILE_ADDRESS_MAIN = os.path.join(script_directory, "_database_main.db")
 # Ziwen SQLite3 cache file (cache file data is generated as the bot runs and is volatile).
 FILE_ADDRESS_CACHE = os.path.join(script_directory, "_cache_main.db")
 
-# Ziwen language database files (reference files for language-related functions)
+# Ziwen language database files (reference files for language-related functions).
 FILE_ADDRESS_OLD_CHINESE = os.path.join(script_directory, "_database_old_chinese.csv")
 FILE_ADDRESS_ZH_ROMANIZATION = os.path.join(script_directory, "_database_romanization_chinese.csv")
 FILE_ADDRESS_ZH_BUDDHIST = os.path.join(script_directory, "_database_buddhist_chinese.md")
@@ -227,3 +227,26 @@ def action_counter(messages_number, action_type):
     f.close()
 
     return
+
+
+def load_statistics_data(language_code):
+    """
+    Function that loads the language statistics dictionary from our saved JSON file.
+
+    :param language_code: Any language code.
+    :return: The language dictionary if it exists. None otherwise.
+    """
+
+    # Open the file
+    f = open(FILE_ADDRESS_ALL_STATISTICS, 'r', encoding='utf-8')
+    stats_data = f.read()
+    f.close()
+
+    # Convert the JSON data into a dictionary.
+    stats_data = json.loads(stats_data)
+    if language_code in stats_data:
+        specific_data = stats_data[language_code]
+    else:  # This language code does not exist as a key.
+        specific_data = None
+
+    return specific_data

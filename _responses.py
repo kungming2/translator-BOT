@@ -83,7 +83,11 @@ MSG_NO_POINTS = ("You haven't earned any points on r/translator yet. "
                  "You can earn points by helping identify or translate requests in our community!")
 MSG_LANGUAGE_FREQUENCY = ("For your reference, our [statistics](https://www.reddit.com/r/translator/wiki/{})"
                           " indicate that approximately **{} requests are made per {}** for {}.")
-MSG_UNSUBSCRIBE_ALL = ("You have been unsubscribed from **{}** notifications on r/translator. "
+MSG_SUBSCRIBE = ("{}! You have been subscribed to r/translator notifications for:\n\n* {}"
+                 "\n\nFor your reference, here are some estimated statistics on the frequency of "
+                 "requests for those language(s):\n\n{}\n\n"
+                 "To see all your subscribed notifications, please click the 'Status' link below.")
+MSG_UNSUBSCRIBE_ALL = ("You have been unsubscribed from r/translator notifications for: {} \n\n"
                        "To resubscribe, please [click here]({}).")
 
 # A comment that is added to long YouTube videos or long text posts.

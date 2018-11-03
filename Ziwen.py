@@ -43,7 +43,7 @@ as they define many of the basic functions of the bot.
 '''
 
 BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.7.54'
+VERSION_NUMBER = '1.7.55'
 USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator. '
               'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 SUBREDDIT = "translator"
@@ -865,7 +865,6 @@ class Ajo:
                 self.language_name.append(name)
                 self.status[code] = "untranslated"
 
-        print(set_languages_processed_codes)
         languages_tag_string = ", ".join(set_languages_processed_codes)  # Evaluate the length of the potential string
 
         # The limit for link flair text is 64 characters. we need to trim it so that it'll fit the flair.
@@ -1655,7 +1654,7 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
     if len(pbody) > 120 and pauthor != oauthor:  # This is an especially long comment...But it's well regarded
         points += 1 + int(round(.25 * language_multiplier))
 
-    if '!identify' in pbody:
+    if '!identify:' in pbody or '!id:' in pbody:
         points += 3
 
     if "`" in pbody:
@@ -2059,7 +2058,11 @@ def messaging_user_statistics_loader(username):
     if username_commands_data is None and notifications_commands_data is None:  # Absolutely no information.
         return None
     else:
-        # Format everything together
+        # Format everything together. Convert None to blank list.
+        if commands_lines_to_post is None:
+            commands_lines_to_post = []
+        if notifications_lines_to_post is None:
+            notifications_lines_to_post = []
         to_post = header + "\n".join(commands_lines_to_post + notifications_lines_to_post)
         return to_post
 
@@ -2083,6 +2086,53 @@ def messaging_months_elapsed():
     months_num = total_current_months - month_beginning
 
     return months_num
+
+
+def messaging_language_frequency_table(language_list):
+    """
+    This is a function that supercedes `messaging_language_frequency` and can generate a table given a list of language
+    codes about the relative frequency for language notifications.
+    """
+
+    formatted_lines = []
+    header = "| Language Name | Approx. Number of Posts | Per |\n|-----------|-----:|:----|\n"
+    line_template = "| [{}]({}) | {} posts / | {} |"
+
+    # Iterate over the language codes.
+    for code in language_list:
+        language_name = converter(code)[1]
+
+        # Retrieve stored data.
+        language_data = load_statistics_data(code)
+        if language_data is not None:  # There is historical statistics for this language.
+            daily_rate = language_data['rate_daily']
+            monthly_rate = language_data['rate_monthly']
+            yearly_rate = language_data['rate_yearly']
+            link = language_data['permalink']
+
+            # Here we try to determine which comment we should return as a line.
+            if daily_rate >= 2:  # This is a pretty popular one, with a few requests a day.
+                frequency = "day"
+                rate = daily_rate
+            elif 2 > daily_rate > 0.05:  # This is a frequent one, a few requests a month. But not the most.
+                frequency = "month"
+                rate = monthly_rate
+            else:  # These are pretty infrequent languages. Maybe a few times a year at most.
+                frequency = "year"
+                rate = yearly_rate
+
+            # Combine the lines together as a message.
+            new_line = line_template.format(language_name, link, rate, frequency)
+        else:  # We have not received data for this language.
+            new_line = "| {} | No recorded statistics | --- |".format(language_name)
+
+        # Add the line to our list.
+        formatted_lines.append(new_line)
+
+    # Format everything.
+    to_post = header + "\n".join(formatted_lines)
+
+    return to_post
 
 
 def messaging_language_frequency(language_name):
@@ -2143,7 +2193,7 @@ def messaging_language_frequency(language_name):
 
     monthly_rate = round((total_rate_posts / months_calculate), 2)  # The average number of posts per month
     daily_rate = round((monthly_rate / 30), 2)  # The average number of posts per day
-    yearly_rate = round((monthly_rate * 12), 2)  # The average number of posts per day
+    yearly_rate = round((monthly_rate * 12), 2)  # The average number of posts per year
 
     # We add up the cumulative number of posts.
     total_posts = sum(total_posts)
@@ -2611,6 +2661,48 @@ def notifier_page_multiple_detector(pbody):
             return None
 
 
+def notifier_language_list_editer(language_list, username, mode='insert'):
+    """
+    Function that will change the notifications database. It can insert or delete entries for a particular username.
+
+    :param language_list: A list of language codes to insert.
+    :param username: The Reddit username of the person whose entries we're changing or updating.
+    :param mode: `insert` adds languages for the username, `delete` obviously removes them. `purge` removes all.
+    :return: Nothing.
+    """
+
+    # If there's nothing in the list, exit.
+    if len(language_list) == 0:
+        return
+    elif mode == 'purge':  # We want to delete everything for this user.
+        cursor_main.execute("DELETE FROM notify_users WHERE username = ?", (username,))
+        conn_main.commit()
+    else:  # We have codes to process.
+
+        # Iterate over the codes.
+        for code in language_list:
+
+            if len(code) == 4 and code != 'meta':  # This is a script
+                code = 'unknown-' + code  # Format it for insertion.
+            elif code is 'en':  # Skip inserting English.
+                continue
+
+            # Check to see if user is already in our database.
+            is_there = notifier_duplicate_checker(code, username)
+
+            sql_package = (code, username)
+            if not is_there and mode == 'insert':  # No entry, and we want to insert.
+                cursor_main.execute("INSERT INTO notify_users VALUES (? , ?)", sql_package)
+                conn_main.commit()
+            elif is_there and mode == 'delete':  # There is an entry, and we want to delete.
+                cursor_main.execute("DELETE FROM notify_users WHERE language_code = ? and username = ?", sql_package)
+                conn_main.commit()
+            else:
+                continue
+
+    return
+
+
 def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify):
     """
     This function notifies people about posts they're subscribed to. Unlike ziwen_messages, this is not a top-level
@@ -2718,8 +2810,18 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
 def ziwen_messages():
     """
     A top-level system to process commands via the messaging system of Reddit. This system acts upon keywords included
-    in the message's subject field.
-    The function will mark any incoming messages/mentions as read, even if they aren't actable.
+    in the message's subject field, including the following.
+
+    * `subscribe`
+    * `unsubscribe`
+    * `ping`
+    * `status`
+    * `points`
+    * `add`
+    * `remove`
+
+    The function will mark any incoming messages/mentions as read, even if they aren't actable. That's going to depend
+    on the operator of this script to check the account itself.
 
     :param: Nothing.
     :return: Nothing.
@@ -2734,176 +2836,103 @@ def ziwen_messages():
         msubject = message.subject.lower()  # Convert to lowercase
         mbody = message.body
 
-        if "subscribe" in msubject and "un" not in msubject:  # User wants to subscribe
-            language_matches = mbody.rpartition(':')[-1].strip()
-            # Here we process the actual message body, returns a string
+        if "subscribe" in msubject and "un" not in msubject:  # User wants to subscribe to language notifications.
 
-            # Replace pluses in case the web browser / client leaves them in.
-            if "+" in language_matches:
-                language_matches = language_matches.replace("+", " ")
-
-            if "," in language_matches:  # This is the regular syntax, comma split
-                language_matches = language_matches.split(",")  # Turn it into a list
-            elif "\n" in language_matches:  # This is for line breaks
-                language_matches = language_matches.split("\n")  # Turn it into a list
-            elif "/" in language_matches:  # This is for slashes.
-                language_matches = language_matches.split("/")  # Turn it into a list
-            else:  # This is for spaces.
-                language_matches = language_matches.split(" ")  # Turn it into a list
-            language_matches = [x.strip(' ') for x in language_matches]  # Remove extra spaces
-            language_matches = [x for x in language_matches if x]  # Remove empty strings. This is now a list.
-
-            final_match_codes = []  # This is the final determination of language codes for the database
-            final_match_names = []
-            for match in language_matches:
-                converted_result = converter(match)  # This will return a tuple.
-                if converted_result[3] is None and len(converted_result[0]) != 4:
-                    # There is no country specific code and this is not a script.
-                    match_code = converted_result[0]  # Should get the code from each
-                elif len(converted_result[0]) == 4:  # This is a script
-                    match_code = "unknown-{}".format(converted_result[0])  # This is the format for the database
-                else:  # This is a language-COUNTRY combo
-                    match_code = "{}-{}".format(converted_result[0], converted_result[3])  # language-Country
-
-                if "multiple" in match.lower():
-                    match_code = "multiple"
-                    match_name = "Multiple Languages"
-                elif 'meta' in match.lower():
-                    match_code = "meta"
-                    match_name = 'Meta'
-                elif 'community' in match.lower():
-                    match_code = "community"
-                    match_name = 'Community'
-                else:
-                    match_name = converted_result[1]
-                    if "unknown-" in match_code:
-                        match_name += " (Script)"  # This is to disambiguate Arabic from Arabic script, for example
-                final_match_codes.append(match_code)
-                final_match_names.append(match_name)
             logger.info("[ZW] Messages: New subscription request from u/{}.".format(mauthor))
-            final_match_codes = list(filter(None, final_match_codes))  # Delete blank ones just in case.
-            final_match_codes = [x for x in final_match_codes if x != 'en']
-            # Remove English... We don't need to write that to the DB
-            final_match_codes = list(set(final_match_codes))
-            # remove duplicates for codes only, we keep the names so they don't get confused
-            final_match_names = [x for x in final_match_names if x]
-            # Remove any blank/unrecognized languages from the final list.
 
-            if len(final_match_codes) == 0:
+            # This gets a list of language codes from the message body.
+            language_matches = language_list_splitter(mbody)
 
-                message.reply(MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER)
+            if len(language_matches) == 0:  # There are no valid codes to subscribe.
+                message.reply(MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER)  # Reply to user.
                 logger.info("[ZW] Messages: Subscription languages listed are not valid.")
-            else:
-                for code in final_match_codes:
-                    # Here's some code to check if user already exists
-                    # True if it's already there, False, if not.
-                    is_there = notifier_duplicate_checker(code, mauthor)
-                    if not is_there:  # There isn't already an entry for it in there
-                        to_commit = (code, mauthor)
-                        cursor_main.execute("INSERT INTO notify_users VALUES (? , ?)", to_commit)
-                        conn_main.commit()
+            else:  # There are valid codes. Let's insert them into our database and reply with a confirmation message.
 
-                # Try to get a custom thank you phrase, often in the language that was subscribed to.
-                # It will default to 'Thank you' if that phrase is not recorded in the main language dictionary.
-                thanks_phrase = MAIN_LANGUAGES.get(final_match_codes[0], {}).get('thanks', 'Thank you')
+                final_match_names = []
 
-                main_body = thanks_phrase + "! You have been subscribed to r/translator notifications for:\n\n* {}"
-                main_body = main_body.format("\n* ".join(final_match_names))
+                # Insert the relevant codes.
+                notifier_language_list_editer(language_matches, mauthor, 'insert')
 
-                try:
-                    # We consult the wiki to see how often results come in for the first language.
-                    first_subscribed_code = final_match_codes[0]
-                    first_subscribed_language_name = converter(first_subscribed_code)[1]
-                    freq_phrase = str(messaging_language_frequency(first_subscribed_language_name)[0]) + "\n\n"
-                except TypeError:  # There are no statistics for it. The thing will return NONE
-                    freq_phrase = ""  # Don't put anything.
-                except prawcore.exceptions.BadRequest:  # eh, weird code... probably has a dash
-                    freq_phrase = ""  # Don't put anything.
+                # Get the language names of those codes.
+                for code in language_matches:
+                    final_match_names.append(converter(code)[1])
 
-                message_body = "{}\n\n{}To see all your subscribed notifications, please click the 'Status' link below."
-                message_body = message_body.format(main_body, freq_phrase)
-                message.reply(message_body + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
+                # Add the various components of the reply.
+                thanks_phrase = MAIN_LANGUAGES.get(language_matches[0], {}).get('thanks', 'Thank you')
+                bullet_list = "\n* ".join(final_match_names)
+                frequency_table = messaging_language_frequency_table(language_matches)
+
+                # Pull it all together with the template.
+                main_body = MSG_SUBSCRIBE.format(thanks_phrase, bullet_list, frequency_table)
+
+                # Reply to the subscribing user.
+                message.reply(main_body + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
                 logger.info("[ZW] Messages: Added notification subscriptions for u/" + mauthor + ".")
-                action_counter(len(final_match_codes), "Subscriptions")
-        elif "unsubscribe" in msubject:  # User wants to unsubscribe
+                action_counter(len(language_matches), "Subscriptions")
+
+        elif "unsubscribe" in msubject:  # User wants to unsubscribe from notifications.
             logger.info("[ZW] Messages: New unsubscription request from u/{}.".format(mauthor))
-            language_matches = mbody.rpartition(':')[-1]  # Here we process the actual message body, returns a string
-            if 'all' in language_matches.lower()[0:5]:  # User wants to unsubscribe from everything.
-                '''
-                final_match_codes = []
-                # Let's add code to see which ones they were first subscribed to.
-                sql_stat = "SELECT * FROM notify_users WHERE username = '{}'".format(mauthor)
-                # We try to retrieve the languages the user is subscribed to.
-                cursor_main.execute(sql_stat)
-                all_subscriptions = cursor_main.fetchall()  # Returns a list of lists, with both code and the username
-                for subscription in all_subscriptions:
-                    final_match_codes.append(subscription[0])  # We only want the language codes (no need the username).
-                '''
+
+            # This gets a list of language codes from the message body.
+            language_matches = language_list_splitter(mbody)
+
+            # Iterate over the results.
+            if 'all' in language_matches:  # User wants to unsubscribe from everything.
+
                 # Delete the user from the database.
-                sql_del = "DELETE FROM notify_users WHERE username = ?"
-                cursor_main.execute(sql_del, (mauthor,))
-                conn_main.commit()
+                notifier_language_list_editer(language_matches, mauthor, 'purge')
 
                 # Send the reply.
                 message.reply(MSG_UNSUBSCRIBE_ALL.format('all', MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER)
+                action_counter(1, "Unsubscriptions")
+            elif len(language_matches) == 0:  # There are no valid codes to unsubscribe them from.
+                # Format the error reply message
+                message.reply(MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER)
+                logger.info("[ZW] Messages: Unsubscription languages listed are invalid. Replied w/ more info.")
 
             else:  # Should return a list of specific languages the person doesn't want.
-                language_matches = language_matches.split(",")  # Turn it into a list
-                language_matches = [x.strip(' ') for x in language_matches]  # Remove extra spaces
-                final_match_codes = []  # This is the final determination of language codes for the database
+
                 final_match_names = []
-                for match in language_matches:
-                    converted_result = converter(match)  # This will return a tuple.
-                    if converted_result[3] is None and len(converted_result[0]) != 4:
-                        # There is no country specific code and this is not a script.
-                        match_code = converted_result[0]  # Should get the code from each
-                    elif len(converted_result[0]) == 4:  # This is a script
-                        match_code = "unknown-{}".format(converted_result[0])  # This is the format for the database
-                    else:  # This is a language-COUNTRY combo
-                        match_code = "{}-{}".format(converted_result[0], converted_result[3])  # language-Country
-                    if "multiple" in match.lower():
-                        match_code = "multiple"
-                    match_name = converted_result[1]
-                    final_match_codes.append(match_code)
-                    final_match_names.append(match_name)
-                final_match_codes = list(filter(None, final_match_codes))  # Delete blank ones
-                if len(final_match_codes) == 0:
-                    # Format the error reply message
-                    message.reply(MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER)
-                    logger.info("[ZW] Messages: Unsubscription languages listed are invalid. Replied w/ more info.")
-                else:
-                    # Iterate over the included codes.
-                    for code in final_match_codes:
-                        sql_del = "DELETE FROM notify_users WHERE language_code = ? and username = ?"
-                        cursor_main.execute(sql_del, (code, mauthor))
-                        conn_main.commit()
 
-                    # Join the list into a string, and fix that the curly braces could cause issues
-                    final_match_string = ", ".join(final_match_names)
+                # Delete the relevant codes.
+                notifier_language_list_editer(language_matches, mauthor, 'delete')
 
-                    # Format the reply message.
-                    message.reply(MSG_UNSUBSCRIBE_ALL.format(final_match_string, MSG_SUBSCRIBE_LINK) +
-                                  BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
-                    logger.info("[ZW] Messages: Removed notification subscriptions for u/" + mauthor + ".")
-                    action_counter(len(final_match_codes), "Unsubscriptions")
+                # Get the language names of those codes.
+                for code in language_matches:
+                    final_match_names.append(converter(code)[1])
+
+                # Join the list into a string that is bulleted.
+                bullet_list = "\n* ".join(final_match_names)
+
+                # Format the reply message.
+                message.reply(MSG_UNSUBSCRIBE_ALL.format(bullet_list, MSG_SUBSCRIBE_LINK) +
+                              BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
+                logger.info("[ZW] Messages: Removed notification subscriptions for u/" + mauthor + ".")
+                action_counter(len(language_matches), "Unsubscriptions")
+
         elif "ping" in msubject:
             logger.info("[ZW] Messages: New status check from u/" + mauthor + ".")
             to_post = "Ziwen is running nominally.\n\n"
-            if is_mod(mauthor):  # New status check from moderators
-                to_post += record_retrieve_error_log()  # Get the last two recorded error entries
+
+            # Determine if user is a moderator.
+            if is_mod(mauthor):  # New status check from moderators.
+                to_post += record_retrieve_error_log()  # Get the last two recorded error entries for debugging.
                 if len(to_post) > 10000:  # If the PM is too long, shorten it.
                     to_post = to_post[0:9750]
             else:  # Ping from a regular user.
                 pass
+
+            # Reply to user.
             message.reply(to_post + BOT_DISCLAIMER)
-            logger.info("[ZW] Messages: Replied with status information.")
+            logger.info("[ZW] Messages: Replied with ping call.")
+
         elif "status" in msubject:
             logger.info("[ZW] Messages: New status request from u/" + mauthor + ".")
             final_match_codes = []
             final_match_names = []
-            sql_stat = "SELECT * FROM notify_users WHERE username = ?"
 
             # We try to retrieve the languages the user is subscribed to.
+            sql_stat = "SELECT * FROM notify_users WHERE username = ?"
             cursor_main.execute(sql_stat, (mauthor,))
             all_subscriptions = cursor_main.fetchall()  # Returns a list of lists w/ the language code & the username
             for subscription in all_subscriptions:
@@ -2923,6 +2952,7 @@ def ziwen_messages():
                     elif "unknown-" in code:  # For scripts
                         match_name += " (Script)"
                     final_match_names.append(match_name)
+
                 # De-dupe and sort the returned languages.
                 final_match_names = list(set(final_match_names))  # Remove duplicates
                 final_match_names = sorted(final_match_names, key=str.lower)  # Alphabetize
@@ -2943,52 +2973,50 @@ def ziwen_messages():
 
             action_counter(1, "Status checks")
             message.reply(compilation + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
-        elif "add" in msubject and is_mod(mauthor):  # Mod manually adding people
+
+        elif "add" in msubject and is_mod(mauthor):  # Mod manually adding people to the notifications database.
             logger.info("[ZW] Messages: New username addition message from moderator u/{}.".format(mauthor))
-            username = mbody.split("USERNAME:", 1)[1]
-            username = username.split("LANGUAGES", 1)[0].strip()  # Get the username (no u/)
-            language_matches = mbody.rpartition('LANGUAGES:')[-1].strip()
-            if "," in language_matches:  # This is the regular syntax, comma split
-                language_matches = language_matches.split(", ")  # Turn it into a list
-            else:  # there were no commas. 
-                language_matches = [language_matches]
 
-            final_match_codes = []
+            # Get the username of the user we want to add to the database.
+            add_username = mbody.split("USERNAME:", 1)[1]
+            add_username = add_username.split("LANGUAGES", 1)[0].strip()  # Get the username (no u/)
 
-            for match in language_matches:  # Process their relevant codes
-                converted_result = converter(match)  # This will return a tuple.
-                match_code = converted_result[0]  # Get just the code
-                final_match_codes.append(match_code)
-            for code in final_match_codes:  # Actually add the codes into the database
-                to_commit = (code, username)
-                cursor_main.execute("INSERT INTO notify_users VALUES (?, ?)", to_commit)
-                conn_main.commit()
+            # Split off the languages part.
+            language_component = mbody.rpartition('LANGUAGES:')[-1].strip()
 
-            final_match_codes_print = ", ".join(final_match_codes)
+            # This gets a list of language codes from the message body.
+            language_matches = language_list_splitter(language_component)
+
+            # Insert the relevant codes.
+            notifier_language_list_editer(language_matches, add_username, 'insert')
+
+            # Reply to moderator.
+            match_codes_print = ", ".join(language_matches)
             addition_message = "Added the language codes **{}** for u/{} into the notifications database."
-            message.reply(addition_message.format(final_match_codes_print, username))
-        elif "remove" in msubject and is_mod(mauthor):  # Mod manually removing people (ability to do remotely)
+            message.reply(addition_message.format(match_codes_print, add_username))
+
+        elif "remove" in msubject and is_mod(mauthor):  # Mod manually removing people from the notifications database.
             logger.info("[ZW] Messages: New username removal message from moderator u/{}.".format(mauthor))
-            username = mbody.split("USERNAME:", 1)[1].strip()
 
-            final_match_codes = []
+            subscribed_codes = []
 
-            sql_stat = "SELECT * FROM notify_users WHERE username = ?"
+            # Get the username of the user we want to add to the database.
+            remove_username = mbody.split("USERNAME:", 1)[1].strip()
 
             # We try to retrieve the languages the user is subscribed to.
-            cursor_main.execute(sql_stat, (username,))
+            cursor_main.execute("SELECT * FROM notify_users WHERE username = ?", (remove_username,))
             all_subscriptions = cursor_main.fetchall()  # Returns a list of lists with both the code and the username.
             for subscription in all_subscriptions:
-                final_match_codes.append(subscription[0])  # We only want the language codes (no need the username).
+                subscribed_codes.append(subscription[0])  # We only want the language codes (no need the username).
 
-            # Actually delete from database
-            cursor_main.execute("DELETE FROM notify_users WHERE username = ?", (username,))
-            conn_main.commit()
+            # Actually delete the username from database.
+            notifier_language_list_editer([], remove_username, 'purge')
 
             # Send a message back to the moderator confirming this.
-            final_match_codes_print = ", ".join(final_match_codes)
+            final_match_codes_print = ", ".join(subscribed_codes)
             removal_message = "Removed the subscriptions for u/{} from the notifications database. (**{}**)"
-            message.reply(removal_message.format(username, final_match_codes_print))
+            message.reply(removal_message.format(remove_username, final_match_codes_print))
+
         elif "points" in msubject:
             logger.info("[ZW] Messages: New points status request from u/{}.".format(mauthor))
 
@@ -4750,7 +4778,6 @@ def reference_search(lookup_term):
 
         if reference_results is not None:  # We found a cached value for this language
             reference_cached_info = reference_results[1]
-            print(reference_cached_info)
             logger.info(
                 "[ZW] Reference: Retrieved the cached reference information for {}.".format(language_lookup_code))
             return reference_cached_info
@@ -5318,7 +5345,7 @@ def ziwen_posts():
                     logger.warning("[ZW] Posts: Unable to process YouTube link at {}. Non-listed error.".format(ourl))
             if len(oselftext) > 1400:  # This changes the CSS text to indicate if it's a long wall of text
                 logger.info("[ZW] Posts: This is a long piece of text.")
-                if final_css_text is not None:  # Let's leave None flair text alone
+                if final_css_text is not None and post.author.name != USERNAME:  # Let's leave None flair text alone
                     final_css_text += " (Long)"
                     post.reply(COMMENT_LONG + BOT_DISCLAIMER)
 
