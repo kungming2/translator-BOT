@@ -8,11 +8,11 @@
 # An addition to the bot footer that contains a link to check status and to unsubscribe from notifications.
 MSG_UNSUBSCRIBE_BUTTON = (" ^| ^[Points](https://www.reddit.com/message/compose?to=translator-BOT&subject=Points"
                           "&message=%23%23+How+many+points+have+I+earned?) ^| ^[Status](https://www.reddit.com/message/"
-                          "compose?to=translator-BOT&subject=Status&message=%23%23+What+languages+am+I+subscribed+to?) ^| "
-                          "^[Unsubscribe](https://www.reddit.com/message/compose?to=translator-BOT&subject=Unsubscribe"
-                          "&message=%23%23+Please+unsubscribe+me+from+the+following+languages.%0A%23%23+List+language+"
-                          "codes+or+names+after+the+colon+below+and+separate+languages+with+commas.+%28List+ALL+to+"
-                          "completely+unsubscribe%29%0ALANGUAGES%3A+ALL)")
+                          "compose?to=translator-BOT&subject=Status&message=%23%23+What+languages+am+I+subscribed+to?)"
+                          " ^| ^[Unsubscribe](https://www.reddit.com/message/compose?to=translator-BOT&subject="
+                          "Unsubscribe&message=%23%23+Please+unsubscribe+me+from+the+following+languages.%0A%23%23+"
+                          "List+language+codes+or+names+after+the+colon+below+and+separate+languages+with+commas."
+                          "+%28List+ALL+to+completely+unsubscribe%29%0ALANGUAGES%3A+ALL)")
 
 # An addition to the notifications message about NSFW content
 MSG_NSFW_WARNING = "\n\n(Just FYI, this *is* an NSFW post.)"
@@ -61,7 +61,9 @@ Hey there u/{0},
 Thanks for submitting to r/translator! It looks like you left a short "thank you" comment on **[your post]({1})**. 
 Consequently, I've automatically marked your request as translated. 
 
-If this is in error, please comment `!reset` on your post or message the r/translator moderators [here](https://www.reddit.com/message/compose?to=r/translator&subject=Please+reset+this+post&message=https://www.reddit.com{1}). Thank you.
+If this is in error, please comment `!reset` on your post or message the r/translator moderators \
+[here](https://www.reddit.com/message/compose?to=r/translator&subject=Please+reset+this+post&message=\
+https://www.reddit.com{1}). Thank you.
 '''
 MSG_NOTIFY = '''
 Hey there u/{username},
@@ -84,14 +86,27 @@ MSG_NO_POINTS = ("You haven't earned any points on r/translator yet. "
 MSG_LANGUAGE_FREQUENCY = ("For your reference, our [statistics](https://www.reddit.com/r/translator/wiki/{})"
                           " indicate that approximately **{} requests are made per {}** for {}.")
 MSG_SUBSCRIBE = ("{}! You have been subscribed to r/translator notifications for:\n\n* {}"
-                 "\n\nFor your reference, here are some estimated statistics on the frequency of "
+                 "\n\nFor your reference, here are some statistics on the estimated frequency of "
                  "requests for those language(s):\n\n{}\n\n"
                  "To see all your subscribed notifications, please click the 'Status' link below.")
-MSG_UNSUBSCRIBE_ALL = ("You have been unsubscribed from r/translator notifications for: {} \n\n"
+MSG_UNSUBSCRIBE_ALL = ("You have been unsubscribed from r/translator notifications for:\n\n* {} \n\n"
                        "To resubscribe, please [click here]({}).")
+MSG_RESTORE_LINK_FAIL = "Sorry, but due to Reddit limitations the `!restore` function only works with text posts."
+MSG_RESTORE_NOT_ELIGIBLE = ("Sorry, but your username does not appear on the list of translators and/or notified "
+                            "individuals for this post. If you had previously made a translation, please mark it as "
+                            "translated with the `!translated` command, and then try again.")
+MSG_RESTORE_TEXT_FAIL = "Sorry, but I couldn't find any data on [Pushshift](https://pushshift.io/) for [this post]({})."
+MSG_RESTORE_TEXT_TEMPLATE= '''
+*The following text was retrieved for [this post]({}) using data from [Pushshift](https://pushshift.io/)*:
+
+---
+
+{}
+'''
 
 # A comment that is added to long YouTube videos or long text posts.
-COMMENT_LONG = ("**Your translation request appears to be very long.** It may take a while for a translator to respond. "
+COMMENT_LONG = ("**Your translation request appears to be very long.** "
+                "It may take a while for a translator to respond. "
                 "Consider narrowing the scope of your request or asking for a synopsis or summary instead.\n\n*Note: "
                 "Your post has NOT been removed. "
                 "This is merely an automated advisory notice and no action is required on your part.*")
@@ -118,11 +133,13 @@ There are more focused communities for English-only requests.
 
 **Our Recommendations**
 
-* Answers on English language learning, English video transcriptions, or word explanations: **r/EnglishLearning** or **r/Grammar**
+* Answers on English language learning, English video transcriptions, or word explanations: **r/EnglishLearning** or \
+**r/Grammar**
 * Proofreading of written English content: **r/Proofreading** (please note their sidebar rules for submissions.)
 * Decipherment of illegible handwriting: **r/handwriting** 
 
-* If you're requesting the *review of a translation*, please include the source language name and its original text in your resubmitted post to r/translator. 
+* If you're requesting the *review of a translation*, please include the source language name and its original text \
+in your resubmitted post to r/translator. 
 '''
 COMMENT_BAD_TITLE = '''
 Hey there, u/{author}!
@@ -136,9 +153,11 @@ We're happy to help you translate your request, but this post has been automatic
 
 **What should you do now?**
 
-* [Try resubmitting your request with the suggested title text below](https://www.reddit.com/r/translator/submit?title={new_url}):
+* [Try resubmitting your request with the suggested title text below]\
+(https://www.reddit.com/r/translator/submit?title={new_url}):
 * {new_title}
-* Should you need more information, please read r/translator's [formatting guidelines](https://www.reddit.com/r/translator/wiki/request-guidelines#wiki_how_should_i_submit_requests_for_translations.3F).
+* Should you need more information, please read r/translator's [formatting guidelines]\
+(https://www.reddit.com/r/translator/wiki/request-guidelines#wiki_how_should_i_submit_requests_for_translations.3F).
 '''
 COMMENT_CLAIM = '''
 **Claimer:** u/{claimer} at {time} UTC
@@ -162,14 +181,17 @@ COMMENT_UNKNOWN = '''
 COMMENT_DEFINED_MULTIPLE = """
 **It looks like you have submitted a translation request for multiple defined languages.** 
 
-* Translators can use the `!translated` and `!doublecheck` status commands on this post by including the language name and command in their comment.
+* Translators can use the `!translated` and `!doublecheck` status commands on this post by including the \
+language name and command in their comment.
 * For example, if one is making a French translation, please include `French` and the command in the text. 
 * This post's flair will automatically update to reflect the state of its requested languages.
 
 *Note: Your post has NOT been removed. This is merely an automated advisory notice.*
 """
 COMMENT_ADVANCED_IDENTIFY_ERROR = '''
-Sorry, but [advanced *!identify* commands](https://www.reddit.com/r/translatorBOT/wiki/ziwen#wiki_advanced_.21identify) require either a [three-letter ISO 639-3](https://en.wikipedia.org/wiki/List_of_ISO_639-3_codes) or [four-letter ISO 15924 code](https://en.wikipedia.org/wiki/ISO_15924#List_of_codes).
+Sorry, but [advanced *!identify* commands](https://www.reddit.com/r/translatorBOT/wiki/ziwen#wiki_advanced_.21identify)\
+ require either a [three-letter ISO 639-3](https://en.wikipedia.org/wiki/List_of_ISO_639-3_codes) or \
+ [four-letter ISO 15924 code](https://en.wikipedia.org/wiki/ISO_15924#List_of_codes).
 
 Here are some common ISO 15924 codes:
 
@@ -183,7 +205,7 @@ Hebrew | *Hebr*
 Latin | *Latn*
 Nastaliq | *Aran*
 '''
-COMMENT_VERIFICATION_RESPONSE = "Thanks, u/{}. I've taken note of your verification request."
+COMMENT_VERIFICATION_RESPONSE = "{}, u/{}. I've taken note of your verification request."
 COMMENT_REFERENCE_HEADER = "*Another member of our community has identified your translation request as:*\n\n"
 COMMENT_INVALID_REFERENCE = ("Sorry, but that doesn't look like anything to me. "
                              "Please enter a valid ISO 639-1 code, ISO 639-3 code, or language name to look up.")
@@ -218,7 +240,9 @@ REFERENCE_TEMPLATE_MAIN = '''## [{0}](https://www.ethnologue.com/language/{1})
 
 > {11}
 
-^Information ^from ^[Ethnologue](https://www.ethnologue.com/language/{1}) ^| ^[Glottolog](http://glottolog.org/glottolog?iso={1}) ^| ^[MultiTree](http://multitree.org/codes/{1}.html) ^| ^[ScriptSource](http://scriptsource.org/cms/scripts/page.php?item_id=language_detail&key={1}) ^| ^[Wikipedia]({10})
+^Information ^from ^[Ethnologue](https://www.ethnologue.com/language/{1}) ^| \
+^[Glottolog](http://glottolog.org/glottolog?iso={1}) ^| ^[MultiTree](http://multitree.org/codes/{1}.html) ^| \
+^[ScriptSource](http://scriptsource.org/cms/scripts/page.php?item_id=language_detail&key={1}) ^| ^[Wikipedia]({10})
 '''
 REFERENCE_TEMPLATE_OTHER = '''## [{0}](https://www.multitree.org/codes/{1})
 
@@ -234,7 +258,9 @@ REFERENCE_TEMPLATE_OTHER = '''## [{0}](https://www.multitree.org/codes/{1})
 
 > {5}
 
-^Information ^from ^[MultiTree](http://multitree.org/codes/{1}.html) ^| ^[Glottolog](http://glottolog.org/glottolog?iso={1}) ^| ^[ScriptSource](http://scriptsource.org/cms/scripts/page.php?item_id=language_detail&key={1}) ^| ^[Wikipedia]({4})
+^Information ^from ^[MultiTree](http://multitree.org/codes/{1}.html) ^| \
+^[Glottolog](http://glottolog.org/glottolog?iso={1}) ^| \
+^[ScriptSource](http://scriptsource.org/cms/scripts/page.php?item_id=language_detail&key={1}) ^| ^[Wikipedia]({4})
 '''
 
 '''WENYUAN RESPONSES'''
@@ -253,7 +279,6 @@ WY_MOD_NOTIFICATION_MESSAGE = '''
 
  Task | Status
 ------|-------
-[Actions Update](https://www.reddit.com/r/translatorBOT/wiki/actions) | {}
 [Status Update](https://www.reddit.com/r/translatorBOT/wiki/status) | {}
 File Backup | {}
 
@@ -276,7 +301,8 @@ WY_NEW_HEADER = '''
 *[Statistics](https://www.reddit.com/r/translator/wiki/statistics) for r/translator \
 provided by [Wenyuan](https://www.reddit.com/r/translatorBOT/wiki/wenyuan)*
 
-Year | Month | Total Requests | Percent of All Requests | Untranslated Requests | Translation Percentage | RI | View Translated Requests
+Year | Month | Total Requests | Percent of All Requests | Untranslated Requests | Translation Percentage | \
+RI | View Translated Requests
 -----|-------|------|------|------|------|----|------'''
 WY_STATUS_UPDATE = '''
 ### Due to {reason}, the bot will be down until around:
@@ -305,18 +331,20 @@ Total elapsed time                      | {} seconds
 '''ZIWEN STREAMER RESPONSES'''
 
 ZWS_COMMENT_XPOST = '''
-**OP:** u/{original_author} at {subreddit} ([Link]({cpermalink}))
+**OP:** u/{original_author} at r/{subreddit} ([Link]({cpermalink}))
 
 **Requester:** u/{requester}
 
-*This is a crossposted translation request and all images/text remain © of the OP. Either user listed above can comment* `!delete` *to remove this post if they wish.*
+*This is a crossposted translation request and all images/text remain © of the OP. Either user listed above can \
+comment* `!delete` *to remove this post if they wish.*
 
 *Please post any translations or commands here on r/translator.*
 '''
 ZWS_COMMENT_ALREADY_POSTED = "It appears that this link has already been posted as a translation request."
 ZWS_COMMENT_XPOST_THANKS = ("{}. I've [crossposted](https://www.reddit.com/r/translatorBOT/wiki/ziwen#"
                             "wiki_cross-posting) this link as a [{} translation request here]({}).")
-ZWS_COMMENT_WRONG_SUBREDDIT = "Sorry, but did you mean r/translator?\n\n^(Note: I can't detect edits.)"
+ZWS_COMMENT_WRONG_SUBREDDIT = ("Sorry, but r/translate is inactive. Did you mean r/translator?\n\n"
+                               "^(Note: I can't detect ninja edits.)")
 ZWS_COMMENT_ENGLISH_ONLY = ('It appears that this is an English-only "translation" crosspost request. English-only '
                             'posts are better suited for r/EnglishLearning.')
 ZWS_COMMENT_WRONG_XPOST_COMMENT = ("It appears that you're trying to crosspost a comment for translation, but your "
