@@ -3,15 +3,15 @@
 
 """Universal functions and variables for r/translator bots to use."""
 
-import os
-import sys
-import random
-import logging
 import json
+import logging
+import os
+import random
+import sys
 from time import strftime
 
 # Set up the directories based on the current location of the bots.
-script_directory = os.path.dirname(__file__)  # Fetch the absolute directory the script is in.
+script_directory = os.path.dirname(os.path.realpath(__file__))  # Fetch the absolute directory the script is in.
 script_directory += "/Data/"  # Where the main files are kept.
 SOURCE_FOLDER = script_directory
     
@@ -34,7 +34,7 @@ FILE_ADDRESS_MECAB = os.path.join(script_directory, "mecab-ipadic-neologd")  # F
 
 # Ziwen Markdown output files (text files for saving information).
 FILE_ADDRESS_ERROR = os.path.join(script_directory, "_log_error.md")
-FILE_ADDRESS_COUNTER = os.path.join(script_directory, "_log_counter.md")
+FILE_ADDRESS_COUNTER = os.path.join(script_directory, "_log_counter.json")
 FILE_ADDRESS_FILTER = os.path.join(script_directory, "_log_filter.md")
 FILE_ADDRESS_EVENTS = os.path.join(script_directory, "_log_events.md")
 
@@ -42,19 +42,19 @@ FILE_ADDRESS_EVENTS = os.path.join(script_directory, "_log_events.md")
 FILE_ADDRESS_STATISTICS = os.path.join(script_directory, "wy_statistics_output.md")
 FILE_ADDRESS_TITLE_LOG = os.path.join(script_directory, "wy_title_test_output.md")
 FILE_ADDRESS_WEEKLY_CHALLENGE = os.path.join(script_directory, "wy_weekly_challenge.md")
+FILE_ADDRESS_PORT = os.path.join(script_directory, "wy_port.json")
 
 # Huiban database files (unused for now).
 FILE_ADDRESS_NOTIFY_EXCHANGE = os.path.join(script_directory, "hb_exchangelist.db")
 FILE_ADDRESS_HUIBAN_OLDPOSTS = os.path.join(script_directory, "hb_processed.db")
 
 # These are keywords in errors thrown from Internet connection problems. We don't need to log those.
-CONNECTION_KEYWORDS = ["socket.timeout", "ssl.SSLError", "ServerError", "400 HTTP", "socket.gaierror", "404 HTTP",
-                       "Errno 113", "CertificateError", "Error 503", "ProtocolError", "ConnectionRefusedError",
-                       "503 HTTP response", ' 404 HTTP response', '504 HTTP response', '200 HTTP response',
-                       '403 HTTP response', '401 HTTP response', "500", "502 HTTP response"]
+CONNECTION_KEYWORDS = ['200 HTTP', '400 HTTP', '401 HTTP', '403 HTTP', '404 HTTP', '404 HTTP', '500 HTTP', '502 HTTP',
+                       '503 HTTP', '504 HTTP', 'CertificateError', 'ConnectionRefusedError', 'Errno 113', 'Error 503',
+                       'ProtocolError', 'ServerError', 'socket.gaierror', 'socket.timeout', 'ssl.SSLError']
 
 # Testing subreddits for the bot. (mostly to test Ziwen Streamer's crossposting function)
-TESTING_SUBREDDITS = ["r/testingground4bots", "r/test", "r/andom"]
+TESTING_SUBREDDITS = ["testingground4bots", "test", "andom"]
 
 # Footers for the comments that the bots make.
 BOT_DISCLAIMER = ("\n\n---\n^Ziwen: ^a ^bot ^for ^r/translator ^| "
@@ -130,7 +130,7 @@ def get_random_useragent():
 
     # Select a random one from the list.
     random_ua = random.choice(ua_stored)
-    accept_string = "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+    accept_string = "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
     headers = {'User-Agent': random_ua, 'Accept': accept_string}
 
     return headers
@@ -183,48 +183,22 @@ def action_counter(messages_number, action_type):
 
     # Format the current day as a string.
     current_day = strftime("%Y-%m-%d")
-    current_test = "{} | {}".format(strftime("%Y-%m-%d"), action_type)  # The current day as a formatted string
 
     # Open the file for reading and access its content.
     f = open(FILE_ADDRESS_COUNTER, 'r+', encoding='utf-8')
-    current_logs_lines = f.read()  # Take the file's current contents
+    current_actions_dict = json.loads(f.read())  # Take the file's current contents
     f.close()  # Close the file
 
-    if current_test in current_logs_lines:  # This day has been recorded.
-
-        first_part = current_logs_lines.split(current_test)[0]  # This is the part preceding our entry
-        second_part = current_logs_lines.split(current_test)[1]  # Includes number of entry and after
-
-        active_line = second_part.split("\n", 1)[0]  # The line our number is on
-        try:  # If there's stuff after the current line
-            second_part_after = second_part.split("\n", 1)[1]  # This is the content after our entry. One piece.
-            # print(second_part_after)
-        except IndexError:  # This must be end of file. Return nothing.
-            second_part_after = ""
-
-        latest_before = active_line.split(" | ")[0]  # Mostly spaces for proper formatting.
-        last_recorded_number = int(active_line.split(" | ")[-1])  # The last counter for this particular item.
-        new_recorded_total = last_recorded_number + new_messages_number  # The final total for today
-
-        new_entry = "{}{} | {}".format(current_test, latest_before,
-                                       str(new_recorded_total))  # The formatted line for writing.
-        if second_part_after != "":  # This is not end of file.
-            new_logs_lines = "{}{}\n{}".format(first_part, new_entry, second_part_after)  # Reconstitute the file.
+    if current_day in current_actions_dict:  # This day has been recorded.
+        if action_type in current_actions_dict[current_day]:
+            current_actions_dict[current_day][action_type] += new_messages_number
         else:
-            new_logs_lines = "{}{}{}".format(first_part, new_entry, second_part_after)  # Reconstitute the file
-    else:  # This action type has NOT been recorded yet today. Start from 0.
-        new_recorded_total = new_messages_number
-        new_entry = "\n{} | {} | {}".format(current_day, action_type.ljust(27),
-                                            str(new_recorded_total))  # Format the last line as an entry.
-        new_logs_lines = current_logs_lines + new_entry
+            current_actions_dict[current_day][action_type] = new_messages_number
+    else:  # This day hasn't been recorded.
+        current_actions_dict[current_day] = {action_type: new_messages_number}
 
-    # Delete the contents of the counter file by opening it and then closing it.
-    open(FILE_ADDRESS_COUNTER, "w", encoding='utf-8').close()
-
-    # Last time, open the file for writing the contents en masse.
-    f = open(FILE_ADDRESS_COUNTER, 'w', encoding='utf-8')
-    f.write(new_logs_lines)
-    f.close()
+    with open(os.path.join(FILE_ADDRESS_COUNTER), 'w', encoding="utf-8") as fp:
+        json.dump(current_actions_dict, fp, sort_keys=True, indent=4)
 
     return
 
