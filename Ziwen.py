@@ -13,20 +13,17 @@ import sqlite3  # For processing and accessing the databases.
 import time
 import traceback  # For documenting errors that are encountered.
 
-import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
-import prawcore  # The base module praw for error logging.
-
+import googlesearch
 import jieba  # Segmenter for Mandarin Chinese.
 import MeCab  # Advanced segmenter for Japanese.
+import pafy  # Gets YouTube video length.
+import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
+import prawcore  # The base module praw for error logging.
+import requests
 import romkan  # Needed for automatic Japanese romaji conversion.
 import tinysegmenter  # Basic segmenter for Japanese; not used on Windows.
-
-import googlesearch
-import pafy  # Gets YouTube video length.
-import requests
-import youtube_dl  # Needed for some exception logging, also used by pafy.
 import wikipedia  # Needed to include Wikipedia content.
-
+import youtube_dl  # Needed for some exception logging, also used by pafy.
 from bs4 import BeautifulSoup as Bs
 from lxml import html
 from mafan import simplify, tradify
@@ -37,17 +34,19 @@ from _config import *
 from _responses import *
 from Data import _ko_romanizer
 
-'''
+"""
 UNIVERSAL VARIABLES
 
 These variables (all denoted by UPPERCASE names) are variables used by many functions in Ziwen. These are important
 as they define many of the basic functions of the bot.
-'''
+"""
 
-BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.8.11'
-USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator. '
-              'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
+BOT_NAME = "Ziwen"
+VERSION_NUMBER = "1.8.11"
+USER_AGENT = (
+    "{} {}, a notifications messenger, general commands monitor, and moderator for r/translator. "
+    "Written and maintained by u/kungming2.".format(BOT_NAME, VERSION_NUMBER)
+)
 SUBREDDIT = "translator"
 TESTING_MODE = False
 
@@ -64,29 +63,69 @@ MESSAGES_OKAY = True
 # A number that defines the soft number of notifications an individual will get in a month *per language*.
 NOTIFICATIONS_LIMIT = 100
 
-'''KEYWORDS LISTS'''
+"""KEYWORDS LISTS"""
 # These are the the commands on r/translator.
-KEYWORDS = ["!page:", "`", "!missing", "!translated", "!id:", "!set:", "!note:", "!reference:", "!search:",
-            "!doublecheck", "!identify:", '!translate', '!translator', '!delete', '!claim',
-            '!reset', '!long', '!restore']
+KEYWORDS = [
+    "!page:",
+    "`",
+    "!missing",
+    "!translated",
+    "!id:",
+    "!set:",
+    "!note:",
+    "!reference:",
+    "!search:",
+    "!doublecheck",
+    "!identify:",
+    "!translate",
+    "!translator",
+    "!delete",
+    "!claim",
+    "!reset",
+    "!long",
+    "!restore",
+]
 # These are the words that count as a 'short thanks' from the OP.
 # If a message includes them, the bot won't message them asking them to thank the translator.
-THANKS_KEYWORDS = ["thank", "thanks", "tyvm", "tysm", "thx", "danke", "arigato", "gracias", "appreciate", "solved"]
+THANKS_KEYWORDS = [
+    "thank",
+    "thanks",
+    "tyvm",
+    "tysm",
+    "thx",
+    "danke",
+    "arigato",
+    "gracias",
+    "appreciate",
+    "solved",
+]
 # These are keywords that if included with `!translated` will give credit to the parent commentator.
-VERIFYING_KEYWORDS = ["concur", "agree", "verify", "verified", "approve", "is correct", "is right", "well done",
-                      "well-done", "good job", "marking", "good work"]
+VERIFYING_KEYWORDS = [
+    "concur",
+    "agree",
+    "verify",
+    "verified",
+    "approve",
+    "is correct",
+    "is right",
+    "well done",
+    "well-done",
+    "good job",
+    "marking",
+    "good work",
+]
 # A cache for language multipliers, generated each instance of running.
 # Allows us to access the wiki less and speed up the process.
 CACHED_MULTIPLIERS = {}
 
 
-'''
+"""
 CONNECTIONS TO REDDIT & SQL DATABASES
 
 Ziwen relies on several SQLite3 files to store its data and uses PRAW to connect to Reddit's API.
-'''
+"""
 
-logger.info('[ZW] Startup: Accessing SQL databases...')
+logger.info("[ZW] Startup: Accessing SQL databases...")
 
 # This connects to the local cache used for detecting edits and the multiplier cache for points.
 conn_cache = sqlite3.connect(FILE_ADDRESS_CACHE)
@@ -102,29 +141,38 @@ cursor_ajo = conn_ajo.cursor()
 
 if len(sys.argv) > 1:  # This is a new startup with additional parameters for modes.
     specific_mode = sys.argv[1].lower()
-    if specific_mode == 'test':
+    if specific_mode == "test":
         TESTING_MODE = True
         SUBREDDIT = "trntest"
         MESSAGES_OKAY = False
-        logger.info("[ZW] Startup: Starting up in TESTING MODE for r/{}...".format(SUBREDDIT))
+        logger.info(
+            "[ZW] Startup: Starting up in TESTING MODE for r/{}...".format(SUBREDDIT)
+        )
 
 # Connecting to the Reddit API via OAuth.
-logger.info('[ZW] Startup: Logging in as u/{}...'.format(USERNAME))
-reddit = praw.Reddit(client_id=ZIWEN_APP_ID, client_secret=ZIWEN_APP_SECRET, password=PASSWORD, user_agent=USER_AGENT,
-                     username=USERNAME)
+logger.info("[ZW] Startup: Logging in as u/{}...".format(USERNAME))
+reddit = praw.Reddit(
+    client_id=ZIWEN_APP_ID,
+    client_secret=ZIWEN_APP_SECRET,
+    password=PASSWORD,
+    user_agent=USER_AGENT,
+    username=USERNAME,
+)
 r = reddit.subreddit(SUBREDDIT)
-logger.info('[ZW] Startup: Initializing {} {} for r/{} with languages module {}.'.format(BOT_NAME, VERSION_NUMBER,
-                                                                                         SUBREDDIT,
-                                                                                         VERSION_NUMBER_LANGUAGES))
+logger.info(
+    "[ZW] Startup: Initializing {} {} for r/{} with languages module {}.".format(
+        BOT_NAME, VERSION_NUMBER, SUBREDDIT, VERSION_NUMBER_LANGUAGES
+    )
+)
 
-'''
+"""
 MAINTENANCE FUNCTIONS
 
 These functions are run at Ziwen's startup and also occasionally in order to refresh their information. Most of them
 fetch data from r/translator itself or r/translatorBOT for internal variables.
 
 Maintenance functions are all prefixed with `maintenance` in their name.
-'''
+"""
 
 
 def maintenance_template_retriever():
@@ -142,7 +190,7 @@ def maintenance_template_retriever():
     # Access the templates on the subreddit.
     for template in r.flair.link_templates:
         css_associated_code = template["css_class"]
-        new_template_ids[css_associated_code] = template['id']
+        new_template_ids[css_associated_code] = template["id"]
 
     # Return a dictionary, if there's data, otherwise return an empty dictionary.
     if len(new_template_ids.keys()) != 0:
@@ -201,8 +249,9 @@ def maintenance_get_verified_thread():
     search_term = "title:verified AND flair:meta"
 
     # Note that even in testing ('trntest') we will still search r/translator for the thread.
-    search_results = reddit.subreddit('translator').search(search_term, time_filter='year',
-                                                           sort='new', limit=1)
+    search_results = reddit.subreddit("translator").search(
+        search_term, time_filter="year", sort="new", limit=1
+    )
 
     # Iterate over the results to get the ID.
     for post in search_results:
@@ -245,27 +294,27 @@ def maintenance_database_processed_cleaner():
     :return: Nothing.
     """
 
-    pruning_command = 'DELETE FROM oldcomments WHERE id NOT IN (SELECT id FROM oldcomments ORDER BY id DESC LIMIT ?)'
+    pruning_command = "DELETE FROM oldcomments WHERE id NOT IN (SELECT id FROM oldcomments ORDER BY id DESC LIMIT ?)"
     cursor_main.execute(pruning_command, [MAXPOSTS * 10])
     conn_main.commit()
 
     return
 
 
-'''
+"""
 AJO CLASS/FUNCTIONS
 
 The basic unit of Ziwen's functions is not an individual Reddit post on r/translator per se, but rather, an Ajo.
-An Ajo class (from Esperanto aĵo, meaning 'thing') is constructed from a Reddit post but is saved locally and contains 
-additional information that cannot be stored on Reddit's system. 
+An Ajo class (from Esperanto aĵo, meaning 'thing') is constructed from a Reddit post but is saved locally and contains
+additional information that cannot be stored on Reddit's system.
 In Ziwen, changes to a post's language, state, etc. are made first to the Ajo. Then a function within the class can
-determine its flair, flair text, and template. 
+determine its flair, flair text, and template.
 
 Note: Wenyuan (as of version 3.0) also uses Ajos for its statistics-keeping.
 
 External Ajo-specific/related functions are all prefixed with `ajo` in their name. The Ajo class itself contains several
 class functions.
-'''
+"""
 
 
 def ajo_defined_multiple_flair_assessor(flairtext):
@@ -287,12 +336,16 @@ def ajo_defined_multiple_flair_assessor(flairtext):
         # Get just the language code.
         language_code = " ".join(re.findall("[a-zA-Z]+", language))
 
-        if len(language_code) != len(language):  # There's a difference - maybe a symbol in DEFINED_MULTIPLE_LEGEND
+        if len(language_code) != len(
+            language
+        ):  # There's a difference - maybe a symbol in DEFINED_MULTIPLE_LEGEND
             for symbol in DEFINED_MULTIPLE_LEGEND:
                 if symbol in language:
-                    final_language_codes[language_code] = DEFINED_MULTIPLE_LEGEND[symbol]
+                    final_language_codes[language_code] = DEFINED_MULTIPLE_LEGEND[
+                        symbol
+                    ]
         else:  # No difference, must be untranslated.
-            final_language_codes[language_code] = 'untranslated'
+            final_language_codes[language_code] = "untranslated"
 
     return final_language_codes
 
@@ -347,10 +400,12 @@ def ajo_defined_multiple_comment_parser(pbody, language_names_list):
 
     detected_status = None
 
-    status_keywords = {KEYWORDS[2]: "missing",
-                       KEYWORDS[3]: "translated",
-                       KEYWORDS[9]: "doublecheck",
-                       KEYWORDS[14]: "inprogress"}
+    status_keywords = {
+        KEYWORDS[2]: "missing",
+        KEYWORDS[3]: "translated",
+        KEYWORDS[9]: "doublecheck",
+        KEYWORDS[14]: "inprogress",
+    }
 
     # Look for language names.
     detected_languages = language_mention_search(pbody)
@@ -390,11 +445,15 @@ def ajo_retrieve_script_code(script_name):
     codes_list = []
     names_list = []
 
-    csv_file = csv.reader(open(FILE_ADDRESS_ISO_ALL, "rt", encoding='utf-8'), delimiter=",")
+    csv_file = csv.reader(
+        open(FILE_ADDRESS_ISO_ALL, "rt", encoding="utf-8"), delimiter=","
+    )
     for row in csv_file:
         if len(row[0]) == 4:  # This is a script code. (the others are 3 characters. )
             codes_list.append(row[0])
-            names_list.append(row[2:][0])  # It is normally returned as a list, so we need to convert into a string.
+            names_list.append(
+                row[2:][0]
+            )  # It is normally returned as a list, so we need to convert into a string.
 
     if script_name in names_list:  # The name is in the code list
         item_index = names_list.index(script_name)
@@ -459,7 +518,9 @@ class Ajo:
     """
 
     # noinspection PyUnboundLocalVariable
-    def __init__(self, reddit_submission):  # This takes a Reddit Submission object and generates info from it.
+    def __init__(
+        self, reddit_submission
+    ):  # This takes a Reddit Submission object and generates info from it.
 
         if type(reddit_submission) is dict:  # Loaded from a file?
             logger.debug("[ZW] Ajo: Loaded Ajo from local database.")
@@ -485,7 +546,7 @@ class Ajo:
                 # Comment author is deleted
                 self.author = "[deleted]"
 
-            if reddit_submission.link_flair_css_class in ["multiple", 'app']:
+            if reddit_submission.link_flair_css_class in ["multiple", "app"]:
                 self.type = "multiple"
             else:
                 self.type = "single"
@@ -493,7 +554,9 @@ class Ajo:
             # oflair_text is an internal variable used to mimic the linkflair text.
             if reddit_submission.link_flair_text is None:  # There is no linkflair text.
                 oflair_text = "Generic"
-                self.is_identified = self.is_long = self.is_script = self.is_bot_crosspost = self.is_supported = False
+                self.is_identified = (
+                    self.is_long
+                ) = self.is_script = self.is_bot_crosspost = self.is_supported = False
             else:
                 if "(Long)" in reddit_submission.link_flair_text:
                     self.is_long = True
@@ -501,10 +564,14 @@ class Ajo:
                 else:
                     self.is_long = False
 
-                if reddit_submission.link_flair_css_class == "unknown":  # Check to see if there is a script classified.
+                if (
+                    reddit_submission.link_flair_css_class == "unknown"
+                ):  # Check to see if there is a script classified.
                     if "(Script)" in reddit_submission.link_flair_text:
                         self.is_script = True
-                        self.script_name = oflair_text = reddit_submission.link_flair_text.split("(")[0].strip()
+                        self.script_name = (
+                            oflair_text
+                        ) = reddit_submission.link_flair_text.split("(")[0].strip()
                         self.script_code = ajo_retrieve_script_code(self.script_name)[0]
                         self.is_identified = False
                     else:
@@ -515,11 +582,15 @@ class Ajo:
                 else:
                     if "(Identified)" in reddit_submission.link_flair_text:
                         self.is_identified = True
-                        oflair_text = reddit_submission.link_flair_text.split("(")[0].strip()
+                        oflair_text = reddit_submission.link_flair_text.split("(")[
+                            0
+                        ].strip()
                     else:
                         self.is_identified = False
                         if "(" in reddit_submission.link_flair_text:  # Contains (Long)
-                            oflair_text = reddit_submission.link_flair_text.split("(")[0].strip()
+                            oflair_text = reddit_submission.link_flair_text.split("(")[
+                                0
+                            ].strip()
                         else:
                             oflair_text = reddit_submission.link_flair_text
 
@@ -528,12 +599,16 @@ class Ajo:
 
                 if len(title_data[0]) == 1:
                     # The source language data is converted into a list. If it's just one, let's make it a string.
-                    self.original_source_language_name = title_data[0][0]  # Take the only item
+                    self.original_source_language_name = title_data[0][
+                        0
+                    ]  # Take the only item
                 else:
                     self.original_source_language_name = title_data[0]
                 if len(title_data[1]) == 1:
                     # The target language data is converted into a list. If it's just one, let's make it a string.
-                    self.original_target_language_name = title_data[1][0]  # Take the only item
+                    self.original_target_language_name = title_data[1][
+                        0
+                    ]  # Take the only item
                 else:
                     self.original_target_language_name = title_data[1]
                 if len(title_data[4]) != 0:  # Were we able to determine a title?
@@ -542,11 +617,19 @@ class Ajo:
                 else:
                     self.title = self.title_original = reddit_submission.title
 
-                if "{" in reddit_submission.title and "}" in reddit_submission.title:  # likely contains a country name
+                if (
+                    "{" in reddit_submission.title and "}" in reddit_submission.title
+                ):  # likely contains a country name
                     country_suffix_name = re.search(r"{(\D+)}", reddit_submission.title)
-                    country_suffix_name = country_suffix_name.group(1)  # Get the Country name only
-                    self.country_code = country_converter(country_suffix_name)[0]  # Get the code (e.g. CH for Swiss)
-                elif title_data[7] is not None and len(title_data[7]) <= 6:  # There is included code from title routine
+                    country_suffix_name = country_suffix_name.group(
+                        1
+                    )  # Get the Country name only
+                    self.country_code = country_converter(country_suffix_name)[
+                        0
+                    ]  # Get the code (e.g. CH for Swiss)
+                elif (
+                    title_data[7] is not None and len(title_data[7]) <= 6
+                ):  # There is included code from title routine
                     country_suffix = title_data[7].split("-", 1)[1]
                     self.country_code = country_suffix
                 else:
@@ -555,9 +638,13 @@ class Ajo:
             if self.type == "single":
                 if "[" not in oflair_text:  # Does not have a language tag. e.g., [DE]
 
-                    if "{" in oflair_text:  # Has a country tag in the flair, so let's take that out.
+                    if (
+                        "{" in oflair_text
+                    ):  # Has a country tag in the flair, so let's take that out.
                         country_suffix_name = re.search(r"{(\D+)}", oflair_text)
-                        country_suffix_name = country_suffix_name.group(1)  # Get the Country name only
+                        country_suffix_name = country_suffix_name.group(
+                            1
+                        )  # Get the Country name only
                         self.country_code = country_converter(country_suffix_name)[0]
                         # Now we want to take out the country from the title.
                         title_first = oflair_text.split("{", 1)[0].strip()
@@ -567,7 +654,9 @@ class Ajo:
                     converter_data = converter(oflair_text)
                     self.language_history = []  # Create an empty list.
 
-                    if reddit_submission.link_flair_css_class != "unknown":  # Regular thing
+                    if (
+                        reddit_submission.link_flair_css_class != "unknown"
+                    ):  # Regular thing
                         self.language_name = converter_data[1]
                         self.language_history.append(converter_data[1])
                     else:
@@ -581,24 +670,34 @@ class Ajo:
                     self.is_supported = converter_data[2]
 
                     if len(converter_data[0]) == 2:  # Find the matching ISO 639-3 code.
-                        self.language_code_3 = MAIN_LANGUAGES[converter_data[0]]['language_code_3']
+                        self.language_code_3 = MAIN_LANGUAGES[converter_data[0]][
+                            "language_code_3"
+                        ]
                     else:
                         self.language_code_1 = None
                 else:  # Does have a language tag.
-                    language_tag = reddit_submission.link_flair_text.split("[")[1][:-1].lower()  # Get the characters
+                    language_tag = reddit_submission.link_flair_text.split("[")[1][
+                        :-1
+                    ].lower()  # Get the characters
 
-                    if language_tag != "?" and language_tag != "--":  # Non-generic versions
+                    if (
+                        language_tag != "?" and language_tag != "--"
+                    ):  # Non-generic versions
                         converter_data = converter(language_tag)
                         self.language_name = converter_data[1]
                         self.is_supported = converter_data[2]
                         if len(language_tag) == 2:
                             self.language_code_1 = language_tag
-                            self.language_code_3 = MAIN_LANGUAGES[language_tag]['language_code_3']
+                            self.language_code_3 = MAIN_LANGUAGES[language_tag][
+                                "language_code_3"
+                            ]
                         elif len(language_tag) == 3:
                             self.language_code_1 = None
                             self.language_code_3 = language_tag
                     else:  # Either a tag for an unknown post or a generic one
-                        if language_tag == "?":  # Unknown post that has still been processed.
+                        if (
+                            language_tag == "?"
+                        ):  # Unknown post that has still been processed.
                             self.language_name = "Unknown"
                             self.language_code_1 = None
                             self.language_code_3 = "unknown"
@@ -608,18 +707,26 @@ class Ajo:
                             self.language_code_1 = None
                             self.language_code_3 = "generic"
                             self.is_supported = False
-            elif self.type == "multiple":  # If it's a multiple type, let's put the language names etc as lists.
+            elif (
+                self.type == "multiple"
+            ):  # If it's a multiple type, let's put the language names etc as lists.
                 self.is_supported = True
                 self.language_history = []
 
                 # Handle DEFINED MULTIPLE
-                if "[" in reddit_submission.link_flair_text:  # There is a list of languages included in the flair
+                if (
+                    "[" in reddit_submission.link_flair_text
+                ):  # There is a list of languages included in the flair
                     # Return their names from the code.
                     # test_list_string = "Multiple Languages [DE, FR]"
                     multiple_languages = []
 
-                    actual_list = reddit_submission.link_flair_text.split("[")[1][:-1]  # Get just the codes
-                    actual_list = actual_list.replace(" ", "")  # Take out the spaces in the tag.
+                    actual_list = reddit_submission.link_flair_text.split("[")[1][
+                        :-1
+                    ]  # Get just the codes
+                    actual_list = actual_list.replace(
+                        " ", ""
+                    )  # Take out the spaces in the tag.
 
                     # Code to replace the special status characters... Not fully sure how it interfaces with the rest
                     for character in DEFINED_MULTIPLE_LEGEND.keys():
@@ -631,9 +738,13 @@ class Ajo:
                     for code in new_code_list:  # We wanna convert them to list of names
                         code = code.lower()  # Convert to lowercase.
                         code = "".join(re.findall("[a-zA-Z]+", code))
-                        multiple_languages.append(converter(code)[1])  # Append the names of the languages.
+                        multiple_languages.append(
+                            converter(code)[1]
+                        )  # Append the names of the languages.
                 else:
-                    multiple_languages = title_data[6]  # Get the languages that this is for. Will be a list or None.
+                    multiple_languages = title_data[
+                        6
+                    ]  # Get the languages that this is for. Will be a list or None.
 
                 # Handle REGULAR MULTIPLE
                 if multiple_languages is None:  # This is a catch-all multiple case
@@ -655,7 +766,11 @@ class Ajo:
                         multi_language_code = converter(language)[0]
                         if len(multi_language_code) == 2:
                             self.language_code_1.append(multi_language_code)
-                            self.language_code_3.append(MAIN_LANGUAGES[converter(language)[0]]['language_code_3'])
+                            self.language_code_3.append(
+                                MAIN_LANGUAGES[converter(language)[0]][
+                                    "language_code_3"
+                                ]
+                            )
                         elif len(multi_language_code) == 3:
                             self.language_code_1.append(None)
                             self.language_code_3.append(multi_language_code)
@@ -674,13 +789,19 @@ class Ajo:
                     self.status = "untranslated"
                 elif multiple_languages is not None:  # This is a defined multiple
                     #  Construct a status dictionary.(we could also use multiple_languages)
-                    actual_list = reddit_submission.link_flair_text.split("[")[1][:-1]  # Get just the codes
-                    self.status = ajo_defined_multiple_flair_assessor(actual_list)  # Pass it to dictionary constructor
+                    actual_list = reddit_submission.link_flair_text.split("[")[1][
+                        :-1
+                    ]  # Get just the codes
+                    self.status = ajo_defined_multiple_flair_assessor(
+                        actual_list
+                    )  # Pass it to dictionary constructor
             else:
                 self.status = "untranslated"
 
             try:
-                original_post_id = reddit_submission.crosspost_parent  # Check to see if this is a bot crosspost.
+                original_post_id = (
+                    reddit_submission.crosspost_parent
+                )  # Check to see if this is a bot crosspost.
                 crossposter = reddit_submission.author.name
                 if crossposter == "translator-BOT":
                     self.is_bot_crosspost = True
@@ -716,8 +837,12 @@ class Ajo:
         :param status_language_code: The language code (e.g. `zh`) we want to define the status for.
         :param new_status: The new status for that language code.
         """
-        if isinstance(self.status, dict):  # Make sure it's something we can actually update
-            if self.status[status_language_code] != 'translated':  # Once something's marked as translated stay there.
+        if isinstance(
+            self.status, dict
+        ):  # Make sure it's something we can actually update
+            if (
+                self.status[status_language_code] != "translated"
+            ):  # Once something's marked as translated stay there.
                 self.status[status_language_code] = new_status
         else:
             pass
@@ -773,12 +898,17 @@ class Ajo:
 
         old_language_name = str(self.language_name)
 
-        if new_language_code not in ["multiple", "app"]:  # This is just a single type of languyage.
+        if new_language_code not in [
+            "multiple",
+            "app",
+        ]:  # This is just a single type of languyage.
             self.type = "single"
             if len(new_language_code) == 2:
                 self.language_name = converter(new_language_code)[1]
                 self.language_code_1 = new_language_code
-                self.language_code_3 = MAIN_LANGUAGES[new_language_code]['language_code_3']
+                self.language_code_3 = MAIN_LANGUAGES[new_language_code][
+                    "language_code_3"
+                ]
                 self.is_supported = converter(new_language_code)[2]
             elif len(new_language_code) == 3:
 
@@ -788,12 +918,14 @@ class Ajo:
 
                 # Check to see if this is a supported language.
                 if new_language_code in MAIN_LANGUAGES:
-                    self.is_supported = MAIN_LANGUAGES[new_language_code]['supported']
+                    self.is_supported = MAIN_LANGUAGES[new_language_code]["supported"]
                 else:
                     self.is_supported = False
             elif new_language_code == "unknown":  # Reset everything
                 self.language_name = "Unknown"
-                self.language_code_1 = self.is_script = self.script_code = self.script_name = None
+                self.language_code_1 = (
+                    self.is_script
+                ) = self.script_code = self.script_name = None
                 self.language_code_3 = "unknown"
                 self.is_supported = True
         elif new_language_code in ["multiple", "app"]:  # For generic multiples (all)
@@ -812,11 +944,18 @@ class Ajo:
             # We do a check here to make sure we are not including the same thing twice.
             # This is to avoid something like ['Unknown', 'Chinese', 'Chinese']
             if self.language_history[-1] != self.language_name:
-                self.language_history.append(self.language_name)  # Add the new language name to the history.
-        except (AttributeError, IndexError):  # There was no language_history defined... Let's create it.
+                self.language_history.append(
+                    self.language_name
+                )  # Add the new language name to the history.
+        except (
+            AttributeError,
+            IndexError,
+        ):  # There was no language_history defined... Let's create it.
             self.language_history = [old_language_name, self.language_name]
 
-        if new_is_identified != self.is_identified:  # There's a change to the identification
+        if (
+            new_is_identified != self.is_identified
+        ):  # There's a change to the identification
             self.is_identified = new_is_identified  # Update with said change
 
     def set_script(self, new_script_code):
@@ -834,7 +973,9 @@ class Ajo:
         self.is_supported = True
         self.is_script = True
         self.script_code = new_script_code
-        self.script_name = lang_code_search(new_script_code, True)[0]  # Get the name of the script
+        self.script_name = lang_code_search(new_script_code, True)[
+            0
+        ]  # Get the name of the script
 
     def set_defined_multiple(self, new_language_codes):
         """
@@ -846,11 +987,11 @@ class Ajo:
         :return:
         """
 
-        self.type = 'multiple'
+        self.type = "multiple"
         old_language_name = str(self.language_name)
 
         # Divide into a list.
-        set_languages_raw = new_language_codes.split('+')
+        set_languages_raw = new_language_codes.split("+")
         set_languages_raw = sorted(set_languages_raw, key=str.lower)
 
         # Set some default values up.
@@ -869,7 +1010,9 @@ class Ajo:
                 self.language_name.append(name)
                 self.status[code] = "untranslated"
 
-        languages_tag_string = ", ".join(set_languages_processed_codes)  # Evaluate the length of the potential string
+        languages_tag_string = ", ".join(
+            set_languages_processed_codes
+        )  # Evaluate the length of the potential string
 
         # The limit for link flair text is 64 characters. we need to trim it so that it'll fit the flair.
         if len(languages_tag_string) > 34:
@@ -885,7 +1028,7 @@ class Ajo:
         for code in set_languages_processed_codes:
             if len(code) == 2:
                 self.language_code_1.append(code)  # self
-                code_3 = MAIN_LANGUAGES[code]['language_code_3']
+                code_3 = MAIN_LANGUAGES[code]["language_code_3"]
                 self.language_code_3.append(code_3)
             elif len(code) == 3:
                 self.language_code_3.append(code)
@@ -895,8 +1038,13 @@ class Ajo:
             # We do a check here to make sure we are not including the same thing twice.
             # This is to avoid something like ['Unknown', 'Chinese', 'Chinese']
             if self.language_history[-1] != self.language_name:
-                self.language_history.append("Multiple Languages")  # Add the new language name to the history.
-        except (AttributeError, IndexError):  # There was no language_history defined... Let's create it.
+                self.language_history.append(
+                    "Multiple Languages"
+                )  # Add the new language name to the history.
+        except (
+            AttributeError,
+            IndexError,
+        ):  # There was no language_history defined... Let's create it.
             self.language_history = [old_language_name, "Multiple Languages"]
 
     def set_time(self, status, moment):
@@ -912,10 +1060,15 @@ class Ajo:
         try:
             # We check here to make sure the dictionary exists.
             working_dictionary = self.time_delta
-        except (AttributeError, NameError):  # There was no time_delta defined... Let's create it.
+        except (
+            AttributeError,
+            NameError,
+        ):  # There was no time_delta defined... Let's create it.
             working_dictionary = {}
 
-        if status not in working_dictionary:  # This status hasn't been recorded. Create it as a key in the dictionary.
+        if (
+            status not in working_dictionary
+        ):  # This status hasn't been recorded. Create it as a key in the dictionary.
             working_dictionary[status] = int(moment)
         else:
             pass
@@ -932,9 +1085,15 @@ class Ajo:
         """
 
         try:
-            if translator_name not in self.recorded_translators:  # The username isn't already in it.
-                self.recorded_translators.append(translator_name)  # Add the username of the translator to the Ajo.
-                logger.debug("[ZW] Ajo: Added translator name u/{}.".format(translator_name))
+            if (
+                translator_name not in self.recorded_translators
+            ):  # The username isn't already in it.
+                self.recorded_translators.append(
+                    translator_name
+                )  # Add the username of the translator to the Ajo.
+                logger.debug(
+                    "[ZW] Ajo: Added translator name u/{}.".format(translator_name)
+                )
         except AttributeError:  # There were no translators defined in the Ajo... Let's create it.
             self.recorded_translators = [translator_name]
 
@@ -951,7 +1110,7 @@ class Ajo:
             for name in notified_list:
                 if name not in self.notified:
                     self.notified.append(name)
-                    logger.debug(('[ZW] Ajo: Added notified name u/{}.'.format(name)))
+                    logger.debug(("[ZW] Ajo: Added notified name u/{}.".format(name)))
         except AttributeError:  # There were no notified users defined in the Ajo.
             self.notified = notified_list
 
@@ -969,7 +1128,7 @@ class Ajo:
         self.time_delta = {}  # Clear this dictionary.
         self.is_identified = False
 
-        if title_format(original_title)[2] in ['multiple', 'app']:
+        if title_format(original_title)[2] in ["multiple", "app"]:
             is_multiple = True
         else:
             is_multiple = False
@@ -983,14 +1142,22 @@ class Ajo:
             self.type = "single"
             if len(provisional_code) == 2:  # ISO 639-1 language
                 self.language_code_1 = provisional_code
-                self.language_code_3 = MAIN_LANGUAGES[provisional_code]['language_code_3']
+                self.language_code_3 = MAIN_LANGUAGES[provisional_code][
+                    "language_code_3"
+                ]
                 self.country_code = provisional_country
-            elif len(provisional_code) == 3 or provisional_code == "unknown" and provisional_code != "app":
+            elif (
+                len(provisional_code) == 3
+                or provisional_code == "unknown"
+                and provisional_code != "app"
+            ):
                 # ISO 639-3 language or Unknown post.
                 self.language_code_1 = None
                 self.language_code_3 = provisional_code
                 self.country_code = provisional_country
-                if provisional_code == 'unknown':  # Fill in the special parameters for Unknown posts.
+                if (
+                    provisional_code == "unknown"
+                ):  # Fill in the special parameters for Unknown posts.
                     self.is_script = False
                     self.script_code = None
                     self.script_name = None
@@ -1003,10 +1170,10 @@ class Ajo:
         elif is_multiple:
             # Resetting multiples here.
             self.type = "multiple"
-            if title_format(original_title)[2] == 'multiple':
+            if title_format(original_title)[2] == "multiple":
                 self.language_code_1 = "multiple"
                 self.language_code_3 = "multiple"
-            if title_format(original_title)[2] == 'app':
+            if title_format(original_title)[2] == "app":
                 self.language_code_1 = "app"
                 self.language_code_3 = "app"
 
@@ -1027,37 +1194,63 @@ class Ajo:
 
         # Code here to determine the output data... CSS first.
         unq_types = ["Unknown", "Generic"]
-        if self.type == "single":  # This includes checks to make sure the content are strings, not lists.
-            if self.is_supported and self.language_name not in unq_types and self.language_name is not None:
-                if self.language_code_1 is not None and isinstance(self.language_code_1, str):
+        if (
+            self.type == "single"
+        ):  # This includes checks to make sure the content are strings, not lists.
+            if (
+                self.is_supported
+                and self.language_name not in unq_types
+                and self.language_name is not None
+            ):
+                if self.language_code_1 is not None and isinstance(
+                    self.language_code_1, str
+                ):
                     code_tag = "[{}]".format(self.language_code_1.upper())
                     self.output_oflair_css = self.language_code_1
-                elif self.language_code_3 is not None and isinstance(self.language_code_3, str):
+                elif self.language_code_3 is not None and isinstance(
+                    self.language_code_3, str
+                ):
                     # Supported three letter code
                     code_tag = "[{}]".format(self.language_code_3.upper())
                     self.output_oflair_css = self.language_code_3
-            elif not self.is_supported and self.language_name not in unq_types and self.language_name is not None:
+            elif (
+                not self.is_supported
+                and self.language_name not in unq_types
+                and self.language_name is not None
+            ):
                 # It's not a supported language
-                if self.language_code_1 is not None and isinstance(self.language_code_1, str):
+                if self.language_code_1 is not None and isinstance(
+                    self.language_code_1, str
+                ):
                     code_tag = "[{}]".format(self.language_code_1.upper())
                     self.output_oflair_css = "generic"
-                elif self.language_code_3 is not None and isinstance(self.language_code_3, str):
+                elif self.language_code_3 is not None and isinstance(
+                    self.language_code_3, str
+                ):
                     code_tag = "[{}]".format(self.language_code_3.upper())
                     self.output_oflair_css = "generic"
             elif self.language_name == "Unknown":  # It's an Unknown post.
                 code_tag = "[?]"
                 self.output_oflair_css = "unknown"
-            elif self.language_name is None or self.language_name == "Generic" or self.language_name == "":
+            elif (
+                self.language_name is None
+                or self.language_name == "Generic"
+                or self.language_name == ""
+            ):
                 # There is no language flair defined.
                 code_tag = "[--]"
                 self.output_oflair_css = "generic"
         else:  # Multiple post.
             code_tag = []
 
-            if self.language_code_3 == "multiple":  # This is a multiple for all languages
+            if (
+                self.language_code_3 == "multiple"
+            ):  # This is a multiple for all languages
                 self.output_oflair_css = "multiple"
                 code_tag = None  # Blank code tag, don't need it.
-            elif self.language_code_3 == "app":  # This is an app request for all languages
+            elif (
+                self.language_code_3 == "app"
+            ):  # This is an app request for all languages
                 self.output_oflair_css = "app"
                 code_tag = None  # Blank code tag, don't need it.
             else:  # This is a defined multiple post.
@@ -1090,15 +1283,23 @@ class Ajo:
                 self.output_oflair_css = "missing"
                 self.output_oflair_text = "Missing Assets {}".format(code_tag)
             else:  # It's an untranslated language
-                self.output_oflair_text = self.language_name  # The default flair text is just the language name.
+                self.output_oflair_text = (
+                    self.language_name
+                )  # The default flair text is just the language name.
                 if self.country_code is not None:  # There is a country code.
-                    self.output_oflair_text = "{} {{{}}}".format(self.output_oflair_text, self.country_code)
+                    self.output_oflair_text = "{} {{{}}}".format(
+                        self.output_oflair_text, self.country_code
+                    )
                     # add the country code in brackets after the language name. It will disappear if translated.
                 if self.language_name != "Unknown":
                     if self.is_identified:
-                        self.output_oflair_text = "{} (Identified)".format(self.output_oflair_text)
+                        self.output_oflair_text = "{} (Identified)".format(
+                            self.output_oflair_text
+                        )
                     if self.is_long:
-                        self.output_oflair_text = "{} (Long)".format(self.output_oflair_text)
+                        self.output_oflair_text = "{} (Long)".format(
+                            self.output_oflair_text
+                        )
                 else:  # This is for Unknown posts
                     if self.is_script:
                         self.output_oflair_text = self.script_name + " (Script)"
@@ -1137,8 +1338,12 @@ def ajo_writer(new_ajo):
 
     if stored_ajo is not None:  # There's already a stored entry
         stored_ajo = eval(stored_ajo[2])  # We only want the stored dict here.
-        if new_ajo.__dict__ != stored_ajo:  # The dictionary representations are not the same
-            representation = str(new_ajo.__dict__)  # Convert the dict of the Ajo into a string.
+        if (
+            new_ajo.__dict__ != stored_ajo
+        ):  # The dictionary representations are not the same
+            representation = str(
+                new_ajo.__dict__
+            )  # Convert the dict of the Ajo into a string.
             update_command = "UPDATE local_database SET ajo = ? WHERE id = ?"
             cursor_ajo.execute(update_command, (representation, ajo_id))
             conn_ajo.commit()
@@ -1181,14 +1386,14 @@ def ajo_loader(ajo_id):
         return new_ajo  # Note: the Ajo class can build itself from this dict.
 
 
-'''
+"""
 KOMENTO ANALYZER
 
 Similar to the Ajo in its general purpose, a Komento object (which is a dictionary) provides anchors and references
 for the bot to check its own output and commands as well.
 
-Komento-related functions are all prefixed with `komento` in their name. 
-'''
+Komento-related functions are all prefixed with `komento` in their name.
+"""
 
 
 def komento_submission_from_comment(comment_id):
@@ -1201,7 +1406,9 @@ def komento_submission_from_comment(comment_id):
 
     main_comment = reddit.comment(id=comment_id)  # Convert ID into comment object.
     main_submission = main_comment.link_id[3:]  # Strip the t3_ from front.
-    main_submission = reddit.submission(id=main_submission)  # Get actual PRAW submission object.
+    main_submission = reddit.submission(
+        id=main_submission
+    )  # Get actual PRAW submission object.
 
     return main_submission
 
@@ -1221,7 +1428,9 @@ def komento_analyzer(reddit_submission):
         return {}  # Changed from None, the idea is to return a null dictionary
 
     # Flatten the comments into a list.
-    reddit_submission.comments.replace_more(limit=None)  # Replace all MoreComments with regular comments.
+    reddit_submission.comments.replace_more(
+        limit=None
+    )  # Replace all MoreComments with regular comments.
     comments = reddit_submission.comments.list()
 
     results = {}  # The main dictionary file we will return
@@ -1240,27 +1449,34 @@ def komento_analyzer(reddit_submission):
 
         cbody = comment.body.lower()  # Lower case everything.
         cid = comment.id
-        lookup_keywords = ["wiktionary", "` doesn't look like anything", "no results", "couldn't find anything"]
+        lookup_keywords = [
+            "wiktionary",
+            "` doesn't look like anything",
+            "no results",
+            "couldn't find anything",
+        ]
 
         # Check for OP Short thanks.
         if cauthor == oauthor and any(keyword in cbody for keyword in THANKS_KEYWORDS):
-            results['op_thanks'] = True
+            results["op_thanks"] = True
             # This is thanks. Not short thanks for marking something translated.
 
         # Check for bot's own comments
         if cauthor == USERNAME:  # Comment is by the bot.
             if "this is a crossposted translation request" in cbody:
-                results['bot_xp_comment'] = cid
+                results["bot_xp_comment"] = cid
                 # We want to get a few more values.
                 op_match = comment.body.split(" at")[0]
                 op_match = op_match.split("/")[1].strip()  # Get just the username
-                results['bot_xp_op'] = op_match
+                results["bot_xp_op"] = op_match
                 requester_match = comment.body.split("**Requester:**")[1]
                 requester = requester_match.split("\n", 1)[0].strip()[2:]
-                results['bot_xp_requester'] = requester
+                results["bot_xp_requester"] = requester
                 original_post = comment.body.split("**Requester:**")[0]  # Split in half
-                original_post_id = original_post.split("comments/")[1].strip()[0:6]  # Get just the post ID
-                results['bot_xp_original_submission'] = original_post_id
+                original_post_id = original_post.split("comments/")[1].strip()[
+                    0:6
+                ]  # Get just the post ID
+                results["bot_xp_original_submission"] = original_post_id
                 # Linked comment in other subreddit.
                 # Original post is the original cross-posted thing
                 original_post = reddit.submission(original_post_id)
@@ -1273,13 +1489,18 @@ def komento_analyzer(reddit_submission):
                     except AttributeError:  # The comment's author was deleted.
                         continue
 
-                    if ori_comment_author == "translator-BOT" and "I've [crossposted]" in ori_comment.body:
-                        results['bot_xp_original_comment'] = ori_comment.id
+                    if (
+                        ori_comment_author == "translator-BOT"
+                        and "I've [crossposted]" in ori_comment.body
+                    ):
+                        results["bot_xp_original_comment"] = ori_comment.id
             elif any(keyword in cbody for keyword in lookup_keywords):
                 bot_replied_comments = []
 
                 # We do need to modify this to accept more than one.
-                parent_lookup_comment = comment.parent()  # This is the comment with the actual lookup words.
+                parent_lookup_comment = (
+                    comment.parent()
+                )  # This is the comment with the actual lookup words.
 
                 parent_body = parent_lookup_comment.body
                 parent_x_id = parent_lookup_comment.id
@@ -1287,7 +1508,9 @@ def komento_analyzer(reddit_submission):
                 if len(parent_body) != 0 and "[deleted]" not in parent_body:
                     # Now we want to create a list/dict linking the specific searches with their data.
                     lookup_results = lookup_matcher(parent_body, None)
-                    lookup_comments[cid] = lookup_results  # We add what specific things were searched
+                    lookup_comments[
+                        cid
+                    ] = lookup_results  # We add what specific things were searched
                     corresponding_comments[parent_lookup_comment.id] = lookup_results
                     parent_replies = parent_lookup_comment.replies
 
@@ -1298,24 +1521,28 @@ def komento_analyzer(reddit_submission):
                     lookup_replies[parent_x_id] = bot_replied_comments
 
             elif "ethnologue" in cbody or "multitree" in cbody:
-                results['bot_reference'] = cid
+                results["bot_reference"] = cid
             elif "translation request tagged as 'unknown.'" in cbody:
-                results['bot_unknown'] = cid
+                results["bot_unknown"] = cid
             elif "your translation request appears to be very long" in cbody:
-                results['bot_long'] = cid
-            elif "please+check+this+out" in cbody:  # This is the response to an invalid !identify command
-                results['bot_invalid_code'] = cid
+                results["bot_long"] = cid
+            elif (
+                "please+check+this+out" in cbody
+            ):  # This is the response to an invalid !identify command
+                results["bot_invalid_code"] = cid
             elif "multiple defined languages" in cbody:
-                results['bot_defined_multiple'] = cid
+                results["bot_defined_multiple"] = cid
             elif "## Search results on r/translator" in cbody:
-                results['bot_search'] = cid
+                results["bot_search"] = cid
             elif "they are working on a translation for this" in cbody:
                 # Claim comment. we want to get a couple more values.
-                results['bot_claim_comment'] = cid
+                results["bot_claim_comment"] = cid
 
-                claimer = re.search(r'(?<=u/)[\w-]+', cbody)  # Get the username of the claimer
+                claimer = re.search(
+                    r"(?<=u/)[\w-]+", cbody
+                )  # Get the username of the claimer
                 claimer = str(claimer.group(0)).strip()
-                results['claim_user'] = claimer
+                results["claim_user"] = claimer
 
                 current_c_time = time.time()
                 claimed_time = cbody.split(" at ")[1]
@@ -1331,26 +1558,32 @@ def komento_analyzer(reddit_submission):
                 num_min = int(claimed_time.split(":")[1])
                 num_sec = int(claimed_time.split(":")[2])
 
-                comment_datetime = datetime.datetime(num_year, num_month, num_day, num_hour, num_min, num_sec)
-                utc_timestamp = calendar.timegm(comment_datetime.timetuple())  # Returns the time in UTC.
+                comment_datetime = datetime.datetime(
+                    num_year, num_month, num_day, num_hour, num_min, num_sec
+                )
+                utc_timestamp = calendar.timegm(
+                    comment_datetime.timetuple()
+                )  # Returns the time in UTC.
                 time_difference = int(current_c_time - utc_timestamp)
-                results['claim_time_diff'] = time_difference  # How long the thing has been claimed for.
+                results[
+                    "claim_time_diff"
+                ] = time_difference  # How long the thing has been claimed for.
         else:  # Processing comments by non-bot
             # Get a list of people who have contributed to helping. Unused at present.
             if KEYWORDS[3] in cbody or KEYWORDS[9] in cbody:
                 list_of_translators.append(cauthor)
 
     if len(lookup_comments) != 0:  # We have lookup data
-        results['bot_lookup'] = lookup_comments
-        results['bot_lookup_correspond'] = corresponding_comments
-        results['bot_lookup_replies'] = lookup_replies
+        results["bot_lookup"] = lookup_comments
+        results["bot_lookup_correspond"] = corresponding_comments
+        results["bot_lookup_replies"] = lookup_replies
     if len(list_of_translators) != 0:
-        results['translators'] = list_of_translators
+        results["translators"] = list_of_translators
 
     return results  # This will be a dictionary with values.
 
 
-'''
+"""
 POINTS TABULATING SYSTEM
 
 Ziwen has a live points system (meaning it calculates users' points as they make their comments) to help users keep
@@ -1358,8 +1591,8 @@ track of their contributions to the community. The points system is not as publi
 points bots, but is instead meant to be more private. A summary table to the months' contributors is posted by Wenyuan
 at the start of every month.
 
-Points-related functions are all prefixed with `points` in their name. 
-'''
+Points-related functions are all prefixed with `points` in their name.
+"""
 
 
 def points_retreiver(username):
@@ -1378,7 +1611,7 @@ def points_retreiver(username):
     to_post = ""
 
     current_time = time.time()
-    month_string = datetime.datetime.fromtimestamp(current_time).strftime('%Y-%m')
+    month_string = datetime.datetime.fromtimestamp(current_time).strftime("%Y-%m")
 
     sql_s = "SELECT * FROM total_points WHERE username = ? AND month_year = ?"
     cursor_main.execute(sql_s, (username, month_string))
@@ -1388,25 +1621,43 @@ def points_retreiver(username):
     cursor_main.execute(sql_un, (username,))
     username_all_points_data = cursor_main.fetchall()
 
-    for data in username_month_points_data:  # Compile the monthly number of points the user has earned.
+    for (
+        data
+    ) in (
+        username_month_points_data
+    ):  # Compile the monthly number of points the user has earned.
         month_points += data[3]
 
-    for data in username_all_points_data:  # Compile the total number of posts participated.
+    for (
+        data
+    ) in username_all_points_data:  # Compile the total number of posts participated.
         post_id = data[4]
         recorded_posts.append(post_id)
     recorded_posts = list(set(recorded_posts))
-    recorded_posts_count = len(recorded_posts)  # This is the number of posts the user has participated in.
+    recorded_posts_count = len(
+        recorded_posts
+    )  # This is the number of posts the user has participated in.
 
-    for data in username_all_points_data:  # Compile the total number of points the user has earned.
+    for (
+        data
+    ) in (
+        username_all_points_data
+    ):  # Compile the total number of points the user has earned.
         all_points += data[3]
 
-    for data in username_all_points_data:  # Compile the total number of months that have been recorded. .
+    for (
+        data
+    ) in (
+        username_all_points_data
+    ):  # Compile the total number of months that have been recorded. .
         recorded_months.append(data[0])
         recorded_months = sorted(list(set(recorded_months)))
 
     if all_points != 0:  # The user has points listed.
-        first_line = ("You've earned **{} points** on r/translator this month.\n\n"
-                      "You've earned **{} points** in total and participated in **{} posts**.\n\n")
+        first_line = (
+            "You've earned **{} points** on r/translator this month.\n\n"
+            "You've earned **{} points** in total and participated in **{} posts**.\n\n"
+        )
         to_post += first_line.format(month_points, all_points, recorded_posts_count)
         to_post += "Year/Month | Points | Number of Posts Participated\n-----------|--------|------------------"
     else:  # User has no points listed.
@@ -1427,7 +1678,9 @@ def points_retreiver(username):
         recorded_posts = len(list(set(scratchpad_posts)))
 
         to_post += "\n{} | {} | {}".format(month, recorded_month_points, recorded_posts)
-    to_post += "\n*Total* | {} | {}".format(all_points, recorded_posts_count)  # Add a summary row for the totals.
+    to_post += "\n*Total* | {} | {}".format(
+        all_points, recorded_posts_count
+    )  # Add a summary row for the totals.
 
     return to_post
 
@@ -1449,22 +1702,30 @@ def points_worth_determiner(language_name):
         return 4  # The multiplier for Unknown can be hard coded.
 
     # Code to check the cache first to see if we have a value already.
-    final_point_value = CACHED_MULTIPLIERS.get(language_name)  # Looks for the dictionary key of the language name.
+    final_point_value = CACHED_MULTIPLIERS.get(
+        language_name
+    )  # Looks for the dictionary key of the language name.
 
     if final_point_value is not None:  # It's cached.
-        logger.debug("[ZW] Points determiner: {} value in the cache: {}".format(language_name, final_point_value))
+        logger.debug(
+            "[ZW] Points determiner: {} value in the cache: {}".format(
+                language_name, final_point_value
+            )
+        )
         return final_point_value  # Return the multipler - no need to go to the wiki.
     else:  # Not found in the cache. Get from the wiki.
-        overall_page = reddit.subreddit(SUBREDDIT).wiki[language_name.lower()]  # Fetch the wikipage.
+        overall_page = reddit.subreddit(SUBREDDIT).wiki[
+            language_name.lower()
+        ]  # Fetch the wikipage.
         try:  # First see if this page actually exists
             overall_page_content = str(overall_page.content_md)
-            last_month_data = overall_page_content.split('\n')[-1]
+            last_month_data = overall_page_content.split("\n")[-1]
         except prawcore.exceptions.NotFound:  # There is no such wikipage.
             logger.debug("[ZW] Points determiner: The wiki page does not exist.")
             last_month_data = "2017 | 08 | [Example Link] | 1%"
             # Feed it dummy data if there's nothing... this language probably hasn't been done in a while.
         try:  # Try to get the percentage from the page
-            total_percent = str(last_month_data.split(' | ')[3])[:-1]
+            total_percent = str(last_month_data.split(" | ")[3])[:-1]
             total_percent = float(total_percent)
         except IndexError:  # There's a page but there is something wrong with data entered.
             logger.debug("[ZW] Points determiner: There was a second error.")
@@ -1480,16 +1741,22 @@ def points_worth_determiner(language_name):
 
         if final_point_value > 20:
             final_point_value = 20
-        logger.debug("[ZW] Points determiner: Multiplier for {} is {}".format(language_name, final_point_value))
+        logger.debug(
+            "[ZW] Points determiner: Multiplier for {} is {}".format(
+                language_name, final_point_value
+            )
+        )
 
         # Add to the cached values, so we don't have to do this next time.
         CACHED_MULTIPLIERS.update({language_name: final_point_value})
 
         # Write data to the cache so that it can be retrieved later.
         current_zeit = time.time()
-        month_string = datetime.datetime.fromtimestamp(current_zeit).strftime('%Y-%m')
+        month_string = datetime.datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
         insert_data = (month_string, language_name, final_point_value)
-        cursor_cache.execute("INSERT INTO multiplier_cache VALUES (?, ?, ?)", insert_data)
+        cursor_cache.execute(
+            "INSERT INTO multiplier_cache VALUES (?, ?, ?)", insert_data
+        )
         conn_cache.commit()
 
     return final_point_value
@@ -1504,15 +1771,31 @@ def points_worth_cacher():
     """
 
     # These are the most common languages on the subreddit. Also in our sidebar.
-    check_languages = ["Arabic", "Chinese", "French", "German", "Hebrew", "Hindi", "Italian", "Japanese",
-                       "Korean", "Latin", "Polish", "Portuguese", "Russian", "Spanish", "Thai", "Vietnamese"]
+    check_languages = [
+        "Arabic",
+        "Chinese",
+        "French",
+        "German",
+        "Hebrew",
+        "Hindi",
+        "Italian",
+        "Japanese",
+        "Korean",
+        "Latin",
+        "Polish",
+        "Portuguese",
+        "Russian",
+        "Spanish",
+        "Thai",
+        "Vietnamese",
+    ]
 
     # Code to check the database file to see if the values are current.
     # It will transform the database info into a dictionary.
 
     # Get the year-month string.
     current_zeit = time.time()
-    month_string = datetime.datetime.fromtimestamp(current_zeit).strftime('%Y-%m')
+    month_string = datetime.datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
 
     # Select from the database the current months data if it exists.
     multiplier_command = "SELECT * from multiplier_cache WHERE month_year = ?"
@@ -1530,7 +1813,7 @@ def points_worth_cacher():
     else:  # We don't have cached data so we will retrieve it from the wiki.
 
         # Delete everything from the cache (clearing out previous months' data as well)
-        command = 'DELETE FROM multiplier_cache'
+        command = "DELETE FROM multiplier_cache"
         cursor_cache.execute(command)
         conn_cache.commit()
 
@@ -1560,7 +1843,7 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
     """
 
     current_time = time.time()
-    month_string = datetime.datetime.fromtimestamp(current_time).strftime('%Y-%m')
+    month_string = datetime.datetime.fromtimestamp(current_time).strftime("%Y-%m")
     points_status = []
 
     if oflair_css in ["meta", "art"]:
@@ -1572,7 +1855,7 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
         # Comment author is deleted
         return
 
-    if pauthor == 'AutoModerator' or pauthor == 'translator-BOT':
+    if pauthor == "AutoModerator" or pauthor == "translator-BOT":
         return  # Ignore these bots
 
     # Load the Ajo from the database. We will check against it to see if it's None later.
@@ -1582,7 +1865,11 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
     pbody = comment.body.lower().strip()
 
     # It is an OP comment and it's *not* a short thanks.
-    if pauthor == oauthor and not any(keyword in pbody for keyword in THANKS_KEYWORDS) and len(pbody) < 20:
+    if (
+        pauthor == oauthor
+        and not any(keyword in pbody for keyword in THANKS_KEYWORDS)
+        and len(pbody) < 20
+    ):
         return
 
     if oflair_css in ["multiple", "app", "community"]:
@@ -1594,12 +1881,12 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
         else:
             return None
     else:  # Regular posts here. Let's get the language.
-        if '[' in oflair_text:
-            language_tag = '[' + oflair_text.split("[")[1]
+        if "[" in oflair_text:
+            language_tag = "[" + oflair_text.split("[")[1]
             language_name = converter(language_tag.lower()[1:-1])[1]
-        elif '{' in oflair_text:  # Contains a bracket. Spanish {Mexico} (Identified)
+        elif "{" in oflair_text:  # Contains a bracket. Spanish {Mexico} (Identified)
             language_name = oflair_text.split("{")[0].strip()
-        elif '(' in oflair_text:  # Contains a parantheses. Spanish (Identified)
+        elif "(" in oflair_text:  # Contains a parantheses. Spanish (Identified)
             language_name = oflair_text.split("(")[0].strip()
         else:
             language_name = oflair_text
@@ -1609,9 +1896,15 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
         # How much is this language worth? Obtain it from our wiki.
     except prawcore.exceptions.Redirect:  # The wiki doesn't have this.
         language_multiplier = 20
-    logger.debug("[ZW] Points tabulator: {}, {} multiplier".format(language_name, str(language_multiplier)))
+    logger.debug(
+        "[ZW] Points tabulator: {}, {} multiplier".format(
+            language_name, str(language_multiplier)
+        )
+    )
 
-    final_translator = ""  # This is in case the commenter is not actually the translator
+    final_translator = (
+        ""  # This is in case the commenter is not actually the translator
+    )
     final_translator_points = 0  # Same here.
 
     points = 0  # base number of points
@@ -1624,90 +1917,142 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
         try:  # Check if it's a comment:
             parent_post = parent_comment.parent_id
             final_translator = parent_comment.author.name
-            logger.debug("[ZW] Points tabulator: Actual translator: u/{} for {}".format(final_translator, parent_post))
+            logger.debug(
+                "[ZW] Points tabulator: Actual translator: u/{} for {}".format(
+                    final_translator, parent_post
+                )
+            )
             final_translator_points += 3  # Give them a flat amount of points.
         except AttributeError:  # Parent is a post. Skip.
             logger.debug("[ZW] Points tabulator: Parent of this comment is a post.")
 
-    if len(pbody) > 13 and oauthor != pauthor and '!translated' in pbody or '!doublecheck' in pbody:
+    if (
+        len(pbody) > 13
+        and oauthor != pauthor
+        and "!translated" in pbody
+        or "!doublecheck" in pbody
+    ):
         # This is a real translation.
-        if len(pbody) < 60 and '!translated' in pbody and any(keyword in pbody for keyword in VERIFYING_KEYWORDS):
+        if (
+            len(pbody) < 60
+            and "!translated" in pbody
+            and any(keyword in pbody for keyword in VERIFYING_KEYWORDS)
+        ):
             # This should be a verification command. Someone's agreeing that another is right.
             parent_comment = comment.parent()
             try:  # Check if it's a comment:
                 parent_post = parent_comment.parent_id
                 final_translator = parent_comment.author.name
-                logger.debug("[ZW] Points tabulator: Actual translator: u/{}, {}".format(final_translator, parent_post))
+                logger.debug(
+                    "[ZW] Points tabulator: Actual translator: u/{}, {}".format(
+                        final_translator, parent_post
+                    )
+                )
                 final_translator_points += 1 + (1 * language_multiplier)
                 points += 1  # Give the cleaner-upper a point.
             except AttributeError:  # Parent is a post.
                 logger.debug("[ZW] Points tabulator: Parent of this comment is a post.")
         else:
-            logger.debug("[ZW] Points tabulator: Seems to be a solid !translated comment by u/{}.".format(pauthor))
+            logger.debug(
+                "[ZW] Points tabulator: Seems to be a solid !translated comment by u/{}.".format(
+                    pauthor
+                )
+            )
             translator_to_add = pauthor
             points += 1 + (1 * language_multiplier)
-    elif len(pbody) < 13 and '!translated' in pbody:
+    elif len(pbody) < 13 and "!translated" in pbody:
         # It's marking someone else's translation as translated. We want to get the parent.
-        logger.debug("[ZW] Points tabulator: This is a cleanup !translated comment by u/{}.".format(pauthor))
+        logger.debug(
+            "[ZW] Points tabulator: This is a cleanup !translated comment by u/{}.".format(
+                pauthor
+            )
+        )
         parent_comment = comment.parent()
         try:  # Check if it's a comment:
             parent_post = parent_comment.parent_id
             final_translator = parent_comment.author.name
-            logger.debug("[ZW] Points tabulator: Actual translator: u/{} for {}".format(final_translator, parent_post))
+            logger.debug(
+                "[ZW] Points tabulator: Actual translator: u/{} for {}".format(
+                    final_translator, parent_post
+                )
+            )
             final_translator_points += 1 + (1 * language_multiplier)
-            if final_translator != pauthor:  # Make sure it isn't someone just calling it on their own here
+            if (
+                final_translator != pauthor
+            ):  # Make sure it isn't someone just calling it on their own here
                 points += 1  # We give the person who called the !translated comment a point for cleaning up
         except AttributeError:  # Parent is a post.
             logger.debug("[ZW] Points tabulator: Parent of this comment is a post.")
         points += 1  # Give the cleaner-upper a point.
-    elif len(pbody) > 13 and '!translated' in pbody and pauthor == oauthor:
+    elif len(pbody) > 13 and "!translated" in pbody and pauthor == oauthor:
         # The OP marked it !translated, but with a longer comment.
-        logger.debug("[ZW] Points tabulator: A !translated comment by the OP u/{} for someone else?.".format(pauthor))
+        logger.debug(
+            "[ZW] Points tabulator: A !translated comment by the OP u/{} for someone else?.".format(
+                pauthor
+            )
+        )
         parent_comment = comment.parent()
         try:  # Check if it's a comment:
             parent_post = parent_comment.parent_id
             final_translator = parent_comment.author.name
             if final_translator != oauthor:
-                logger.debug("[ZW] Points tabulator: Actual translator: u/{}, {}".format(final_translator, parent_post))
+                logger.debug(
+                    "[ZW] Points tabulator: Actual translator: u/{}, {}".format(
+                        final_translator, parent_post
+                    )
+                )
                 final_translator_points += 1 + (1 * language_multiplier)
         except AttributeError:  # Parent is a post.
             logger.debug("[ZW] Points tabulator: Parent of this comment is a post.")
 
-    if len(pbody) > 120 and pauthor != oauthor:  # This is an especially long comment...But it's well regarded
-        points += 1 + int(round(.25 * language_multiplier))
+    if (
+        len(pbody) > 120 and pauthor != oauthor
+    ):  # This is an especially long comment...But it's well regarded
+        points += 1 + int(round(0.25 * language_multiplier))
 
-    if '!identify:' in pbody or '!id:' in pbody:
+    if "!identify:" in pbody or "!id:" in pbody:
         points += 3
 
     if "`" in pbody:
         points += 2
 
-    if '!missing' in pbody:
+    if "!missing" in pbody:
         points += 2
 
-    if '!claim' in pbody:
+    if "!claim" in pbody:
         points += 1
 
-    if '!page' in pbody:
+    if "!page" in pbody:
         points += 1
 
-    if '!search' in pbody:
+    if "!search" in pbody:
         points += 1
 
-    if '!reference' in pbody:
+    if "!reference" in pbody:
         points += 1
 
-    if any(keyword in pbody for keyword in THANKS_KEYWORDS) and pauthor == oauthor and len(
-            pbody) < 20:  # The OP thanked someone. Who?
+    if (
+        any(keyword in pbody for keyword in THANKS_KEYWORDS)
+        and pauthor == oauthor
+        and len(pbody) < 20
+    ):  # The OP thanked someone. Who?
         logger.debug("[ZW] Points tabulator: Found an OP short thank you.")
         parent_comment = comment.parent()
         try:  # Check if it's a comment:
             parent_post = parent_comment.parent_id
-            final_translator = parent_comment.author.name  # This is the person OP thanked.
-            logger.debug("[ZW] Points tabulator: Actual translator: u/{} for {}".format(final_translator, parent_post))
+            final_translator = (
+                parent_comment.author.name
+            )  # This is the person OP thanked.
+            logger.debug(
+                "[ZW] Points tabulator: Actual translator: u/{} for {}".format(
+                    final_translator, parent_post
+                )
+            )
             # Code here to check in the database if the person already got points.
             final_translator_points += 1 + (1 * language_multiplier)
-            command_selection = "SELECT * FROM total_points WHERE username = ? AND oid = ?"
+            command_selection = (
+                "SELECT * FROM total_points WHERE username = ? AND oid = ?"
+            )
             cursor_main.execute(command_selection, (final_translator, oid))
             obtained_points = cursor_main.fetchall()
             # [('2017-09', 'dn9u1g0', 'davayrino', 2, '71bfh4'), ('2017-09', 'dn9u1g0', 'davayrino', 21, '71bfh4')
@@ -1716,19 +2061,28 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
                 recorded_points = record[3]  # The points for this particular record.
                 recorded_post_id = record[4]  # The Reddit ID of the post.
 
-                if recorded_points == final_translator_points and recorded_post_id == oid:
+                if (
+                    recorded_points == final_translator_points
+                    and recorded_post_id == oid
+                ):
                     # The person has gotten the exact same amount of points here. Reset.
                     final_translator_points = 0  # Reset the points if that's the case. Person has gotten it before.
 
         except AttributeError:  # Parent is a post.
-            logger.debug("[ZW] Points tabulator: Parent of this comment is a post. Never mind.")
+            logger.debug(
+                "[ZW] Points tabulator: Parent of this comment is a post. Never mind."
+            )
 
-    if any(pauthor in s for s in points_status):  # Check if author is already listed in our list.
+    if any(
+        pauthor in s for s in points_status
+    ):  # Check if author is already listed in our list.
         for i in range(len(points_status)):  # Add their points if so.
             if points_status[i][0] == pauthor:  # Get their username
                 points_status[i][1] += points  # Add the running total of points
     else:
-        points_status.append([pauthor, points])  # They're not in the list. Just add them.
+        points_status.append(
+            [pauthor, points]
+        )  # They're not in the list. Just add them.
 
     if final_translator_points != 0:  # If we have another person's score to put in...
         points_status.append([final_translator, final_translator_points])
@@ -1758,14 +2112,14 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
     return points_status
 
 
-'''
+"""
 RECORDING FUNCTIONS
 
 This is a collection of functions that record information for Ziwen. Some write to a local Markdown file, while others
 may write to the wiki of r/translator.
 
 Recording functions are all prefixed with `record` in their name.
-'''
+"""
 
 
 def record_filter_log(filtered_title, ocreated, filter_type):
@@ -1779,12 +2133,16 @@ def record_filter_log(filtered_title, ocreated, filter_type):
     """
 
     # Access the file.
-    f = open(FILE_ADDRESS_FILTER, 'a+', encoding='utf-8')  # File address for the filter log, cumulative.
+    f = open(
+        FILE_ADDRESS_FILTER, "a+", encoding="utf-8"
+    )  # File address for the filter log, cumulative.
 
     # Format the new line.
-    filter_line_template = '\n{} | {} | {}'
+    filter_line_template = "\n{} | {} | {}"
     timestamp_utc = str(datetime.datetime.fromtimestamp(ocreated).strftime("%Y-%m-%d"))
-    filter_line = filter_line_template.format(timestamp_utc, filtered_title, filter_type)
+    filter_line = filter_line_template.format(
+        timestamp_utc, filtered_title, filter_type
+    )
 
     # Write the new line.
     f.write(filter_line)
@@ -1804,26 +2162,40 @@ def record_last_post_comment():
 
     # Some default values just in case.
     nowutc = time.time()
-    s_format_time = c_format_time = str(datetime.datetime.fromtimestamp(nowutc).strftime("%Y-%m-%d [%I:%M:%S %p]"))
+    s_format_time = c_format_time = str(
+        datetime.datetime.fromtimestamp(nowutc).strftime("%Y-%m-%d [%I:%M:%S %p]")
+    )
     cbody = ""
     slink = ""
     cpermalink = ""
 
     for submission in r.new(limit=1):  # Get the last posted post in the subreddit.
         sutc = submission.created_utc
-        slink = 'https://www.reddit.com{}'.format(submission.permalink)
-        s_format_time = str(datetime.datetime.fromtimestamp(sutc).strftime("%a, %b %d, %Y [%I:%M:%S %p]"))
+        slink = "https://www.reddit.com{}".format(submission.permalink)
+        s_format_time = str(
+            datetime.datetime.fromtimestamp(sutc).strftime(
+                "%a, %b %d, %Y [%I:%M:%S %p]"
+            )
+        )
     for comment in r.comments(limit=1):  # Get the last posted comment
         cbody = "              > {}".format(comment.body)
 
         cutc = comment.created_utc
         cpermalink = "https://www.reddit.com" + comment.permalink
-        c_format_time = str(datetime.datetime.fromtimestamp(cutc).strftime("%a, %b %d, %Y [%I:%M:%S %p]"))
+        c_format_time = str(
+            datetime.datetime.fromtimestamp(cutc).strftime(
+                "%a, %b %d, %Y [%I:%M:%S %p]"
+            )
+        )
 
     if "\n" in cbody:
-        cbody = cbody.replace("\n", "\n              > ")  # Nicely format each line to fit with our format.
+        cbody = cbody.replace(
+            "\n", "\n              > "
+        )  # Nicely format each line to fit with our format.
     to_post_template = "Last post     |   {}:    {}\nLast comment  |   {}:    {}\n"
-    to_post = to_post_template.format(s_format_time, slink, c_format_time, cpermalink)  # Format the text for inclusion
+    to_post = to_post_template.format(
+        s_format_time, slink, c_format_time, cpermalink
+    )  # Format the text for inclusion
     to_post += cbody + "\n"
 
     return to_post
@@ -1838,18 +2210,23 @@ def record_error_log(error_save_entry):
     :return: Nothing.
     """
 
-    f = open(FILE_ADDRESS_ERROR, 'a+', encoding='utf-8')  # File address for the error log, cumulative.
+    f = open(
+        FILE_ADDRESS_ERROR, "a+", encoding="utf-8"
+    )  # File address for the error log, cumulative.
     existing_log = f.read()  # Get the data that already exists
 
     # If this error entry doesn't exist yet, let's save it.
     if error_save_entry not in existing_log:
         error_date = strftime("%Y-%m-%d [%I:%M:%S %p]")
-        last_post_text = record_last_post_comment()  # Get the last post and comment as a string
+        last_post_text = (
+            record_last_post_comment()
+        )  # Get the last post and comment as a string
 
         try:
             log_template = "\n-----------------------------------\n{} ({} {})\n{}\n{}"
-            log_template_txt = log_template.format(error_date, BOT_NAME, VERSION_NUMBER,
-                                                   last_post_text, error_save_entry)
+            log_template_txt = log_template.format(
+                error_date, BOT_NAME, VERSION_NUMBER, last_post_text, error_save_entry
+            )
             f.write(log_template_txt)
         except UnicodeEncodeError:  # Occasionally this may fail on Windows thanks to its crap Unicode support.
             logger.error("[ZW] Error_Log: Encountered a Unicode writing error.")
@@ -1866,13 +2243,15 @@ def record_retrieve_error_log():
     """
 
     # Error stuff. Open the file.
-    with open(FILE_ADDRESS_ERROR, "r", encoding='utf-8') as f:
+    with open(FILE_ADDRESS_ERROR, "r", encoding="utf-8") as f:
         error_logs = f.read()
 
     # Obtain the last two errors that were recorded.
-    penultimate_error = error_logs.split('------------------------------')[-2]
-    penultimate_error = penultimate_error.replace("\n", "\n    ")  # Add indenting of four spaces
-    last_error = error_logs.split('------------------------------')[-1]
+    penultimate_error = error_logs.split("------------------------------")[-2]
+    penultimate_error = penultimate_error.replace(
+        "\n", "\n    "
+    )  # Add indenting of four spaces
+    last_error = error_logs.split("------------------------------")[-1]
     last_error = last_error.replace("\n", "\n    ")  # Add indenting
 
     # Return the last two errors only.
@@ -1900,44 +2279,55 @@ def record_to_wiki(odate, otitle, oid, oflair_text, s_or_i, oflair_new, user=Non
     :return: Does not return anything.
     """
 
-    oformat_date = datetime.datetime.fromtimestamp(int(odate)).strftime('%Y-%m-%d')
+    oformat_date = datetime.datetime.fromtimestamp(int(odate)).strftime("%Y-%m-%d")
 
     if s_or_i:  # Means we should write to the 'saved' page:
         page_content = reddit.subreddit(SUBREDDIT).wiki["saved"]
-        new_content = ("{} | [{}](https://redd.it/{}) | {} | u/{}".format(oformat_date, otitle, oid, oflair_text,
-                                                                          user))
-        page_content_new = str(page_content.content_md) + '\n' + new_content
+        new_content = "{} | [{}](https://redd.it/{}) | {} | u/{}".format(
+            oformat_date, otitle, oid, oflair_text, user
+        )
+        page_content_new = str(page_content.content_md) + "\n" + new_content
         # Adds this language entry to the 'saved page'
-        page_content.edit(content=page_content_new, reason='Ziwen: updating the "Saved" page with a new link')
+        page_content.edit(
+            content=page_content_new,
+            reason='Ziwen: updating the "Saved" page with a new link',
+        )
         logger.info("[ZW] Save_Wiki: Updated the 'saved' wiki page.")
     elif not s_or_i:  # Means we should write to the 'identified' page:
         page_content = reddit.subreddit(SUBREDDIT).wiki["identified"]
         new_content_template = "{} | [{}](https://redd.it/{}) | {} | {} | u/{}"
-        new_content = new_content_template.format(oformat_date, otitle, oid, oflair_text, oflair_new, user)
+        new_content = new_content_template.format(
+            oformat_date, otitle, oid, oflair_text, oflair_new, user
+        )
         # Log in the wiki for later reference
-        page_content_new = str(page_content.content_md) + '\n' + new_content
+        page_content_new = str(page_content.content_md) + "\n" + new_content
         # Adds this month's entry to the data from the wikipage
         try:
-            page_content.edit(content=page_content_new, reason='Ziwen: updating the "Identified" page with a new link')
+            page_content.edit(
+                content=page_content_new,
+                reason='Ziwen: updating the "Identified" page with a new link',
+            )
         except prawcore.exceptions.TooLarge:  # The wikipage is too large.
-            page_name = 'identified'
+            page_name = "identified"
             message_subject = "[Notification] '{}' Wiki Page Full".format(page_name)
             message_template = MSG_WIKIPAGE_FULL.format(page_name)
-            logger.warning("[ZW] Save_Wiki: The '{}' wiki page is full.".format(page_name))
-            reddit.subreddit('translatorBOT').message(message_subject, message_template)
+            logger.warning(
+                "[ZW] Save_Wiki: The '{}' wiki page is full.".format(page_name)
+            )
+            reddit.subreddit("translatorBOT").message(message_subject, message_template)
         logger.info("[ZW] Save_Wiki: Updated the 'identified' wiki page.")
 
     return
 
 
-'''
+"""
 MESSAGING FUNCTIONS
 
-These are functions that are used in messages to users but are not necessarily part of the notifications system. The 
+These are functions that are used in messages to users but are not necessarily part of the notifications system. The
 notifications system, however, may still use these functions.
 
 These non-notifier functions are all prefixed with `messaging` in their name.
-'''
+"""
 
 
 # noinspection PyUnusedLocal
@@ -1955,7 +2345,10 @@ def messaging_is_valid_user(username):
 
     try:
         user = reddit.redditor(username).fullname
-    except (prawcore.exceptions.NotFound, AttributeError):  # AttributeError is thrown if suspended user.
+    except (
+        prawcore.exceptions.NotFound,
+        AttributeError,
+    ):  # AttributeError is thrown if suspended user.
         exists = False
 
     return exists
@@ -1966,7 +2359,7 @@ def messaging_user_statistics_writer(body_text, username):
     Function that records which commands are written by whom, cumulatively, and stores it into an SQLite file.
     Takes the body text of their comment as an input.
     The database used is the main one but with a different table.
-    
+
     :param body_text: The content of a comment, likely containing r/translator commands.
     :param username: The username of a Reddit user.
     :return: Nothing.
@@ -1974,7 +2367,10 @@ def messaging_user_statistics_writer(body_text, username):
 
     # Properly format things.
     recorded_keywords = list(KEYWORDS)
-    for nonwanted in ['!translate', '!translator']:  # These commands are never used on our subreddit.
+    for nonwanted in [
+        "!translate",
+        "!translator",
+    ]:  # These commands are never used on our subreddit.
         recorded_keywords.remove(nonwanted)
     if recorded_keywords[4] in body_text:
         body_text = body_text.replace(recorded_keywords[4], recorded_keywords[10])
@@ -1989,13 +2385,17 @@ def messaging_user_statistics_writer(body_text, username):
         already_saved = False
     else:  # There's data already for this username.
         already_saved = True
-        commands_dictionary = eval(username_commands_data[0][1])  # We only want the stored dict here.
+        commands_dictionary = eval(
+            username_commands_data[0][1]
+        )  # We only want the stored dict here.
 
     # Process through the text and record the commands used.
     for keyword in recorded_keywords:
         if keyword in body_text:
 
-            if keyword is '`':  # Since these come in pairs, we have to divide this in half.
+            if (
+                keyword is "`"
+            ):  # Since these come in pairs, we have to divide this in half.
                 keyword_count = int((body_text.count(keyword) / 2))
             else:  # Regular command
                 keyword_count = body_text.count(keyword)
@@ -2006,11 +2406,15 @@ def messaging_user_statistics_writer(body_text, username):
                 commands_dictionary[keyword] = keyword_count
 
     # Save to the database if there's stuff.
-    if len(commands_dictionary.keys()) != 0 and not already_saved:  # This is a new username.
+    if (
+        len(commands_dictionary.keys()) != 0 and not already_saved
+    ):  # This is a new username.
         to_store = (username, str(commands_dictionary))
         cursor_main.execute("INSERT INTO total_commands VALUES (?, ?)", to_store)
         conn_main.commit()
-    elif len(commands_dictionary.keys()) != 0 and already_saved:  # This username exists. Update instead.
+    elif (
+        len(commands_dictionary.keys()) != 0 and already_saved
+    ):  # This username exists. Update instead.
         update_command = "UPDATE total_commands SET commands = ? WHERE username = ?"
         cursor_main.execute(update_command, (str(commands_dictionary), username))
         conn_main.commit()
@@ -2050,12 +2454,14 @@ def messaging_user_statistics_loader(username):
     if username_commands_data is None:  # There is no data for this user.
         commands_lines_to_post = None
     else:  # There's data. Get the data and format it line-by-line.
-        commands_dictionary = eval(username_commands_data[1])  # We only want the stored dict here.
+        commands_dictionary = eval(
+            username_commands_data[1]
+        )  # We only want the stored dict here.
         for key, value in sorted(commands_dictionary.items()):
             command_type = key
-            if command_type != 'Notifications':  # This is a regular command.
-                if command_type == '`':
-                    command_type = '`lookup`'
+            if command_type != "Notifications":  # This is a regular command.
+                if command_type == "`":
+                    command_type = "`lookup`"
                 formatted_line = "| {} | {} |".format(command_type, value)
                 commands_lines_to_post.append(formatted_line)
 
@@ -2065,10 +2471,16 @@ def messaging_user_statistics_loader(username):
     else:  # There's data
         notification_dict = eval(notifications_commands_data[1])
         for language_code, notification_num in sorted(notification_dict.items()):
-            formatted_line = "| Notifications (`{}`) | {} |".format(language_code, notification_num)
-            notifications_lines_to_post.append(formatted_line)  # Reform it as a string from a list.
+            formatted_line = "| Notifications (`{}`) | {} |".format(
+                language_code, notification_num
+            )
+            notifications_lines_to_post.append(
+                formatted_line
+            )  # Reform it as a string from a list.
 
-    if username_commands_data is None and notifications_commands_data is None:  # Absolutely no information.
+    if (
+        username_commands_data is None and notifications_commands_data is None
+    ):  # Absolutely no information.
         return None
     else:
         # Format everything together. Convert None to blank list.
@@ -2076,7 +2488,9 @@ def messaging_user_statistics_loader(username):
             commands_lines_to_post = []
         if notifications_lines_to_post is None:
             notifications_lines_to_post = []
-        to_post = header + "\n".join(commands_lines_to_post + notifications_lines_to_post)
+        to_post = header + "\n".join(
+            commands_lines_to_post + notifications_lines_to_post
+        )
         return to_post
 
 
@@ -2092,8 +2506,12 @@ def messaging_months_elapsed():
     month_beginning = 24198  # This is the May 2016 month, when the redesign was implemented. No archive data before.
     current_toki = time.time()
 
-    month_int = int(datetime.datetime.fromtimestamp(current_toki).strftime('%m'))  # EG 05
-    year_int = int(datetime.datetime.fromtimestamp(current_toki).strftime('%Y'))  # EG 2017
+    month_int = int(
+        datetime.datetime.fromtimestamp(current_toki).strftime("%m")
+    )  # EG 05
+    year_int = int(
+        datetime.datetime.fromtimestamp(current_toki).strftime("%Y")
+    )  # EG 2017
 
     total_current_months = (year_int * 12) + month_int
     months_num = total_current_months - month_beginning
@@ -2117,17 +2535,23 @@ def messaging_language_frequency_table(language_list):
 
         # Retrieve stored data.
         language_data = load_statistics_data(code)
-        if language_data is not None:  # There is historical statistics for this language.
-            daily_rate = language_data['rate_daily']
-            monthly_rate = language_data['rate_monthly']
-            yearly_rate = language_data['rate_yearly']
-            link = language_data['permalink']
+        if (
+            language_data is not None
+        ):  # There is historical statistics for this language.
+            daily_rate = language_data["rate_daily"]
+            monthly_rate = language_data["rate_monthly"]
+            yearly_rate = language_data["rate_yearly"]
+            link = language_data["permalink"]
 
             # Here we try to determine which comment we should return as a line.
-            if daily_rate >= 2:  # This is a pretty popular one, with a few requests a day.
+            if (
+                daily_rate >= 2
+            ):  # This is a pretty popular one, with a few requests a day.
                 frequency = "day"
                 rate = daily_rate
-            elif 2 > daily_rate > 0.05:  # This is a frequent one, a few requests a month. But not the most.
+            elif (
+                2 > daily_rate > 0.05
+            ):  # This is a frequent one, a few requests a month. But not the most.
                 frequency = "month"
                 rate = monthly_rate
             else:  # These are pretty infrequent languages. Maybe a few times a year at most.
@@ -2170,10 +2594,15 @@ def messaging_language_frequency(language_name):
     if " " in language_name:  # Wiki links need underscores instead of spaces.
         language_name = language_name.replace(" ", "_")
 
-    overall_page = reddit.subreddit(SUBREDDIT).wiki[language_name.lower()]  # Fetch the wikipage.
+    overall_page = reddit.subreddit(SUBREDDIT).wiki[
+        language_name.lower()
+    ]  # Fetch the wikipage.
     try:
         overall_page_content = str(overall_page.content_md)
-    except (prawcore.exceptions.NotFound, prawcore.exceptions.BadRequest):  # There is no page for this language
+    except (
+        prawcore.exceptions.NotFound,
+        prawcore.exceptions.BadRequest,
+    ):  # There is no page for this language
         return None  # Exit with nothing.
     except prawcore.exceptions.Redirect:  # Tends to happen with "community" requests
         return None  # Exit with nothing.
@@ -2181,30 +2610,44 @@ def messaging_language_frequency(language_name):
     per_month_lines = overall_page_content.split("\n")  # Separate into lines.
 
     for line in per_month_lines[5:]:  # We omit the header of the page.
-        work_line = line.split("(", 1)[0]  # We only want the first part, with month|year|total
+        work_line = line.split("(", 1)[
+            0
+        ]  # We only want the first part, with month|year|total
         # Strip the formatting.
         for character in ["[", "]", " "]:
             work_line = work_line.replace(character, "")
         per_month_lines_edit.append(work_line)
 
-    per_month_lines_edit = [x for x in per_month_lines_edit if "20" in x]  # Only get the ones that have a year in them
+    per_month_lines_edit = [
+        x for x in per_month_lines_edit if "20" in x
+    ]  # Only get the ones that have a year in them
 
     for row in per_month_lines_edit:
         month_posts = int(row.split("|")[2])  # We take the number of posts here.
         total_posts.append(month_posts)  # add it to the list of post counts.
 
-    months_with_data = len(per_month_lines_edit)  # The number of months we have data for the language.
-    months_since = messaging_months_elapsed()  # Get the number of months since we started statistic keeping
+    months_with_data = len(
+        per_month_lines_edit
+    )  # The number of months we have data for the language.
+    months_since = (
+        messaging_months_elapsed()
+    )  # Get the number of months since we started statistic keeping
 
-    if months_with_data == months_since:  # We have data for every single month for the language.
+    if (
+        months_with_data == months_since
+    ):  # We have data for every single month for the language.
         # We want to take only the last 6 months.
         months_calculate = 6  # Change the time frame to 6 months
-        total_rate_posts = sum(total_posts[-1 * months_calculate:])  # Add only the data for the last 6 months.
+        total_rate_posts = sum(
+            total_posts[-1 * months_calculate :]
+        )  # Add only the data for the last 6 months.
     else:
         total_rate_posts = sum(total_posts)
         months_calculate = months_since
 
-    monthly_rate = round((total_rate_posts / months_calculate), 2)  # The average number of posts per month
+    monthly_rate = round(
+        (total_rate_posts / months_calculate), 2
+    )  # The average number of posts per month
     daily_rate = round((monthly_rate / 30), 2)  # The average number of posts per day
     yearly_rate = round((monthly_rate * 12), 2)  # The average number of posts per year
 
@@ -2216,13 +2659,21 @@ def messaging_language_frequency(language_name):
 
     # Here we try to determine which comment we should return as a string.
     if daily_rate >= 2:  # This is a pretty popular one, with a few requests a day.
-        freq_string = MSG_LANGUAGE_FREQUENCY.format(lang_wiki_name, str(daily_rate), "day", lang_name_original)
+        freq_string = MSG_LANGUAGE_FREQUENCY.format(
+            lang_wiki_name, str(daily_rate), "day", lang_name_original
+        )
         return freq_string, stats_package
-    elif 2 > daily_rate > 0.05:  # This is a frequent one, a few requests a month. But not the most.
-        freq_string = MSG_LANGUAGE_FREQUENCY.format(lang_wiki_name, str(monthly_rate), "month", lang_name_original)
+    elif (
+        2 > daily_rate > 0.05
+    ):  # This is a frequent one, a few requests a month. But not the most.
+        freq_string = MSG_LANGUAGE_FREQUENCY.format(
+            lang_wiki_name, str(monthly_rate), "month", lang_name_original
+        )
         return freq_string, stats_package
     else:  # These are pretty infrequent languages. Maybe a few times a year at most.
-        freq_string = MSG_LANGUAGE_FREQUENCY.format(lang_wiki_name, str(yearly_rate), "year", lang_name_original)
+        freq_string = MSG_LANGUAGE_FREQUENCY.format(
+            lang_wiki_name, str(yearly_rate), "year", lang_name_original
+        )
         return freq_string, stats_package
 
 
@@ -2236,31 +2687,38 @@ def messaging_translated_message(oauthor, opermalink):
     """
 
     if oauthor != "translator-BOT":  # I don't want to message myself.
-        translated_subject = '[Notification] Your request has been translated on r/translator!'
-        translated_body = MSG_TRANSLATED.format(oauthor=oauthor, opermalink=opermalink) + BOT_DISCLAIMER
+        translated_subject = (
+            "[Notification] Your request has been translated on r/translator!"
+        )
+        translated_body = (
+            MSG_TRANSLATED.format(oauthor=oauthor, opermalink=opermalink)
+            + BOT_DISCLAIMER
+        )
         try:
             reddit.redditor(oauthor).message(translated_subject, translated_body)
         except praw.exceptions.APIException:  # User doesn't allow for messages.
             pass
 
-    logger.info("[ZW] messaging_translated_message: >> Messaged the OP u/{} "
-                "about their translated post.".format(oauthor))
+    logger.info(
+        "[ZW] messaging_translated_message: >> Messaged the OP u/{} "
+        "about their translated post.".format(oauthor)
+    )
 
     return
 
 
-'''
+"""
 NOTIFICATIONS SYSTEM
 
-These functions all relate to Ziwen's notifications - that is, the database of individuals who are on Ziwen's list for 
-languages. 
+These functions all relate to Ziwen's notifications - that is, the database of individuals who are on Ziwen's list for
+languages.
 
 The two main functions are: `ziwen_notifier`, the actual function that sends messages to people.
                             `ziwen_messages`, the function that proccesses incoming messages to the bot.
 
 All other notifier functions are prefixed with `notifier` in their name.
 Paging functions, which are a subset of the notifications system, has the prefix `notifier_page`.
-'''
+"""
 
 
 def notifier_list_pruner(username):
@@ -2285,14 +2743,22 @@ def notifier_list_pruner(username):
         all_subscriptions = cursor_main.fetchall()
 
         for subscription in all_subscriptions:
-            final_codes.append(subscription[0])  # We only want the language codes (don't need the username).
-        to_post = ", ".join(final_codes)  # Gather a list of the languages user WAS subscribed to
+            final_codes.append(
+                subscription[0]
+            )  # We only want the language codes (don't need the username).
+        to_post = ", ".join(
+            final_codes
+        )  # Gather a list of the languages user WAS subscribed to
 
         # Remove the user from the database.
         sql_command = "DELETE FROM notify_users WHERE username = ?"
         cursor_main.execute(sql_command, (username,))
         conn_main.commit()
-        logger.info("[ZW] notifier_list_pruner: Deleted subscription information for u/{}.".format(username))
+        logger.info(
+            "[ZW] notifier_list_pruner: Deleted subscription information for u/{}.".format(
+                username
+            )
+        )
 
         return to_post  # Return the list of formerly subscribed languages
 
@@ -2326,7 +2792,9 @@ def notifier_regional_language_fetcher(targeted_language):
     cursor_main.execute(sql_lc, (targeted_language,))
     notify_targets = cursor_main.fetchall()
 
-    if relevant_iso_code is not None:  # There is an equvalent code. Let's get the users from that too.
+    if (
+        relevant_iso_code is not None
+    ):  # There is an equvalent code. Let's get the users from that too.
         sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
         cursor_main.execute(sql_lc, (relevant_iso_code,))
         notify_targets += cursor_main.fetchall()
@@ -2335,7 +2803,9 @@ def notifier_regional_language_fetcher(targeted_language):
         username = target[1]  # Get the username.
         final_specific_usernames.append(username)
 
-    final_specific_usernames = list(set(final_specific_usernames))  # Dedupe the final list.
+    final_specific_usernames = list(
+        set(final_specific_usernames)
+    )  # Dedupe the final list.
 
     # Now we need to find the overall list's user names for the broader langauge (e.g. ar)
     broader_code = targeted_language.split("-")[0]  # Take only the language part (ar).
@@ -2344,9 +2814,13 @@ def notifier_regional_language_fetcher(targeted_language):
     all_notify_targets = cursor_main.fetchall()
 
     for target in all_notify_targets:
-        all_broader_usernames.append(target[1])  # This creates a list of all the people signed up for the original.
+        all_broader_usernames.append(
+            target[1]
+        )  # This creates a list of all the people signed up for the original.
 
-    final_specific_determined = set(final_specific_usernames) - set(all_broader_usernames)
+    final_specific_determined = set(final_specific_usernames) - set(
+        all_broader_usernames
+    )
     final_specific_determined = list(final_specific_determined)
 
     return final_specific_determined
@@ -2356,7 +2830,7 @@ def notifier_duplicate_checker(language_code, username):
     """
     Function that checks to see if there is a duplicate entry in the notifications database. That is, there is a user
     who is signed up for this specific language code.
-    
+
     :param language_code: The language code the user may be signed up for.
     :param username: The username of a Reddit user.
     :return: True if entry pair is in there (the user is signed up for this language), False if not.
@@ -2383,7 +2857,7 @@ def notifier_title_cleaner(otitle):
     """
 
     # Characters to prefix a backslash to.
-    specific_characters = ['[', ']']
+    specific_characters = ["[", "]"]
 
     for character in specific_characters:
         if character in otitle:
@@ -2461,10 +2935,14 @@ def notifier_limit_writer(username, language_code, num_notifications=1):
     # Parse the user's data. Load it if it exists.
     if user_data is not None:  # There's a record.
         monthly_limit_dictionary = user_data[1]  # Take the stored dictionary.
-        monthly_limit_dictionary = eval(monthly_limit_dictionary)  # Convert the string to a proper dictionary.
+        monthly_limit_dictionary = eval(
+            monthly_limit_dictionary
+        )  # Convert the string to a proper dictionary.
 
     # Write the changes to the database.
-    if language_code not in monthly_limit_dictionary and user_data is None:  # Create a new record, user doesn't exist.
+    if (
+        language_code not in monthly_limit_dictionary and user_data is None
+    ):  # Create a new record, user doesn't exist.
 
         # Define the key and its value.
         monthly_limit_dictionary[language_code] = num_notifications
@@ -2482,7 +2960,9 @@ def notifier_limit_writer(username, language_code, num_notifications=1):
 
         # Write to the database.
         to_store = (str(monthly_limit_dictionary), username)
-        update_command = "UPDATE notify_monthly_limit SET received = ? WHERE username = ?"
+        update_command = (
+            "UPDATE notify_monthly_limit SET received = ? WHERE username = ?"
+        )
         cursor_main.execute(update_command, to_store)
 
     # Commit changes.
@@ -2546,7 +3026,9 @@ def notifier_equalizer(notify_users_list, language_name, monthly_limit):
     else:
         users_number = None
 
-    if users_number is None:  # If there's no one signed up for, just return an empty list
+    if (
+        users_number is None
+    ):  # If there's no one signed up for, just return an empty list
         return []
 
     # Get the number of requests on average per month for a language
@@ -2554,12 +3036,16 @@ def notifier_equalizer(notify_users_list, language_name, monthly_limit):
         if language_name == "Unknown":  # Hardcode Unknown frequency
             monthly_number_notifications = 260
         else:
-            monthly_number_notifications = messaging_language_frequency(language_name)[1][1]
+            monthly_number_notifications = messaging_language_frequency(language_name)[
+                1
+            ][1]
     except TypeError:  # If there are no statistics for this language, just set it to low.
         monthly_number_notifications = 1
 
     # Get the number of users we're going to randomly pick for this language
-    users_to_contact = round(((users_number * monthly_limit) / monthly_number_notifications), 0)
+    users_to_contact = round(
+        ((users_number * monthly_limit) / monthly_number_notifications), 0
+    )
     users_to_contact = int(users_to_contact)
 
     # There are more users to contact than the recommended amount. Randomize.
@@ -2573,8 +3059,11 @@ def notifier_equalizer(notify_users_list, language_name, monthly_limit):
     if users_number > limit_number:
         # Pick X people at random. Cut the list down
         notify_users_list = random.sample(notify_users_list, limit_number)
-        logger.info("[ZW] Notifier Equalizer: {}+ people for {} notifications. Randomized.".format(limit_number,
-                                                                                                   language_name))
+        logger.info(
+            "[ZW] Notifier Equalizer: {}+ people for {} notifications. Randomized.".format(
+                limit_number, language_name
+            )
+        )
 
     # Alphabetize
     notify_users_list = sorted(notify_users_list, key=str.lower)
@@ -2582,7 +3071,9 @@ def notifier_equalizer(notify_users_list, language_name, monthly_limit):
     return notify_users_list
 
 
-def notifier_page_translators(language_code, language_name, pauthor, otitle, opermalink, oauthor, is_nsfw):
+def notifier_page_translators(
+    language_code, language_name, pauthor, otitle, opermalink, oauthor, is_nsfw
+):
     """
     A function (the original purpose Ziwen was written for!) to page up to three users for a post's language.
     Paging now uses the same database as the notification service. It used to rely on a manually populated
@@ -2607,34 +3098,62 @@ def notifier_page_translators(language_code, language_name, pauthor, otitle, ope
     page_users_list = []
 
     for target in page_targets:  # This is a list of tuples.
-        username = target[1]  # Get the user name, as the language is [0] (ar, kungming2)
+        username = target[
+            1
+        ]  # Get the user name, as the language is [0] (ar, kungming2)
         page_users_list.append(username)  # Add the username to the list.
 
     page_users_list = list(set(page_users_list))  # Remove duplicates
-    page_users_list = [x for x in page_users_list if x != pauthor]  # Remove the caller if on there
+    page_users_list = [
+        x for x in page_users_list if x != pauthor
+    ]  # Remove the caller if on there
     if len(page_users_list) > number_to_page:  # If there are more than three people...
-        page_users_list = random.sample(page_users_list, number_to_page)  # Randomly pick 3
+        page_users_list = random.sample(
+            page_users_list, number_to_page
+        )  # Randomly pick 3
 
     if len(page_users_list) == 0:  # There is no one on the list for it.
         return None  # Exit, return None.
     else:
         for target_username in page_users_list:
             # if is_page:
-            message = MSG_PAGE.format(username=target_username, pauthor=pauthor, language_name=language_name,
-                                      otitle=otitle, opermalink=opermalink, oauthor=oauthor,
-                                      removal_link=MSG_REMOVAL_LINK.format(language_name=language_code))
-            subject_line = '[Page] Message from r/translator regarding a {} post'.format(language_name)
+            message = MSG_PAGE.format(
+                username=target_username,
+                pauthor=pauthor,
+                language_name=language_name,
+                otitle=otitle,
+                opermalink=opermalink,
+                oauthor=oauthor,
+                removal_link=MSG_REMOVAL_LINK.format(language_name=language_code),
+            )
+            subject_line = (
+                "[Page] Message from r/translator regarding a {} post".format(
+                    language_name
+                )
+            )
             # Add on a NSFW warning if appropriate.
             if is_nsfw:
                 message += MSG_NSFW_WARNING
 
             # Send the actual message. Delete the username if an error is encountered.
             try:
-                reddit.redditor(str(target_username)).message(subject_line, message + BOT_DISCLAIMER)
-                logger.info('[ZW] Paging: Messaged u/{} for a {} post.'.format(target_username, language_name))
+                reddit.redditor(str(target_username)).message(
+                    subject_line, message + BOT_DISCLAIMER
+                )
+                logger.info(
+                    "[ZW] Paging: Messaged u/{} for a {} post.".format(
+                        target_username, language_name
+                    )
+                )
             except praw.exceptions.APIException:  # There was an error... User probably does not exist anymore.
-                logger.debug("[ZW] Paging: Error occurred sending message to u/{}. Removing...".format(target_username))
-                notifier_list_pruner(target_username)  # Remove the username from our database.
+                logger.debug(
+                    "[ZW] Paging: Error occurred sending message to u/{}. Removing...".format(
+                        target_username
+                    )
+                )
+                notifier_list_pruner(
+                    target_username
+                )  # Remove the username from our database.
 
         return page_users_list
 
@@ -2680,7 +3199,7 @@ def notifier_page_multiple_detector(pbody):
             return None
 
 
-def notifier_language_list_editer(language_list, username, mode='insert'):
+def notifier_language_list_editer(language_list, username, mode="insert"):
     """
     Function that will change the notifications database. It can insert or delete entries for a particular username.
 
@@ -2691,7 +3210,7 @@ def notifier_language_list_editer(language_list, username, mode='insert'):
     """
 
     # If there's nothing in the list, exit.
-    if mode == 'purge':  # We want to delete everything for this user.
+    if mode == "purge":  # We want to delete everything for this user.
         cursor_main.execute("DELETE FROM notify_users WHERE username = ?", (username,))
         conn_main.commit()
     elif len(language_list) == 0:
@@ -2701,20 +3220,27 @@ def notifier_language_list_editer(language_list, username, mode='insert'):
         # Iterate over the codes.
         for code in language_list:
 
-            if len(code) == 4 and code != 'meta':  # This is a script
-                code = 'unknown-' + code  # Format it for insertion.
-            elif code is 'en':  # Skip inserting English.
+            if len(code) == 4 and code != "meta":  # This is a script
+                code = "unknown-" + code  # Format it for insertion.
+            elif code is "en":  # Skip inserting English.
                 continue
 
             # Check to see if user is already in our database.
             is_there = notifier_duplicate_checker(code, username)
 
             sql_package = (code, username)
-            if not is_there and mode == 'insert':  # No entry, and we want to insert.
-                cursor_main.execute("INSERT INTO notify_users VALUES (? , ?)", sql_package)
+            if not is_there and mode == "insert":  # No entry, and we want to insert.
+                cursor_main.execute(
+                    "INSERT INTO notify_users VALUES (? , ?)", sql_package
+                )
                 conn_main.commit()
-            elif is_there and mode == 'delete':  # There is an entry, and we want to delete.
-                cursor_main.execute("DELETE FROM notify_users WHERE language_code = ? and username = ?", sql_package)
+            elif (
+                is_there and mode == "delete"
+            ):  # There is an entry, and we want to delete.
+                cursor_main.execute(
+                    "DELETE FROM notify_users WHERE language_code = ? and username = ?",
+                    sql_package,
+                )
                 conn_main.commit()
             else:
                 continue
@@ -2739,23 +3265,32 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
     post_type = "translation request"
 
     # We don't want to send testing messages.
-    if 'trntest' in opermalink:
+    if "trntest" in opermalink:
         return []
 
     # Load the language_history from the Ajo for this.
     # Exception for dashed stuff for now and meta and community and multiple ones. (defined multiples will just go thru)
-    if suggested_css_text not in ['Community', 'Meta', 'Multiple Languages', 'App'] and "-" not in suggested_css_text:
+    if (
+        suggested_css_text not in ["Community", "Meta", "Multiple Languages", "App"]
+        and "-" not in suggested_css_text
+    ):
 
         # Load the Ajo to check against its history.
-        mid = re.search(r'comments/(.*)/\w', opermalink).group(1)  # Get just the Reddit ID.
+        mid = re.search(r"comments/(.*)/\w", opermalink).group(
+            1
+        )  # Get just the Reddit ID.
         majo = ajo_loader(mid)  # Load the Ajo
 
         # Checking the language history and the user history of the particular submission.
         try:
-            language_history = majo.language_history  # Load the history of languages this post has been in
+            language_history = (
+                majo.language_history
+            )  # Load the history of languages this post has been in
             contacted = majo.notified  # Load the people who have been contacted before.
-            logger.debug('Ziwen Notifier: Already contacted {}'.format(contacted))
-            permission_to_proceed = notifier_history_checker(suggested_css_text, language_history)
+            logger.debug("Ziwen Notifier: Already contacted {}".format(contacted))
+            permission_to_proceed = notifier_history_checker(
+                suggested_css_text, language_history
+            )
         except AttributeError:
             permission_to_proceed = True
 
@@ -2767,10 +3302,15 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
     if "-" not in suggested_css_text:  # This is a regular notification.
         language_code = converter(suggested_css_text)[0]
         language_name = converter(suggested_css_text)[1]
-        if suggested_css_text == "Multiple Languages":  # Debug fix for the multiple ones.
+        if (
+            suggested_css_text == "Multiple Languages"
+        ):  # Debug fix for the multiple ones.
             language_code = "multiple"
             language_name = "Multiple Languages"
-        elif suggested_css_text in ["meta", "community"]:  # Debug fix for the meta & community ones.
+        elif suggested_css_text in [
+            "meta",
+            "community",
+        ]:  # Debug fix for the meta & community ones.
             language_code = suggested_css_text
             language_name = suggested_css_text.title()
             post_type = "post"  # Since these are technically not language requests
@@ -2780,23 +3320,31 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
                 return []  # Exit.
     else:  # This is a specific code, we want to add the people only signed up for them.
         # Note, this only gets people who are specifically signed up for them, not
-        language_code = suggested_css_text.split("-", 1)[0]  # We get the broader category here. (ar, unknown)
+        language_code = suggested_css_text.split("-", 1)[
+            0
+        ]  # We get the broader category here. (ar, unknown)
         language_name = converter(suggested_css_text)[1]
         if language_code == "unknown":  # Add a new script phrase
             language_name += " (Script)"  # This is to distinguish script notifications
         regional_data = notifier_regional_language_fetcher(suggested_css_text)
         if len(regional_data) != 0:
-            notify_users_list += regional_data  # add the additional people to the notifications list.
+            notify_users_list += (
+                regional_data  # add the additional people to the notifications list.
+            )
 
     sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
     cursor_main.execute(sql_lc, (language_code,))
     notify_targets = cursor_main.fetchall()
 
-    if len(notify_targets) == 0 and len(notify_users_list) == 0:  # If there's no one on the list, just continue
+    if (
+        len(notify_targets) == 0 and len(notify_users_list) == 0
+    ):  # If there's no one on the list, just continue
         return []
 
     for target in notify_targets:  # This is a list of tuples.
-        username = target[1]  # Get the user name, as the language is [0] (ar, kungming2)
+        username = target[
+            1
+        ]  # Get the user name, as the language is [0] (ar, kungming2)
         notify_users_list.append(username)
 
     notify_users_list = list(set(notify_users_list))  # Eliminate duplicates
@@ -2804,28 +3352,59 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
     notify_users_list = [x for x in notify_users_list if x not in contacted]
 
     # Code here to equalize data (see function above)
-    notify_users_list = notifier_equalizer(notify_users_list, language_name, NOTIFICATIONS_LIMIT)
+    notify_users_list = notifier_equalizer(
+        notify_users_list, language_name, NOTIFICATIONS_LIMIT
+    )
 
-    action_counter(len(notify_users_list), "Notifications")  # Write to the counter log how many we send
-    otitle = notifier_title_cleaner(otitle)  # Clean up the title, prevent Markdown errors with square brackets
+    action_counter(
+        len(notify_users_list), "Notifications"
+    )  # Write to the counter log how many we send
+    otitle = notifier_title_cleaner(
+        otitle
+    )  # Clean up the title, prevent Markdown errors with square brackets
 
     for username in notify_users_list:
         if not is_identify:  # This is just the regular notification
-            message = MSG_NOTIFY.format(username=username, language_name=language_name, post_type=post_type,
-                                        otitle=otitle, opermalink=opermalink, oauthor=oauthor)
+            message = MSG_NOTIFY.format(
+                username=username,
+                language_name=language_name,
+                post_type=post_type,
+                otitle=otitle,
+                opermalink=opermalink,
+                oauthor=oauthor,
+            )
         else:  # This is from an !identify command.
-            message = MSG_NOTIFY_IDENTIFY.format(username=username, language_name=language_name, post_type=post_type,
-                                                 otitle=otitle, opermalink=opermalink, oauthor=oauthor)
+            message = MSG_NOTIFY_IDENTIFY.format(
+                username=username,
+                language_name=language_name,
+                post_type=post_type,
+                otitle=otitle,
+                opermalink=opermalink,
+                oauthor=oauthor,
+            )
         try:
-            message_subject = '[Notification] New {} post on r/translator'.format(language_name)
-            reddit.redditor(username).message(message_subject, message + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
-            notifier_limit_writer(username, language_code)  # Record that they have been messaged
+            message_subject = "[Notification] New {} post on r/translator".format(
+                language_name
+            )
+            reddit.redditor(username).message(
+                message_subject, message + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON
+            )
+            notifier_limit_writer(
+                username, language_code
+            )  # Record that they have been messaged
         except praw.exceptions.APIException:  # If the user deleted their account...
-            logger.info("[ZW] Notifier: An error occured while sending a message to u/{}. Removing...".format(username))
+            logger.info(
+                "[ZW] Notifier: An error occured while sending a message to u/{}. Removing...".format(
+                    username
+                )
+            )
             notifier_list_pruner(username)  # Remove the username from our database.
 
-    logger.info("[ZW] Notifier: Sent notifications to {} users signed up for {}.".format(str(len(notify_users_list)),
-                                                                                         language_name))
+    logger.info(
+        "[ZW] Notifier: Sent notifications to {} users signed up for {}.".format(
+            str(len(notify_users_list)), language_name
+        )
+    )
 
     return notify_users_list
 
@@ -2860,69 +3439,100 @@ def ziwen_messages():
         mbody = message.body
         message.mark_read()  # Mark the message as read.
 
-        if "subscribe" in msubject and "un" not in msubject:  # User wants to subscribe to language notifications.
+        if (
+            "subscribe" in msubject and "un" not in msubject
+        ):  # User wants to subscribe to language notifications.
 
-            logger.info("[ZW] Messages: New subscription request from u/{}.".format(mauthor))
+            logger.info(
+                "[ZW] Messages: New subscription request from u/{}.".format(mauthor)
+            )
 
             # This gets a list of language codes from the message body.
             language_matches = language_list_splitter(mbody)
 
             if language_matches is None:  # There are no valid codes to subscribe.
-                message.reply(MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER)  # Reply to user.
-                logger.info("[ZW] Messages: Subscription languages listed are not valid.")
+                message.reply(
+                    MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER
+                )  # Reply to user.
+                logger.info(
+                    "[ZW] Messages: Subscription languages listed are not valid."
+                )
             else:  # There are valid codes. Let's insert them into our database and reply with a confirmation message.
 
                 final_match_names = []
 
                 # Insert the relevant codes.
-                notifier_language_list_editer(language_matches, mauthor, 'insert')
+                notifier_language_list_editer(language_matches, mauthor, "insert")
 
                 # Get the language names of those codes.
                 for code in language_matches:
                     final_match_names.append(converter(code)[1])
 
                 # Add the various components of the reply.
-                thanks_phrase = MAIN_LANGUAGES.get(language_matches[0], {}).get('thanks', 'Thank you')
+                thanks_phrase = MAIN_LANGUAGES.get(language_matches[0], {}).get(
+                    "thanks", "Thank you"
+                )
                 bullet_list = "\n* ".join(final_match_names)
                 frequency_table = messaging_language_frequency_table(language_matches)
 
                 # Pull it all together with the template.
-                main_body = MSG_SUBSCRIBE.format(thanks_phrase, bullet_list, frequency_table)
+                main_body = MSG_SUBSCRIBE.format(
+                    thanks_phrase, bullet_list, frequency_table
+                )
 
                 # Reply to the subscribing user.
                 message.reply(main_body + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
-                logger.info("[ZW] Messages: Added notification subscriptions for u/" + mauthor + ".")
+                logger.info(
+                    "[ZW] Messages: Added notification subscriptions for u/"
+                    + mauthor
+                    + "."
+                )
                 action_counter(len(language_matches), "Subscriptions")
 
         elif "unsubscribe" in msubject:  # User wants to unsubscribe from notifications.
-            logger.info("[ZW] Messages: New unsubscription request from u/{}.".format(mauthor))
+            logger.info(
+                "[ZW] Messages: New unsubscription request from u/{}.".format(mauthor)
+            )
 
             # This gets a list of language codes from the message body.
             language_matches = language_list_splitter(mbody)
 
             # Iterate over the results.
-            if language_matches is None:  # There are no valid codes to unsubscribe them from.
+            if (
+                language_matches is None
+            ):  # There are no valid codes to unsubscribe them from.
                 # Format the error reply message.
-                message.reply(MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER)
+                message.reply(
+                    MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER
+                )
 
                 # Forward the message to my creator.
-                reddit.redditor('kungming2').message(subject='Unsubscribe Attempt: u/{}'.format(mauthor),
-                                                     message="Forwarded message:\n\n---\n\n{}".format(mbody))
-                logger.info("[ZW] Messages: Unsubscription languages listed are invalid. Replied w/ more info.")
-            elif 'all' in language_matches:  # User wants to unsubscribe from everything.
+                reddit.redditor("kungming2").message(
+                    subject="Unsubscribe Attempt: u/{}".format(mauthor),
+                    message="Forwarded message:\n\n---\n\n{}".format(mbody),
+                )
+                logger.info(
+                    "[ZW] Messages: Unsubscription languages listed are invalid. Replied w/ more info."
+                )
+            elif (
+                "all" in language_matches
+            ):  # User wants to unsubscribe from everything.
 
                 # Delete the user from the database.
-                notifier_language_list_editer(language_matches, mauthor, 'purge')
+                notifier_language_list_editer(language_matches, mauthor, "purge")
 
                 # Send the reply.
-                message.reply(MSG_UNSUBSCRIBE_ALL.format('all', MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER)
+                message.reply(
+                    MSG_UNSUBSCRIBE_ALL.format("all", MSG_SUBSCRIBE_LINK)
+                    + BOT_DISCLAIMER
+                )
                 action_counter(1, "Unsubscriptions")
             else:  # Should return a list of specific languages the person doesn't want.
 
                 final_match_names = []
 
                 # Delete the relevant codes.
-                notifier_language_list_editer(language_matches, mauthor, 'delete')
+                notifier_language_list_editer(language_matches, mauthor, "delete")
 
                 # Get the language names of those codes.
                 for code in language_matches:
@@ -2932,9 +3542,16 @@ def ziwen_messages():
                 bullet_list = "\n* ".join(final_match_names)
 
                 # Format the reply message.
-                message.reply(MSG_UNSUBSCRIBE_ALL.format(bullet_list, MSG_SUBSCRIBE_LINK) +
-                              BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
-                logger.info("[ZW] Messages: Removed notification subscriptions for u/" + mauthor + ".")
+                message.reply(
+                    MSG_UNSUBSCRIBE_ALL.format(bullet_list, MSG_SUBSCRIBE_LINK)
+                    + BOT_DISCLAIMER
+                    + MSG_UNSUBSCRIBE_BUTTON
+                )
+                logger.info(
+                    "[ZW] Messages: Removed notification subscriptions for u/"
+                    + mauthor
+                    + "."
+                )
                 action_counter(len(language_matches), "Unsubscriptions")
 
         elif "ping" in msubject:
@@ -2943,7 +3560,9 @@ def ziwen_messages():
 
             # Determine if user is a moderator.
             if is_mod(mauthor):  # New status check from moderators.
-                to_post += record_retrieve_error_log()  # Get the last two recorded error entries for debugging.
+                to_post += (
+                    record_retrieve_error_log()
+                )  # Get the last two recorded error entries for debugging.
                 if len(to_post) > 10000:  # If the PM is too long, shorten it.
                     to_post = to_post[0:9750]
             else:  # Ping from a regular user.
@@ -2961,9 +3580,13 @@ def ziwen_messages():
             # We try to retrieve the languages the user is subscribed to.
             sql_stat = "SELECT * FROM notify_users WHERE username = ?"
             cursor_main.execute(sql_stat, (mauthor,))
-            all_subscriptions = cursor_main.fetchall()  # Returns a list of lists w/ the language code & the username
+            all_subscriptions = (
+                cursor_main.fetchall()
+            )  # Returns a list of lists w/ the language code & the username
             for subscription in all_subscriptions:
-                final_match_codes.append(subscription[0])  # We only want the language codes (don't need the username).
+                final_match_codes.append(
+                    subscription[0]
+                )  # We only want the language codes (don't need the username).
 
             # User is not subscribed to anything.
             if len(final_match_codes) == 0:
@@ -2972,59 +3595,84 @@ def ziwen_messages():
                 for code in final_match_codes:  # Convert the codes into names
                     converted_result = converter(code)  # This will return a tuple.
                     match_name = converted_result[1]  # Should get the name from each
-                    if code == 'meta':
-                        match_name = 'Meta'
-                    elif code == 'community':
-                        match_name = 'Community'
+                    if code == "meta":
+                        match_name = "Meta"
+                    elif code == "community":
+                        match_name = "Community"
                     elif "unknown-" in code:  # For scripts
                         match_name += " (Script)"
                     final_match_names.append(match_name)
 
                 # De-dupe and sort the returned languages.
                 final_match_names = list(set(final_match_names))  # Remove duplicates
-                final_match_names = sorted(final_match_names, key=str.lower)  # Alphabetize
+                final_match_names = sorted(
+                    final_match_names, key=str.lower
+                )  # Alphabetize
 
                 # Format the message to send to the requester.
-                status_message = "You're subscribed to notifications on r/translator for:\n\n* {}"
+                status_message = (
+                    "You're subscribed to notifications on r/translator for:\n\n* {}"
+                )
                 status_component = status_message.format("\n* ".join(final_match_names))
 
             # Get the commands the user may have used before.
             user_commands_statistics_data = messaging_user_statistics_loader(mauthor)
             if user_commands_statistics_data is not None:
-                commands_component = "\n\n### User Commands Statistics\n\n" + user_commands_statistics_data
+                commands_component = (
+                    "\n\n### User Commands Statistics\n\n"
+                    + user_commands_statistics_data
+                )
             else:
                 commands_component = ""
 
             # Compile the components together
-            compilation = "### Notifications\n\n" + status_component + commands_component
+            compilation = (
+                "### Notifications\n\n" + status_component + commands_component
+            )
 
             action_counter(1, "Status checks")
             message.reply(compilation + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
 
-        elif "add" in msubject and is_mod(mauthor):  # Mod manually adding people to the notifications database.
-            logger.info("[ZW] Messages: New username addition message from moderator u/{}.".format(mauthor))
+        elif "add" in msubject and is_mod(
+            mauthor
+        ):  # Mod manually adding people to the notifications database.
+            logger.info(
+                "[ZW] Messages: New username addition message from moderator u/{}.".format(
+                    mauthor
+                )
+            )
 
             # Get the username of the user we want to add to the database.
             add_username = mbody.split("USERNAME:", 1)[1]
-            add_username = add_username.split("LANGUAGES", 1)[0].strip()  # Get the username (no u/)
+            add_username = add_username.split("LANGUAGES", 1)[
+                0
+            ].strip()  # Get the username (no u/)
 
             # Split off the languages part.
-            language_component = mbody.rpartition('LANGUAGES:')[-1].strip()
+            language_component = mbody.rpartition("LANGUAGES:")[-1].strip()
 
             # This gets a list of language codes from the message body.
             language_matches = language_list_splitter(language_component)
 
-            if language_matches is not None:  # In case the moderators' addition string is incomprehensible.
+            if (
+                language_matches is not None
+            ):  # In case the moderators' addition string is incomprehensible.
                 # Insert the relevant codes.
-                notifier_language_list_editer(language_matches, add_username, 'insert')
+                notifier_language_list_editer(language_matches, add_username, "insert")
 
                 # Reply to moderator.
                 match_codes_print = ", ".join(language_matches)
                 addition_message = "Added the language codes **{}** for u/{} into the notifications database."
                 message.reply(addition_message.format(match_codes_print, add_username))
 
-        elif "remove" in msubject and is_mod(mauthor):  # Mod manually removing people from the notifications database.
-            logger.info("[ZW] Messages: New username removal message from moderator u/{}.".format(mauthor))
+        elif "remove" in msubject and is_mod(
+            mauthor
+        ):  # Mod manually removing people from the notifications database.
+            logger.info(
+                "[ZW] Messages: New username removal message from moderator u/{}.".format(
+                    mauthor
+                )
+            )
 
             subscribed_codes = []
 
@@ -3032,29 +3680,43 @@ def ziwen_messages():
             remove_username = mbody.split("USERNAME:", 1)[1].strip()
 
             # We try to retrieve the languages the user is subscribed to.
-            cursor_main.execute("SELECT * FROM notify_users WHERE username = ?", (remove_username,))
-            all_subscriptions = cursor_main.fetchall()  # Returns a list of lists with both the code and the username.
+            cursor_main.execute(
+                "SELECT * FROM notify_users WHERE username = ?", (remove_username,)
+            )
+            all_subscriptions = (
+                cursor_main.fetchall()
+            )  # Returns a list of lists with both the code and the username.
             for subscription in all_subscriptions:
-                subscribed_codes.append(subscription[0])  # We only want the language codes (no need the username).
+                subscribed_codes.append(
+                    subscription[0]
+                )  # We only want the language codes (no need the username).
 
             # Actually delete the username from database.
-            notifier_language_list_editer([], remove_username, 'purge')
+            notifier_language_list_editer([], remove_username, "purge")
 
             # Send a message back to the moderator confirming this.
             final_match_codes_print = ", ".join(subscribed_codes)
             removal_message = "Removed the subscriptions for u/{} from the notifications database. (**{}**)"
-            message.reply(removal_message.format(remove_username, final_match_codes_print))
+            message.reply(
+                removal_message.format(remove_username, final_match_codes_print)
+            )
 
         elif "points" in msubject:
-            logger.info("[ZW] Messages: New points status request from u/{}.".format(mauthor))
+            logger.info(
+                "[ZW] Messages: New points status request from u/{}.".format(mauthor)
+            )
 
             # Get the user's points
-            user_points_output = "### Points on r/translator\n\n" + points_retreiver(mauthor)
+            user_points_output = "### Points on r/translator\n\n" + points_retreiver(
+                mauthor
+            )
 
             # Get the commands the user may have used before.
             user_commands_statistics_data = messaging_user_statistics_loader(mauthor)
             if user_commands_statistics_data is not None:
-                commands_component = "\n\n### Commands Statistics\n\n" + user_commands_statistics_data
+                commands_component = (
+                    "\n\n### Commands Statistics\n\n" + user_commands_statistics_data
+                )
             else:
                 commands_component = ""
 
@@ -3064,18 +3726,18 @@ def ziwen_messages():
     return
 
 
-'''
+"""
 CHARACTER/WORD LOOKUP FUNCTIONS
 
-Ziwen uses the regular code-formatting in Markdown (`) as a syntax to define words for it to look up. 
-The most supported searches are for Japanese and Chinese as they account for nearly 50% of posts on r/translator. 
+Ziwen uses the regular code-formatting in Markdown (`) as a syntax to define words for it to look up.
+The most supported searches are for Japanese and Chinese as they account for nearly 50% of posts on r/translator.
 There is also a dedicated search function for Korean and a Wiktionary search for every other language.
 
 For Chinese and Japanese, the main functions are `xx_character` and `xx_word`, where xx is the language code (ZH or JA).
 
 Specific language lookup functions are prefixed by the function whose data they return to. (e.g. `zh_word`)
 More general ones are prefixed by `lookup`.
-'''
+"""
 
 
 # Chinese Lookup Functions
@@ -3092,14 +3754,18 @@ def zh_character_oc_search(character):
     mc_oc_readings = {}
 
     # Iterate over the CSV
-    csv_file = csv.reader(open(FILE_ADDRESS_OLD_CHINESE, "rt", encoding="utf-8"), delimiter=",")
+    csv_file = csv.reader(
+        open(FILE_ADDRESS_OLD_CHINESE, "rt", encoding="utf-8"), delimiter=","
+    )
     for row in csv_file:
         my_character = row[0]
 
-        mc_reading = (row[2:][0])  # It is normally returned as a list, so we need to convert into a string.
-        oc_reading = (row[4:][0])
+        mc_reading = row[2:][
+            0
+        ]  # It is normally returned as a list, so we need to convert into a string.
+        oc_reading = row[4:][0]
         if "(" in oc_reading:
-            oc_reading = oc_reading.split('(', 1)[0]
+            oc_reading = oc_reading.split("(", 1)[0]
 
         # Add the character as a key with the readings as a tuple
         mc_oc_readings[my_character] = (mc_reading.strip(), oc_reading.strip())
@@ -3109,7 +3775,9 @@ def zh_character_oc_search(character):
         return None
     else:  # Character exists!
         character_data = mc_oc_readings[character]  # Get the tuple
-        to_post = "\n**Middle Chinese** | \**{}*\n**Old Chinese** | \*{}*".format(character_data[0], character_data[1])
+        to_post = "\n**Middle Chinese** | \**{}*\n**Old Chinese** | \*{}*".format(
+            character_data[0], character_data[1]
+        )
         return to_post
 
 
@@ -3124,29 +3792,39 @@ def zh_character_min_hak(character):
     """
 
     # Fetch Hokkien results
-    min_page = requests.get("https://www.moedict.tw/'{}".format(character), headers=ZW_USERAGENT)
+    min_page = requests.get(
+        "https://www.moedict.tw/'{}".format(character), headers=ZW_USERAGENT
+    )
     min_tree = html.fromstring(min_page.content)  # now contains the whole HTML page
 
     # The annotation returns as a list, we want to take the first one.
     try:
-        min_reading = min_tree.xpath('//ru[contains(@class,"rightangle") and contains(@order,"0")]/@annotation')[0]
+        min_reading = min_tree.xpath(
+            '//ru[contains(@class,"rightangle") and contains(@order,"0")]/@annotation'
+        )[0]
         min_reading = "\n**Southern Min** | *{}*".format(min_reading)
     except IndexError:  # No character or word found.
         min_reading = ""
 
     # Fetch Hakka results (Sixian)
-    hak_page = requests.get("https://www.moedict.tw/:{}".format(character), headers=ZW_USERAGENT)
+    hak_page = requests.get(
+        "https://www.moedict.tw/:{}".format(character), headers=ZW_USERAGENT
+    )
     hak_tree = html.fromstring(hak_page.content)  # now contains the whole HTML page
     try:
-        hak_reading = hak_tree.xpath('string(//span[contains(@data-reactid,"$0.6.2.1")])')
+        hak_reading = hak_tree.xpath(
+            'string(//span[contains(@data-reactid,"$0.6.2.1")])'
+        )
 
         if len(hak_reading) != 0:
             # Format the tones and words properly with superscript.
             hak_reading_new = []
-            hak_reading = re.sub(r'(\d{1,4})([a-z])', r'\1 ', hak_reading)  # Add spaces between words.
+            hak_reading = re.sub(
+                r"(\d{1,4})([a-z])", r"\1 ", hak_reading
+            )  # Add spaces between words.
             hak_reading = hak_reading.split(" ")
             for word in hak_reading:
-                new_word = re.sub(r'([a-z])(\d)', r'\1^\2', word)
+                new_word = re.sub(r"([a-z])(\d)", r"\1^\2", word)
                 hak_reading_new.append(new_word)
             hak_reading = " ".join(hak_reading_new)
 
@@ -3172,11 +3850,16 @@ def zh_character_calligraphy_search(character):
     character = simplify(character)
 
     # First get data from http://shufa.guoxuedashi.com (this will be included as a URL)
-    unicode_assignment = hex(ord(character)).upper()[2:]  # Get the Unicode assignment (eg 738B)
-    gx_url = 'http://shufa.guoxuedashi.com/{}/'.format(unicode_assignment)
+    unicode_assignment = hex(ord(character)).upper()[
+        2:
+    ]  # Get the Unicode assignment (eg 738B)
+    gx_url = "http://shufa.guoxuedashi.com/{}/".format(unicode_assignment)
 
     # Next get an image from Shufazidian
-    formdata = {'sort': '7', 'wd': character}  # Form data to pass on to the POST system.
+    formdata = {
+        "sort": "7",
+        "wd": character,
+    }  # Form data to pass on to the POST system.
     try:
         rdata = requests.post("http://www.shufazidian.com/", data=formdata)
         tree = Bs(rdata.content, "lxml")
@@ -3196,13 +3879,21 @@ def zh_character_calligraphy_search(character):
             if "gif" in url:  # Or GIFs
                 continue
 
-            if "shufa6" in url:  # We try to get the broader summation image instead of the thumbnail.
-                complete_image = url.replace('shufa6/1', 'shufa6')
+            if (
+                "shufa6" in url
+            ):  # We try to get the broader summation image instead of the thumbnail.
+                complete_image = url.replace("shufa6/1", "shufa6")
 
         if len(complete_image) != 0:
-            logger.debug("[ZW] ZH-Calligraphy: There is a Chinese calligraphic image for " + character + ".")
-            image_format = ("\n\n**Chinese Calligraphy Variants**: [{}]({}) (*[SFZD](http://www.shufazidian.com/)*, "
-                            "*[GXDS]({})*)")
+            logger.debug(
+                "[ZW] ZH-Calligraphy: There is a Chinese calligraphic image for "
+                + character
+                + "."
+            )
+            image_format = (
+                "\n\n**Chinese Calligraphy Variants**: [{}]({}) (*[SFZD](http://www.shufazidian.com/)*, "
+                "*[GXDS]({})*)"
+            )
             image_string = image_format.format(character, complete_image, gx_url)
     else:
         image_string = None
@@ -3227,7 +3918,7 @@ def zh_character_other_readings(character):
     to_post = []
 
     # Access the API
-    u_url = 'http://ccdb.hemiola.com/characters/string/{}?fields=kHangul,kKorean,kJapaneseKun,kJapaneseOn,kVietnamese'
+    u_url = "http://ccdb.hemiola.com/characters/string/{}?fields=kHangul,kKorean,kJapaneseKun,kJapaneseOn,kVietnamese"
     unicode_rep = requests.get(u_url.format(character), headers=ZW_USERAGENT)
     try:
         unicode_rep_json = unicode_rep.json()
@@ -3235,14 +3926,16 @@ def zh_character_other_readings(character):
     except (IndexError, ValueError):  # Don't really have the proper data.
         return None
 
-    if 'kJapaneseKun' in unicode_rep_jdict and 'kJapaneseOn' in unicode_rep_jdict:
-        ja_kun = unicode_rep_jdict['kJapaneseKun']
-        ja_on = unicode_rep_jdict['kJapaneseOn']
+    if "kJapaneseKun" in unicode_rep_jdict and "kJapaneseOn" in unicode_rep_jdict:
+        ja_kun = unicode_rep_jdict["kJapaneseKun"]
+        ja_on = unicode_rep_jdict["kJapaneseOn"]
         if ja_kun is not None or ja_on is not None:
 
             # Process the data, allowing for either of these to be None in value.
             if ja_kun is not None:
-                ja_kun = ja_kun.lower() + " "  # A space is added since the kun appears first
+                ja_kun = (
+                    ja_kun.lower() + " "
+                )  # A space is added since the kun appears first
             else:
                 ja_kun = ""
             if ja_on is not None:
@@ -3256,9 +3949,9 @@ def zh_character_other_readings(character):
             ja_total = ", ".join(ja_total)
             ja_string = "**Japanese** | *{}*".format(ja_total)
             to_post.append(ja_string)
-    if 'kHangul' in unicode_rep_jdict and 'kKorean' in unicode_rep_jdict:
-        ko_hangul = unicode_rep_jdict['kHangul']
-        ko_latin = unicode_rep_jdict['kKorean']
+    if "kHangul" in unicode_rep_jdict and "kKorean" in unicode_rep_jdict:
+        ko_hangul = unicode_rep_jdict["kHangul"]
+        ko_latin = unicode_rep_jdict["kKorean"]
         if ko_latin is not None and ko_hangul is not None:
             ko_latin = ko_latin.lower()
             ko_latin = ko_latin.replace(" ", ", ")  # Replace spaces with commas
@@ -3266,8 +3959,8 @@ def zh_character_other_readings(character):
             ko_total = "{} / *{}*".format(ko_hangul, ko_latin)
             ko_string = "**Korean** | {}".format(ko_total)
             to_post.append(ko_string)
-    if 'kVietnamese' in unicode_rep_jdict:
-        vi_latin = unicode_rep_jdict['kVietnamese']
+    if "kVietnamese" in unicode_rep_jdict:
+        vi_latin = unicode_rep_jdict["kVietnamese"]
         if vi_latin is not None:
             vi_latin = vi_latin.lower()
             vi_string = "**Vietnamese** | *{}*".format(vi_latin)
@@ -3293,13 +3986,20 @@ def zh_character(character):
     multi_character_dict = {}
     multi_character_list = list(character)
 
-    if len(multi_character_list) > 1:  # Whether or not multiple characters are passed to this function
+    if (
+        len(multi_character_list) > 1
+    ):  # Whether or not multiple characters are passed to this function
         multi_mode = True
 
-    eth_page = requests.get('https://www.mdbg.net/chindict/chindict.php?page=chardict&cdcanoce=0&cdqchi=' + character,
-                            headers=ZW_USERAGENT)
+    eth_page = requests.get(
+        "https://www.mdbg.net/chindict/chindict.php?page=chardict&cdcanoce=0&cdqchi="
+        + character,
+        headers=ZW_USERAGENT,
+    )
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
-    pronunciation = [div.text_content() for div in tree.xpath('//div[contains(@class,"pinyin")]')]
+    pronunciation = [
+        div.text_content() for div in tree.xpath('//div[contains(@class,"pinyin")]')
+    ]
     cmn_pronunciation, yue_pronunciation = pronunciation[::2], pronunciation[1::2]
 
     if len(pronunciation) == 0:  # Check to not return anything if the entry is invalid
@@ -3308,27 +4008,46 @@ def zh_character(character):
         return to_post
 
     if not multi_mode:  # Regular old-school character search for just one.
-        cmn_pronunciation = ' / '.join(cmn_pronunciation)
-        yue_pronunciation = tree.xpath('//a[contains(@onclick,"pronounce-jyutping")]/text()')
-        yue_pronunciation = ' / '.join(yue_pronunciation)
+        cmn_pronunciation = " / ".join(cmn_pronunciation)
+        yue_pronunciation = tree.xpath(
+            '//a[contains(@onclick,"pronounce-jyutping")]/text()'
+        )
+        yue_pronunciation = " / ".join(yue_pronunciation)
         for i in range(0, 9):
             yue_pronunciation = yue_pronunciation.replace(str(i), "^%s " % str(i))
         meaning = tree.xpath('//div[contains(@class,"defs")]/text()')
-        meaning = '/ '.join(meaning)
+        meaning = "/ ".join(meaning)
         meaning = meaning.strip()
         if tradify(character) == simplify(character):
-            logger.debug('[ZW] ZH-Character: The two versions of {} are identical.'.format(character))
-            lookup_line_1 = str('# [{0}](https://en.wiktionary.org/wiki/{0}#Chinese)'.format(character))
+            logger.debug(
+                "[ZW] ZH-Character: The two versions of {} are identical.".format(
+                    character
+                )
+            )
+            lookup_line_1 = str(
+                "# [{0}](https://en.wiktionary.org/wiki/{0}#Chinese)".format(character)
+            )
             lookup_line_1 += "\n\nLanguage | Pronunciation\n---------|--------------\n"
             lookup_line_1 += "**Mandarin** | *{}*\n**Cantonese** | *{}*"
-            lookup_line_1 = lookup_line_1.format(cmn_pronunciation, yue_pronunciation[:-1])
+            lookup_line_1 = lookup_line_1.format(
+                cmn_pronunciation, yue_pronunciation[:-1]
+            )
         else:
-            logger.debug('[ZW] ZH-Character: The two versions of {} are *not* identical.'.format(character))
-            lookup_line_1 = '# [{0} ({1})](https://en.wiktionary.org/wiki/{0}#Chinese)'.format(tradify(character),
-                                                                                               simplify(character))
+            logger.debug(
+                "[ZW] ZH-Character: The two versions of {} are *not* identical.".format(
+                    character
+                )
+            )
+            lookup_line_1 = (
+                "# [{0} ({1})](https://en.wiktionary.org/wiki/{0}#Chinese)".format(
+                    tradify(character), simplify(character)
+                )
+            )
             lookup_line_1 += "\n\nLanguage | Pronunciation\n---------|--------------\n"
             lookup_line_1 += "**Mandarin** | *{}*\n**Cantonese** | *{}*"
-            lookup_line_1 = lookup_line_1.format(cmn_pronunciation, yue_pronunciation[:-1])
+            lookup_line_1 = lookup_line_1.format(
+                cmn_pronunciation, yue_pronunciation[:-1]
+            )
 
         # Hokkien and Hakka Data
         min_hak_data = zh_character_min_hak(tradify(character))
@@ -3372,16 +4091,29 @@ def zh_character(character):
             multi_character_dict[wenzi] = {}  # Create a new dictionary for it.
 
             # Get the data.
-            character_url = 'https://www.mdbg.net/chindict/chindict.php?page=chardict&cdcanoce=0&cdqchi=' + wenzi
+            character_url = (
+                "https://www.mdbg.net/chindict/chindict.php?page=chardict&cdcanoce=0&cdqchi="
+                + wenzi
+            )
             new_eth_page = requests.get(character_url, headers=ZW_USERAGENT)
-            new_tree = html.fromstring(new_eth_page.content)  # now contains the whole HTML page
-            pronunciation = [div.text_content() for div in new_tree.xpath('//div[contains(@class,"pinyin")]')]
-            cmn_pronunciation, yue_pronunciation = pronunciation[::2], pronunciation[1::2]
+            new_tree = html.fromstring(
+                new_eth_page.content
+            )  # now contains the whole HTML page
+            pronunciation = [
+                div.text_content()
+                for div in new_tree.xpath('//div[contains(@class,"pinyin")]')
+            ]
+            cmn_pronunciation, yue_pronunciation = (
+                pronunciation[::2],
+                pronunciation[1::2],
+            )
 
             # Format the pronunciation data
-            cmn_pronunciation = "*" + ' '.join(cmn_pronunciation) + "*"
-            yue_pronunciation = new_tree.xpath('//a[contains(@onclick,"pronounce-jyutping")]/text()')
-            yue_pronunciation = ' '.join(yue_pronunciation)
+            cmn_pronunciation = "*" + " ".join(cmn_pronunciation) + "*"
+            yue_pronunciation = new_tree.xpath(
+                '//a[contains(@onclick,"pronounce-jyutping")]/text()'
+            )
+            yue_pronunciation = " ".join(yue_pronunciation)
             for i in range(0, 9):
                 yue_pronunciation = yue_pronunciation.replace(str(i), "^%s " % str(i))
             yue_pronunciation = "*" + yue_pronunciation.strip() + "*"
@@ -3391,7 +4123,7 @@ def zh_character(character):
 
             # Format the meaning data.
             meaning = new_tree.xpath('//div[contains(@class,"defs")]/text()')
-            meaning = '/ '.join(meaning)
+            meaning = "/ ".join(meaning)
             meaning = '"' + meaning.strip() + '."'
             multi_character_dict[wenzi]["meaning"] = meaning
 
@@ -3403,30 +4135,48 @@ def zh_character(character):
         for key in multi_character_list:  # Iterate over the characters in order
             character_data = multi_character_dict[key]
             if tradify(key) == simplify(key):  # Same character in both sets.
-                duo_header += " | [{0}](https://en.wiktionary.org/wiki/{0}#Chinese)".format(key)
+                duo_header += (
+                    " | [{0}](https://en.wiktionary.org/wiki/{0}#Chinese)".format(key)
+                )
             else:
-                duo_header += " | [{0} ({1})](https://en.wiktionary.org/wiki/{0}#Chinese)".format(tradify(key),
-                                                                                                  simplify(key))
+                duo_header += (
+                    " | [{0} ({1})](https://en.wiktionary.org/wiki/{0}#Chinese)".format(
+                        tradify(key), simplify(key)
+                    )
+                )
             duo_separator += "---|"
             duo_mandarin += " | {}".format(character_data["mandarin"])
             duo_cantonese += " | {}".format(character_data["cantonese"])
             duo_meaning += " | {}".format(character_data["meaning"])
 
-        lookup_line_1 = duo_key + duo_header + duo_separator + duo_mandarin + duo_cantonese + duo_meaning
+        lookup_line_1 = (
+            duo_key
+            + duo_header
+            + duo_separator
+            + duo_mandarin
+            + duo_cantonese
+            + duo_meaning
+        )
 
     # Format the dictionary links footer
-    lookup_line_2 = ('\n\n\n^Information ^from '
-                     '[^Unihan](http://www.unicode.org/cgi-bin/GetUnihanData.pl?codepoint={0}) ^| '
-                     '[^CantoDict](http://www.cantonese.sheik.co.uk/dictionary/characters/{0}/) ^| '
-                     '[^Chinese ^Etymology](http://hanziyuan.net/#{1}) ^| '
-                     '[^CHISE](http://www.chise.org/est/view/char/{0}) ^| '
-                     '[^CTEXT](http://ctext.org/dictionary.pl?if=en&char={1}) ^| '
-                     '[^MDBG](https://www.mdbg.net/chindict/chindict.php?page=chardict&cdcanoce=0&cdqchi={0}) ^| '
-                     '[^MFCCD](http://humanum.arts.cuhk.edu.hk/Lexis/lexi-mf/search.php?word={1})')
+    lookup_line_2 = (
+        "\n\n\n^Information ^from "
+        "[^Unihan](http://www.unicode.org/cgi-bin/GetUnihanData.pl?codepoint={0}) ^| "
+        "[^CantoDict](http://www.cantonese.sheik.co.uk/dictionary/characters/{0}/) ^| "
+        "[^Chinese ^Etymology](http://hanziyuan.net/#{1}) ^| "
+        "[^CHISE](http://www.chise.org/est/view/char/{0}) ^| "
+        "[^CTEXT](http://ctext.org/dictionary.pl?if=en&char={1}) ^| "
+        "[^MDBG](https://www.mdbg.net/chindict/chindict.php?page=chardict&cdcanoce=0&cdqchi={0}) ^| "
+        "[^MFCCD](http://humanum.arts.cuhk.edu.hk/Lexis/lexi-mf/search.php?word={1})"
+    )
     lookup_line_2 = lookup_line_2.format(character, tradify(character))
 
-    to_post = (lookup_line_1 + lookup_line_2)
-    logger.info("[ZW] ZH-Character: Received lookup command for " + character + " in Chinese. Returned search results.")
+    to_post = lookup_line_1 + lookup_line_2
+    logger.info(
+        "[ZW] ZH-Character: Received lookup command for "
+        + character
+        + " in Chinese. Returned search results."
+    )
 
     return to_post
 
@@ -3441,36 +4191,42 @@ def zh_word_decode_pinyin(s):
     :return result: A string of pinyin with the tone marks properly applied (e.g. pīnyīn)
     """
 
-    pinyintonemark = {0: "aoeiuv\u00fc",
-                      1: "\u0101\u014d\u0113\u012b\u016b\u01d6\u01d6",
-                      2: "\u00e1\u00f3\u00e9\u00ed\u00fa\u01d8\u01d8",
-                      3: "\u01ce\u01d2\u011b\u01d0\u01d4\u01da\u01da",
-                      4: "\u00e0\u00f2\u00e8\u00ec\u00f9\u01dc\u01dc", }
+    pinyintonemark = {
+        0: "aoeiuv\u00fc",
+        1: "\u0101\u014d\u0113\u012b\u016b\u01d6\u01d6",
+        2: "\u00e1\u00f3\u00e9\u00ed\u00fa\u01d8\u01d8",
+        3: "\u01ce\u01d2\u011b\u01d0\u01d4\u01da\u01da",
+        4: "\u00e0\u00f2\u00e8\u00ec\u00f9\u01dc\u01dc",
+    }
 
     s = s.lower()
     result = ""
     t = ""
     for c in s:
-        if 'a' <= c <= 'z':
+        if "a" <= c <= "z":
             t += c
-        elif c == ':':
-            assert t[-1] == 'u'
+        elif c == ":":
+            assert t[-1] == "u"
             t = t[:-1] + "\u00fc"
         else:
-            if '0' <= c <= '5':
+            if "0" <= c <= "5":
                 tone = int(c) % 5
                 if tone != 0:
                     m = re.search("[aoeiuv\u00fc]+", t)
                     if m is None:
                         t += c
                     elif len(m.group(0)) == 1:
-                        t = t[:m.start(0)] + pinyintonemark[tone][pinyintonemark[0].index(m.group(0))] + t[m.end(0):]
+                        t = (
+                            t[: m.start(0)]
+                            + pinyintonemark[tone][pinyintonemark[0].index(m.group(0))]
+                            + t[m.end(0) :]
+                        )
                     else:
-                        if 'a' in t:
+                        if "a" in t:
                             t = t.replace("a", pinyintonemark[tone][0])
-                        elif 'o' in t:
+                        elif "o" in t:
                             t = t.replace("o", pinyintonemark[tone][1])
-                        elif 'e' in t:
+                        elif "e" in t:
                             t = t.replace("e", pinyintonemark[tone][2])
                         elif t.endswith("ui"):
                             t = t.replace("i", pinyintonemark[tone][3])
@@ -3497,9 +4253,9 @@ def zh_word_buddhist_dictionary_search(chinese_word):
     general_dictionary = {}
 
     # We open the file.
-    f = open(FILE_ADDRESS_ZH_BUDDHIST, 'r', encoding='utf-8')
+    f = open(FILE_ADDRESS_ZH_BUDDHIST, "r", encoding="utf-8")
     existing_data = f.read()
-    existing_data = existing_data.split('\n')
+    existing_data = existing_data.split("\n")
     f.close()
 
     relevant_line = None
@@ -3515,25 +4271,34 @@ def zh_word_buddhist_dictionary_search(chinese_word):
 
     if relevant_line is not None:  # We found a matching word.
         # Parse the entry (code courtesy Marcanuy at https://github.com/marcanuy/cedict_utils, MIT license)
-        hanzis = relevant_line.partition('[')[0].split(' ', 1)
+        hanzis = relevant_line.partition("[")[0].split(" ", 1)
         keywords = dict(
-            meanings=relevant_line.partition('/')[2].replace("\"", "'").rstrip("/").strip().split("/"),
+            meanings=relevant_line.partition("/")[2]
+            .replace('"', "'")
+            .rstrip("/")
+            .strip()
+            .split("/"),
             traditional=hanzis[0].strip(" "),
             simplified=hanzis[1].strip(" "),
             # Take the content in between the two brackets
-            pinyin=relevant_line.partition('[')[2].partition(']')[0],
-            raw_line=relevant_line)
+            pinyin=relevant_line.partition("[")[2].partition("]")[0],
+            raw_line=relevant_line,
+        )
 
         # Format the data nicely.
-        if len(keywords['meanings']) > 2:  # Truncate if too long.
-            keywords['meanings'] = keywords['meanings'][:2]
-            keywords['meanings'][-1] += "."  # Add a period.
-        formatted_line = '\n\n**Buddhist Meanings**: "{}"'.format("; ".join(keywords['meanings']))
-        formatted_line += (" ([Soothill-Hodous]"
-                           "(https://mahajana.net/en/library/texts/a-dictionary-of-chinese-buddhist-terms))")
+        if len(keywords["meanings"]) > 2:  # Truncate if too long.
+            keywords["meanings"] = keywords["meanings"][:2]
+            keywords["meanings"][-1] += "."  # Add a period.
+        formatted_line = '\n\n**Buddhist Meanings**: "{}"'.format(
+            "; ".join(keywords["meanings"])
+        )
+        formatted_line += (
+            " ([Soothill-Hodous]"
+            "(https://mahajana.net/en/library/texts/a-dictionary-of-chinese-buddhist-terms))"
+        )
 
-        general_dictionary['meaning'] = formatted_line
-        general_dictionary['pinyin'] = keywords['pinyin']
+        general_dictionary["meaning"] = formatted_line
+        general_dictionary["pinyin"] = keywords["pinyin"]
 
         return general_dictionary
     else:  # Nothing found.
@@ -3551,9 +4316,9 @@ def zh_word_cccanto_search(cantonese_word):
     general_dictionary = {}
 
     # We open the file.
-    f = open(FILE_ADDRESS_ZH_CCCANTO, 'r', encoding='utf-8')
+    f = open(FILE_ADDRESS_ZH_CCCANTO, "r", encoding="utf-8")
     existing_data = f.read()
-    existing_data = existing_data.split('\n')
+    existing_data = existing_data.split("\n")
     f.close()
 
     relevant_line = None
@@ -3569,25 +4334,38 @@ def zh_word_cccanto_search(cantonese_word):
 
     if relevant_line is not None:
         # Parse the entry (based on code from Marcanuy at https://github.com/marcanuy/cedict_utils, MIT license)
-        hanzis = relevant_line.partition('[')[0].split(' ', 1)
+        hanzis = relevant_line.partition("[")[0].split(" ", 1)
         keywords = dict(
-            meanings=relevant_line.partition('/')[2].replace("\"", "'").rstrip("/").strip().split("/"),
+            meanings=relevant_line.partition("/")[2]
+            .replace('"', "'")
+            .rstrip("/")
+            .strip()
+            .split("/"),
             traditional=hanzis[0].strip(" "),
             simplified=hanzis[1].strip(" "),
             # Take the content in between the two brackets
-            pinyin=relevant_line.partition('[')[2].partition(']')[0],
-            jyutping=relevant_line.partition('{')[2].partition('}')[0],
-            raw_line=relevant_line)
+            pinyin=relevant_line.partition("[")[2].partition("]")[0],
+            jyutping=relevant_line.partition("{")[2].partition("}")[0],
+            raw_line=relevant_line,
+        )
 
-        formatted_line = '\n\n**Cantonese Meanings**: "{}."'.format("; ".join(keywords['meanings']))
-        formatted_line += (" ([CC-Canto](http://cantonese.org/search.php?q={}))".format(cantonese_word))
+        formatted_line = '\n\n**Cantonese Meanings**: "{}."'.format(
+            "; ".join(keywords["meanings"])
+        )
+        formatted_line += " ([CC-Canto](http://cantonese.org/search.php?q={}))".format(
+            cantonese_word
+        )
         for i in range(0, 9):
-            keywords['jyutping'] = keywords['jyutping'].replace(str(i), "^%s " % str(i))  # Adds syntax for tones
-        keywords['jyutping'] = keywords['jyutping'].replace("  ", " ").strip()  # Replace double spaces
+            keywords["jyutping"] = keywords["jyutping"].replace(
+                str(i), "^%s " % str(i)
+            )  # Adds syntax for tones
+        keywords["jyutping"] = (
+            keywords["jyutping"].replace("  ", " ").strip()
+        )  # Replace double spaces
 
-        general_dictionary['meaning'] = formatted_line
-        general_dictionary['pinyin'] = keywords['pinyin']
-        general_dictionary['jyutping'] = keywords['jyutping']
+        general_dictionary["meaning"] = formatted_line
+        general_dictionary["pinyin"] = keywords["pinyin"]
+        general_dictionary["jyutping"] = keywords["jyutping"]
 
         return general_dictionary
     else:
@@ -3605,7 +4383,11 @@ def zh_word_tea_dictionary_search(chinese_word):
     general_dictionary = {}
 
     # Conduct a search.
-    web_search = "http://babelcarp.org/babelcarp/babelcarp.cgi?phrase={}&define=1".format(chinese_word)
+    web_search = (
+        "http://babelcarp.org/babelcarp/babelcarp.cgi?phrase={}&define=1".format(
+            chinese_word
+        )
+    )
     eth_page = requests.get(web_search, headers=ZW_USERAGENT)
     try:
         tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
@@ -3618,12 +4400,14 @@ def zh_word_tea_dictionary_search(chinese_word):
         head_word = word_content[2].strip()
     except IndexError:
         return None
-    
-    if chinese_word not in head_word:  # If the characters don't match: Exit. This includes null searches.
+
+    if (
+        chinese_word not in head_word
+    ):  # If the characters don't match: Exit. This includes null searches.
         return None
     else:  # It exists.
         try:
-            pinyin = re.search(r'\((.*?)\)', word_content[2]).group(1).lower()
+            pinyin = re.search(r"\((.*?)\)", word_content[2]).group(1).lower()
         except AttributeError:  # Never mind, it does not exist.
             return None
 
@@ -3632,12 +4416,12 @@ def zh_word_tea_dictionary_search(chinese_word):
 
         # Format the entry to return
         formatted_line = '\n\n**Tea Meanings**: "{}."'.format(" ".join(meaning))
-        formatted_line = formatted_line.replace(' )', ' ')
-        formatted_line = formatted_line.replace('  ', ' ')
+        formatted_line = formatted_line.replace(" )", " ")
+        formatted_line = formatted_line.replace("  ", " ")
         formatted_line += " ([Babelcarp]({}))".format(web_search)  # Append source
 
-        general_dictionary['meaning'] = formatted_line
-        general_dictionary['pinyin'] = pinyin
+        general_dictionary["meaning"] = formatted_line
+        general_dictionary["pinyin"] = pinyin
 
         return general_dictionary
 
@@ -3657,13 +4441,15 @@ def zh_word_alt_romanization(pinyin_string):
 
     # Get the corresponding pronunciations into a dictonary.
     corresponding_dict = {}
-    csv_file = csv.reader(open(FILE_ADDRESS_ZH_ROMANIZATION, "rt", encoding="utf-8"), delimiter=",")
+    csv_file = csv.reader(
+        open(FILE_ADDRESS_ZH_ROMANIZATION, "rt", encoding="utf-8"), delimiter=","
+    )
     for row in csv_file:
         pinyin_p, yale_p, wadegiles_p = row
         corresponding_dict[pinyin_p] = [yale_p.strip(), wadegiles_p.strip()]
 
     # Divide the string into syllables
-    syllables = pinyin_string.split(' ')
+    syllables = pinyin_string.split(" ")
 
     # Process each syllable.
     for syllable in syllables:
@@ -3696,16 +4482,20 @@ def zh_word_chengyu(chengyu):
     :return: None if no results, otherwise a formatted string.
     """
 
-    headers = {'Content-Type': "text/html; charset=gb2312", 'f-type': 'chengyu', "accept-encoding": "gb2312"}
+    headers = {
+        "Content-Type": "text/html; charset=gb2312",
+        "f-type": "chengyu",
+        "accept-encoding": "gb2312",
+    }
     chengyu = simplify(chengyu)  # This website only takes simplified chinese
     r_tree = None  # Placeholder.
 
     # Convert Unicode into a string for the URL, which uses GB2312 encoding.
-    chengyu_gb = str(chengyu.encode('gb2312'))
-    chengyu_gb = chengyu_gb.replace('\\x', "%").upper()[2:-1]
+    chengyu_gb = str(chengyu.encode("gb2312"))
+    chengyu_gb = chengyu_gb.replace("\\x", "%").upper()[2:-1]
 
     # Format the search link.
-    search_link = 'http://www.51bc.net/cy/serach.php?f_type=chengyu&f_type2=&f_key={}'  # Note: 'serach' is intentional.
+    search_link = "http://www.51bc.net/cy/serach.php?f_type=chengyu&f_type2=&f_key={}"  # Note: 'serach' is intentional.
     search_link = search_link.format(chengyu_gb)
     logger.debug(search_link)
 
@@ -3715,22 +4505,28 @@ def zh_word_chengyu(chengyu):
         results.encoding = "gb2312"
         r_tree = html.fromstring(results.text)  # now contains the whole HTML page
         chengyu_exists = r_tree.xpath('//td[contains(@bgcolor,"#B4D8F5")]/text()')
-    except (UnicodeEncodeError, UnicodeDecodeError, requests.exceptions.ConnectionError):
+    except (
+        UnicodeEncodeError,
+        UnicodeDecodeError,
+        requests.exceptions.ConnectionError,
+    ):
         # There may be an issue with the conversion. Skip if so.
         logger.error("[ZW] ZH-Chengyu: Unicode encoding error.")
-        chengyu_exists = ["", '找到 0 个成语']  # Tell it to exit later.
+        chengyu_exists = ["", "找到 0 个成语"]  # Tell it to exit later.
 
-    if '找到 0 个成语' in chengyu_exists[1]:  # There are no results...
+    if "找到 0 个成语" in chengyu_exists[1]:  # There are no results...
         logger.info("[ZW] ZH-Chengyu: No chengyu results found for {}.".format(chengyu))
         return None
     elif r_tree is not None:  # There are results.
         # Look through the results page.
         link_results = r_tree.xpath('//td[contains(@width,"20%")]/a')
         try:
-            actual_link = link_results[0].attrib['href']
+            actual_link = link_results[0].attrib["href"]
         except IndexError:
             return None
-        logger.info("[ZW] > ZH-Chengyu: Found a chengyu. Actual link at: {}".format(actual_link))
+        logger.info(
+            "[ZW] > ZH-Chengyu: Found a chengyu. Actual link at: {}".format(actual_link)
+        )
 
         # Get the data from the actual link
         eth_page = requests.get(actual_link)
@@ -3747,9 +4543,15 @@ def zh_word_chengyu(chengyu):
         # Format the data nicely to add to the zh_word output.
         cy_to_post = "\n\n**Chinese Meaning**: {}\n\n**Literary Source**: {}"
         cy_to_post = cy_to_post.format(chengyu_meaning, chengyu_source)
-        cy_to_post += " ([5156edu]({}), [18Dao](https://tw.18dao.net/成語詞典/{}))".format(actual_link, tradify(chengyu))
+        cy_to_post += " ([5156edu]({}), [18Dao](https://tw.18dao.net/成語詞典/{}))".format(
+            actual_link, tradify(chengyu)
+        )
 
-        logger.info("[ZW] > ZH-Chengyu: Looked up the chengyu {} in Chinese. Returned search results.".format(chengyu))
+        logger.info(
+            "[ZW] > ZH-Chengyu: Looked up the chengyu {} in Chinese. Returned search results.".format(
+                chengyu
+            )
+        )
 
         return cy_to_post
 
@@ -3767,16 +4569,23 @@ def zh_word(word):
     alternate_pinyin = ()
     alternate_jyutping = None
 
-    eth_page = requests.get('https://www.mdbg.net/chindict/chindict.php?page=worddict&wdrst=0&wdqb=c:' + word,
-                            headers=ZW_USERAGENT)
+    eth_page = requests.get(
+        "https://www.mdbg.net/chindict/chindict.php?page=worddict&wdrst=0&wdqb=c:"
+        + word,
+        headers=ZW_USERAGENT,
+    )
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
     word_exists = str(tree.xpath('//p[contains(@class,"nonprintable")]/strong/text()'))
     cmn_pronunciation = tree.xpath('//div[contains(@class,"pinyin")]/a/span/text()')
-    cmn_pronunciation = cmn_pronunciation[0:len(word)]  # We only want the pronunciations to be as long as the input
-    cmn_pronunciation = ''.join(cmn_pronunciation)  # We don't need a dividing character per pinyin standards
+    cmn_pronunciation = cmn_pronunciation[
+        0 : len(word)
+    ]  # We only want the pronunciations to be as long as the input
+    cmn_pronunciation = "".join(
+        cmn_pronunciation
+    )  # We don't need a dividing character per pinyin standards
 
     # Check to not return anything if the entry is invalid
-    if 'No results found' in word_exists:
+    if "No results found" in word_exists:
 
         # First we try to check our specialty dictionaries. Buddhist dictionary first. Then the tea dictionary.
         search_results_buddhist = zh_word_buddhist_dictionary_search(tradify(word))
@@ -3784,52 +4593,82 @@ def zh_word(word):
         search_results_cccanto = zh_word_cccanto_search(tradify(word))
 
         # If both have nothing, we kick it down to the character search.
-        if search_results_buddhist is None and search_results_tea is None and search_results_cccanto is None:
+        if (
+            search_results_buddhist is None
+            and search_results_tea is None
+            and search_results_cccanto is None
+        ):
             to_post = zh_character(word)
-            logger.info("[ZW] ZH-Word: No results found. Getting individual characters instead.")
+            logger.info(
+                "[ZW] ZH-Word: No results found. Getting individual characters instead."
+            )
             return to_post
         else:  # Otherwise, let's try to format the data nicely.
 
             if search_results_buddhist is not None:
-                alternate_meanings.append(search_results_buddhist['meaning'])
-                alternate_pinyin = search_results_buddhist['pinyin']
+                alternate_meanings.append(search_results_buddhist["meaning"])
+                alternate_pinyin = search_results_buddhist["pinyin"]
             if search_results_tea is not None:
-                alternate_meanings.append(search_results_tea['meaning'])
-                alternate_pinyin = search_results_tea['pinyin']
+                alternate_meanings.append(search_results_tea["meaning"])
+                alternate_pinyin = search_results_tea["pinyin"]
             if search_results_cccanto is not None:
-                alternate_meanings.append(search_results_cccanto['meaning'])
-                alternate_pinyin = search_results_cccanto['pinyin']
-                alternate_jyutping = search_results_cccanto['jyutping']
-            logger.info("[ZW] ZH-Word: No results for word {}, but results are in specialty dictionaries.".format(word))
+                alternate_meanings.append(search_results_cccanto["meaning"])
+                alternate_pinyin = search_results_cccanto["pinyin"]
+                alternate_jyutping = search_results_cccanto["jyutping"]
+            logger.info(
+                "[ZW] ZH-Word: No results for word {}, but results are in specialty dictionaries.".format(
+                    word
+                )
+            )
 
     if len(alternate_meanings) == 0:  # The standard search function for regular words.
         # Get alternate pinyin from a separate function. We get Wade Giles and Yale. Like 'Guan1 yin1 Pu2 sa4'
         try:
-            py_split_pronunciation = tree.xpath('//div[contains(@class,"pinyin")]/a/@onclick')
-            py_split_pronunciation = re.search(r"\|(...+)\'\)", py_split_pronunciation[0]).group(0)
-            py_split_pronunciation = py_split_pronunciation.split("'", 1)[0][1:].strip()  # Format it nicely.
+            py_split_pronunciation = tree.xpath(
+                '//div[contains(@class,"pinyin")]/a/@onclick'
+            )
+            py_split_pronunciation = re.search(
+                r"\|(...+)\'\)", py_split_pronunciation[0]
+            ).group(0)
+            py_split_pronunciation = py_split_pronunciation.split("'", 1)[0][
+                1:
+            ].strip()  # Format it nicely.
             alt_romanize = zh_word_alt_romanization(py_split_pronunciation)
         except IndexError:  # This likely means that the page does not contain that information.
             alt_romanize = ("---", "---")
 
-        meaning = [div.text_content() for div in tree.xpath('//div[contains(@class,"defs")]')]
-        meaning = [x for x in meaning if x != ' ']  # This removes any empty spaces that are in the list.
-        meaning = [x for x in meaning if x != ', ']  # This removes any extraneous commas that are in the list
-        meaning = '/ '.join(meaning)
+        meaning = [
+            div.text_content() for div in tree.xpath('//div[contains(@class,"defs")]')
+        ]
+        meaning = [
+            x for x in meaning if x != " "
+        ]  # This removes any empty spaces that are in the list.
+        meaning = [
+            x for x in meaning if x != ", "
+        ]  # This removes any extraneous commas that are in the list
+        meaning = "/ ".join(meaning)
         meaning = meaning.strip()
 
         # Obtain the Cantonese information.
-        yue_page = requests.get('http://cantonese.org/search.php?q=' + word, headers=ZW_USERAGENT)
+        yue_page = requests.get(
+            "http://cantonese.org/search.php?q=" + word, headers=ZW_USERAGENT
+        )
         yue_tree = html.fromstring(yue_page.content)  # now contains the whole HTML page
-        yue_pronunciation = yue_tree.xpath('//h3[contains(@class,"resulthead")]/small/strong//text()')
-        yue_pronunciation = yue_pronunciation[0:(len(word) * 2)]  # This Len needs to be double because of the numbers
+        yue_pronunciation = yue_tree.xpath(
+            '//h3[contains(@class,"resulthead")]/small/strong//text()'
+        )
+        yue_pronunciation = yue_pronunciation[
+            0 : (len(word) * 2)
+        ]  # This Len needs to be double because of the numbers
         yue_pronunciation = iter(yue_pronunciation)
-        yue_pronunciation = [c + next(yue_pronunciation, '') for c in yue_pronunciation]
+        yue_pronunciation = [c + next(yue_pronunciation, "") for c in yue_pronunciation]
 
         # Combines the tones and the syllables together
-        yue_pronunciation = ' '.join(yue_pronunciation)
+        yue_pronunciation = " ".join(yue_pronunciation)
         for i in range(0, 9):
-            yue_pronunciation = yue_pronunciation.replace(str(i), "^%s " % str(i))  # Adds Markdown syntax
+            yue_pronunciation = yue_pronunciation.replace(
+                str(i), "^%s " % str(i)
+            )  # Adds Markdown syntax
         yue_pronunciation = yue_pronunciation.strip()
     else:  # This is for the alternate search with the specialty dictionaries.
         cmn_pronunciation = zh_word_decode_pinyin(alternate_pinyin)
@@ -3842,16 +4681,25 @@ def zh_word(word):
 
     # Format the header appropriately.
     if tradify(word) == simplify(word):
-        lookup_line_1 = str('# [{0}](https://en.wiktionary.org/wiki/{0}#Chinese)'.format(word))
+        lookup_line_1 = str(
+            "# [{0}](https://en.wiktionary.org/wiki/{0}#Chinese)".format(word)
+        )
     else:
-        lookup_line_1 = '# [{0} ({1})](https://en.wiktionary.org/wiki/{0}#Chinese)'.format(tradify(word),
-                                                                                           simplify(word))
+        lookup_line_1 = (
+            "# [{0} ({1})](https://en.wiktionary.org/wiki/{0}#Chinese)".format(
+                tradify(word), simplify(word)
+            )
+        )
 
     # Format the rest.
     lookup_line_1 += "\n\nLanguage | Pronunciation\n---------|--------------"
-    readings_line = ("\n**Mandarin** (Pinyin) | *{}*\n**Mandarin** (Wade-Giles) | *{}*"
-                     "\n**Mandarin** (Yale) | *{}*\n**Cantonese** | *{}*")
-    readings_line = readings_line.format(cmn_pronunciation, alt_romanize[1], alt_romanize[0], yue_pronunciation)
+    readings_line = (
+        "\n**Mandarin** (Pinyin) | *{}*\n**Mandarin** (Wade-Giles) | *{}*"
+        "\n**Mandarin** (Yale) | *{}*\n**Cantonese** | *{}*"
+    )
+    readings_line = readings_line.format(
+        cmn_pronunciation, alt_romanize[1], alt_romanize[0], yue_pronunciation
+    )
     lookup_line_1 += readings_line
 
     # Add Hokkien and Hakka data.
@@ -3871,25 +4719,33 @@ def zh_word(word):
                 lookup_line_2 += chengyu_data
 
         # We append Buddhist results if we have them.
-        mainline_search_results_buddhist = zh_word_buddhist_dictionary_search(tradify(word))
+        mainline_search_results_buddhist = zh_word_buddhist_dictionary_search(
+            tradify(word)
+        )
         if mainline_search_results_buddhist is not None:
-            lookup_line_2 += mainline_search_results_buddhist['meaning']
+            lookup_line_2 += mainline_search_results_buddhist["meaning"]
 
     else:  # This is for the alternate dictionaries only.
-        lookup_line_2 = '\n' + meaning
+        lookup_line_2 = "\n" + meaning
 
     # Format the footer with the dictionary links.
-    lookup_line_3 = ('\n\n\n^Information ^from '
-                     '[^CantoDict](http://www.cantonese.sheik.co.uk/dictionary/search/?searchtype=1&text={0}) ^| '
-                     '[^Jukuu](http://jukuu.com/search.php?q={0}) ^| '
-                     '[^MDBG](https://www.mdbg.net/chindict/chindict.php?page=worddict&wdrst=0&wdqb={0}) ^| '
-                     '[^Yellowbridge](https://yellowbridge.com/chinese/dictionary.php?word={0}) ^| '
-                     '[^Youdao](http://dict.youdao.com/w/eng/{0}/#keyfrom=dict2.index)')
+    lookup_line_3 = (
+        "\n\n\n^Information ^from "
+        "[^CantoDict](http://www.cantonese.sheik.co.uk/dictionary/search/?searchtype=1&text={0}) ^| "
+        "[^Jukuu](http://jukuu.com/search.php?q={0}) ^| "
+        "[^MDBG](https://www.mdbg.net/chindict/chindict.php?page=worddict&wdrst=0&wdqb={0}) ^| "
+        "[^Yellowbridge](https://yellowbridge.com/chinese/dictionary.php?word={0}) ^| "
+        "[^Youdao](http://dict.youdao.com/w/eng/{0}/#keyfrom=dict2.index)"
+    )
     lookup_line_3 = lookup_line_3.format(word)
 
     # Combine everything together.
-    to_post = (lookup_line_1 + lookup_line_2 + "\n\n" + lookup_line_3)
-    logger.info("[ZW] ZH-Word: Received a lookup command for " + word + " in Chinese. Returned search results.")
+    to_post = lookup_line_1 + lookup_line_2 + "\n\n" + lookup_line_3
+    logger.info(
+        "[ZW] ZH-Word: Received a lookup command for "
+        + word
+        + " in Chinese. Returned search results."
+    )
     return to_post
 
 
@@ -3903,15 +4759,23 @@ def ja_character_calligraphy_search(character):
     """
 
     try:
-        eth_page = requests.get('http://www013.upp.so-net.ne.jp/santai/santai.htm', headers=ZW_USERAGENT)
+        eth_page = requests.get(
+            "http://www013.upp.so-net.ne.jp/santai/santai.htm", headers=ZW_USERAGENT
+        )
         tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
         page_url = tree.xpath('//a[contains(text(), "' + character + '")]/@href')
         page_url = "http://www013.upp.so-net.ne.jp/santai/" + str(page_url[0])
 
         if len(page_url) != 0:
-            logger.debug("[ZW] JA-Calligraphy: There is a Japanese calligraphic image for " + character + ".")
+            logger.debug(
+                "[ZW] JA-Calligraphy: There is a Japanese calligraphic image for "
+                + character
+                + "."
+            )
             ja_calligraphy_format = "\n\n**Japanese Calligraphy Variants**: [{}]({}) "
-            ja_calligraphy_format += "(*[Source](http://www013.upp.so-net.ne.jp/santai/santai.htm)*)"
+            ja_calligraphy_format += (
+                "(*[Source](http://www013.upp.so-net.ne.jp/santai/santai.htm)*)"
+            )
             to_post = ja_calligraphy_format.format(character, page_url)
         else:
             return None
@@ -3932,7 +4796,9 @@ def ja_character(character):
     multi_mode = False
     multi_character_dict = {}  # Dictionary to store the info we get.
     total_data = ""
-    kana_test = re.search('[\u3040-\u309f]', character)  # Check to see if it's hiragana. Will return none if kanji.
+    kana_test = re.search(
+        "[\u3040-\u309f]", character
+    )  # Check to see if it's hiragana. Will return none if kanji.
 
     multi_character_list = list(character)
 
@@ -3941,42 +4807,67 @@ def ja_character(character):
 
     if kana_test is not None:
         kana = kana_test.group(0)
-        eth_page = requests.get('http://jisho.org/search/{}%20%23particle'.format(character), headers=ZW_USERAGENT)
+        eth_page = requests.get(
+            "http://jisho.org/search/{}%20%23particle".format(character),
+            headers=ZW_USERAGENT,
+        )
         tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
         meaning = tree.xpath('//span[contains(@class,"meaning-meaning")]/text()')
-        meaning = ' / '.join(meaning)
+        meaning = " / ".join(meaning)
         is_kana = True
-        total_data = '# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)'.format(kana)
+        total_data = "# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)".format(kana)
         total_data += " (*{}*)".format(romkan.to_hepburn(kana))
         total_data += '\n\n**Meanings**: "{}."'.format(meaning)
     else:
         if not multi_mode:
             # Regular old-school one character search.
-            eth_page = requests.get('http://jisho.org/search/' + character + '%20%23kanji', headers=ZW_USERAGENT)
+            eth_page = requests.get(
+                "http://jisho.org/search/" + character + "%20%23kanji",
+                headers=ZW_USERAGENT,
+            )
             tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
             kun_reading = tree.xpath('//dl[contains(@class,"kun_yomi")]/dd/a/text()')
-            meaning = tree.xpath('//div[contains(@class,"kanji-details__main-meanings")]/text()')
-            meaning = '/ '.join(meaning)
+            meaning = tree.xpath(
+                '//div[contains(@class,"kanji-details__main-meanings")]/text()'
+            )
+            meaning = "/ ".join(meaning)
             meaning = meaning.strip()
-            if len(meaning) == 0:  # Check to not return anything if the entry is invalid
-                to_post = ("There were no results for {}. Please check to make sure it is a valid Japanese "
-                           "character or word.".format(character))
+            if (
+                len(meaning) == 0
+            ):  # Check to not return anything if the entry is invalid
+                to_post = (
+                    "There were no results for {}. Please check to make sure it is a valid Japanese "
+                    "character or word.".format(character)
+                )
                 logger.info("[ZW] JA-Character: No results for {}".format(character))
                 return to_post
             if len(kun_reading) == 0:
-                on_reading = tree.xpath('//*[@id="result_area"]/div/div[1]/div[2]/div/div[1]/div[2]/dl/dd/a/text()')
+                on_reading = tree.xpath(
+                    '//*[@id="result_area"]/div/div[1]/div[2]/div/div[1]/div[2]/dl/dd/a/text()'
+                )
             else:
-                on_reading = tree.xpath('//div[contains(@class,"kanji-details__main-readings")]/dl[2]/dd/a/text()')
+                on_reading = tree.xpath(
+                    '//div[contains(@class,"kanji-details__main-readings")]/dl[2]/dd/a/text()'
+                )
             kun_chunk = ""
             for reading in kun_reading:
-                kun_chunk_new = reading + ' (*' + romkan.to_hepburn(reading) + '*)'
-                kun_chunk = kun_chunk + ', ' + kun_chunk_new
+                kun_chunk_new = reading + " (*" + romkan.to_hepburn(reading) + "*)"
+                kun_chunk = kun_chunk + ", " + kun_chunk_new
             on_chunk = ""
             for reading in on_reading:
-                on_chunk_new = reading + ' (*' + romkan.to_hepburn(reading) + '*)'
-                on_chunk = on_chunk + ', ' + on_chunk_new
-            lookup_line_1 = '# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n'.format(character)
-            lookup_line_1 += '**Kun-readings:** ' + kun_chunk[2:] + '\n\n**On-readings:** ' + on_chunk[2:]
+                on_chunk_new = reading + " (*" + romkan.to_hepburn(reading) + "*)"
+                on_chunk = on_chunk + ", " + on_chunk_new
+            lookup_line_1 = (
+                "# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n".format(
+                    character
+                )
+            )
+            lookup_line_1 += (
+                "**Kun-readings:** "
+                + kun_chunk[2:]
+                + "\n\n**On-readings:** "
+                + on_chunk[2:]
+            )
 
             # Try to get a Japanese calligraphic image
             ja_calligraphy_image = ja_character_calligraphy_search(character)
@@ -4007,20 +4898,31 @@ def ja_character(character):
 
                 multi_character_dict[moji] = {}  # Create a new null dictionary
 
-                eth_page = requests.get('http://jisho.org/search/' + moji + '%20%23kanji', headers=ZW_USERAGENT)
-                tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
+                eth_page = requests.get(
+                    "http://jisho.org/search/" + moji + "%20%23kanji",
+                    headers=ZW_USERAGENT,
+                )
+                tree = html.fromstring(
+                    eth_page.content
+                )  # now contains the whole HTML page
 
                 # Get the readings of the characters
-                kun_reading = tree.xpath('//dl[contains(@class,"kun_yomi")]/dd/a/text()')
+                kun_reading = tree.xpath(
+                    '//dl[contains(@class,"kun_yomi")]/dd/a/text()'
+                )
                 if len(kun_reading) == 0:
-                    on_reading = tree.xpath('//*[@id="result_area"]/div/div[1]/div[2]/div/div[1]/div[2]/dl/dd/a/text()')
+                    on_reading = tree.xpath(
+                        '//*[@id="result_area"]/div/div[1]/div[2]/div/div[1]/div[2]/dl/dd/a/text()'
+                    )
                 else:
-                    on_reading = tree.xpath('//div[contains(@class,"kanji-details__main-readings")]/dl[2]/dd/a/text()')
+                    on_reading = tree.xpath(
+                        '//div[contains(@class,"kanji-details__main-readings")]/dl[2]/dd/a/text()'
+                    )
 
                 # Process and format the kun readings
                 kun_chunk = []
                 for reading in kun_reading:
-                    kun_chunk_new = reading + ' (*' + romkan.to_hepburn(reading) + '*)'
+                    kun_chunk_new = reading + " (*" + romkan.to_hepburn(reading) + "*)"
                     kun_chunk.append(kun_chunk_new)
                 kun_chunk = ", ".join(kun_chunk)
                 multi_character_dict[moji]["kun"] = kun_chunk
@@ -4028,27 +4930,33 @@ def ja_character(character):
                 # Process and format the on readings
                 on_chunk = []
                 for reading in on_reading:
-                    on_chunk_new = reading + ' (*' + romkan.to_hepburn(reading) + '*)'
+                    on_chunk_new = reading + " (*" + romkan.to_hepburn(reading) + "*)"
                     on_chunk.append(on_chunk_new)
                 on_chunk = ", ".join(on_chunk)
                 multi_character_dict[moji]["on"] = on_chunk
 
-                meaning = tree.xpath('//div[contains(@class,"kanji-details__main-meanings")]/text()')
-                meaning = '/ '.join(meaning)
+                meaning = tree.xpath(
+                    '//div[contains(@class,"kanji-details__main-meanings")]/text()'
+                )
+                meaning = "/ ".join(meaning)
                 meaning = '"' + meaning.strip() + '."'
                 multi_character_dict[moji]["meaning"] = meaning
 
             # Now let's construct our table based on the data we have.
             for key in multi_character_list:
                 character_data = multi_character_dict[key]
-                ooi_header += " | [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)".format(key)
+                ooi_header += (
+                    " | [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)".format(key)
+                )
                 ooi_separator += "---|"
                 ooi_kun += " | {}".format(character_data["kun"])
                 ooi_on += " | {}".format(character_data["on"])
                 ooi_meaning += " | {}".format(character_data["meaning"])
 
             # Combine the data together.
-            total_data = ooi_key + ooi_header + ooi_separator + ooi_kun + ooi_on + ooi_meaning
+            total_data = (
+                ooi_key + ooi_header + ooi_separator + ooi_kun + ooi_on + ooi_meaning
+            )
 
     if not is_kana:
         ja_to_post = "\n\n^Information ^from [^Jisho](http://jisho.org/search/{0}%20%23kanji) ^| "
@@ -4064,7 +4972,11 @@ def ja_character(character):
         lookup_line_3 = ja_to_post
 
     to_post = total_data + lookup_line_3
-    logger.info("[ZW] JA-Character: Received lookup command for " + character + " in Japanese. Returned results.")
+    logger.info(
+        "[ZW] JA-Character: Received lookup command for "
+        + character
+        + " in Japanese. Returned results."
+    )
 
     return to_post
 
@@ -4081,22 +4993,24 @@ def ja_word_sfx(katakana_string):
     actual_link = None
 
     # Check to make sure everything is katakana.
-    katakana_test = re.search('[\u30A0-\u30FF]', katakana_string)
+    katakana_test = re.search("[\u30A0-\u30FF]", katakana_string)
 
     if katakana_test is None:
         return None
 
     # Format the search URL.
-    search_url = "http://thejadednetwork.com/sfx/search/?keyword=+{}&submitSearch=Search+SFX&x=".format(katakana_string)
+    search_url = "http://thejadednetwork.com/sfx/search/?keyword=+{}&submitSearch=Search+SFX&x=".format(
+        katakana_string
+    )
 
     # Conduct a search.
     eth_page = requests.get(search_url, headers=ZW_USERAGENT)
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
-    list_of_links = tree.xpath('//td/a/@href')
+    list_of_links = tree.xpath("//td/a/@href")
 
     # Here we look for the actual dictionary entry.
     for link in list_of_links:
-        if 'sfx/browse/' in link:
+        if "sfx/browse/" in link:
             actual_link = link
             break
 
@@ -4108,7 +5022,9 @@ def ja_word_sfx(katakana_string):
 
         # Gather data.
         sound_data = new_tree.xpath('//table[contains(@class,"definitions")]//text()')
-        sound_data = [x for x in sound_data if len(x.strip()) > 0]  # Take away the blanks.
+        sound_data = [
+            x for x in sound_data if len(x.strip()) > 0
+        ]  # Take away the blanks.
 
         # Double-check the entry to make sure it's right.
         katakana_entry = sound_data[4].strip().replace(",", "")
@@ -4116,18 +5032,31 @@ def ja_word_sfx(katakana_string):
             return None
 
         # Parse data, assign variables.
-        katakana_reading = "{} (*{}*)".format(katakana_string, romkan.to_hepburn(katakana_string))
+        katakana_reading = "{} (*{}*)".format(
+            katakana_string, romkan.to_hepburn(katakana_string)
+        )
         sound_effect = sound_data[7].replace("*", r"\*")
         sound_explanation = sound_data[8].strip().replace("*", r"\*")
 
         # Create the formatted comment.
-        formatted_line = "\n\n**English Equivalent**: {}\n\n**Explanation**: {} ".format(sound_effect,
-                                                                                         sound_explanation)
-        formatted_line += "\n\n\n^Information ^from [^SFX ^Dictionary]({})".format(actual_link)
-        header = '# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n##### *Sound effect*\n\n**Reading:** {1}{2}'
-        finished_comment = header.format(katakana_string, katakana_reading, formatted_line)
+        formatted_line = (
+            "\n\n**English Equivalent**: {}\n\n**Explanation**: {} ".format(
+                sound_effect, sound_explanation
+            )
+        )
+        formatted_line += "\n\n\n^Information ^from [^SFX ^Dictionary]({})".format(
+            actual_link
+        )
+        header = "# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n##### *Sound effect*\n\n**Reading:** {1}{2}"
+        finished_comment = header.format(
+            katakana_string, katakana_reading, formatted_line
+        )
 
-        logger.info("[ZW] JA-Word-SFX: Found a dictionary entry for {} at {}".format(katakana_string, actual_link))
+        logger.info(
+            "[ZW] JA-Word-SFX: Found a dictionary entry for {} at {}".format(
+                katakana_string, actual_link
+            )
+        )
 
         return finished_comment
     else:  # We do not have any results.
@@ -4160,23 +5089,27 @@ def ja_word_given_name_search(ja_given_name):
         return None
 
     # If there's more than one reading, split it.
-    if '、' in hiragana_names:
-        hiragana_names = hiragana_names.split('、')
+    if "、" in hiragana_names:
+        hiragana_names = hiragana_names.split("、")
     else:
         hiragana_names = [hiragana_names]
 
     # Create the readings list.
     for name in hiragana_names:
         name_formatted = name.strip()
-        furigana_chunk = "{} (*{}*)".format(name_formatted, romkan.to_hepburn(name_formatted).title())
+        furigana_chunk = "{} (*{}*)".format(
+            name_formatted, romkan.to_hepburn(name_formatted).title()
+        )
         names_w_readings.append(furigana_chunk)
     name_formatted_readings = ", ".join(names_w_readings)
 
     # Create the comment
-    formatted_section = ('# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n'
-                         '**Readings:** {1}\n\n**Meanings**: A Japanese name.'
-                         "\n\n\n^Information ^from [^Jinmei ^Kanji ^Jisho](http://kanji.reader.bz/{0}) "
-                         "^| [^Weblio ^EJJE](http://ejje.weblio.jp/content/{0})")
+    formatted_section = (
+        "# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n"
+        "**Readings:** {1}\n\n**Meanings**: A Japanese name."
+        "\n\n\n^Information ^from [^Jinmei ^Kanji ^Jisho](http://kanji.reader.bz/{0}) "
+        "^| [^Weblio ^EJJE](http://ejje.weblio.jp/content/{0})"
+    )
     formatted_section = formatted_section.format(ja_given_name, name_formatted_readings)
 
     return formatted_section
@@ -4190,7 +5123,10 @@ def ja_word_surname(name):
     :return None: if no results, otherwise return a formatted string.
     """
 
-    eth_page = requests.get('https://myoji-yurai.net/searchResult.htm?myojiKanji=' + name, headers=ZW_USERAGENT)
+    eth_page = requests.get(
+        "https://myoji-yurai.net/searchResult.htm?myojiKanji=" + name,
+        headers=ZW_USERAGENT,
+    )
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
     ja_reading = tree.xpath('//div[contains(@class,"post")]/p/text()')
     ja_reading = str(ja_reading[0])[4:].split(",")
@@ -4201,16 +5137,26 @@ def ja_word_surname(name):
     else:
         furigana_chunk = ""
         for reading in ja_reading:
-            furigana_chunk_new = reading.strip() + ' (*' + romkan.to_hepburn(reading).title() + '*)'
-            furigana_chunk = furigana_chunk + ', ' + furigana_chunk_new
-        lookup_line_1 = '# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n'.format(name)
-        lookup_line_1 += '**Readings:** ' + furigana_chunk[2:]  # We return the formatted readings of this name
-        lookup_line_2 = str('\n\n**Meanings**: A Japanese surname.')
+            furigana_chunk_new = (
+                reading.strip() + " (*" + romkan.to_hepburn(reading).title() + "*)"
+            )
+            furigana_chunk = furigana_chunk + ", " + furigana_chunk_new
+        lookup_line_1 = (
+            "# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n".format(name)
+        )
+        lookup_line_1 += (
+            "**Readings:** " + furigana_chunk[2:]
+        )  # We return the formatted readings of this name
+        lookup_line_2 = str("\n\n**Meanings**: A Japanese surname.")
         lookup_line_3 = "\n\n\n^Information ^from [^Myoji](https://myoji-yurai.net/searchResult.htm?myojiKanji={0}) "
         lookup_line_3 += "^| [^Weblio ^EJJE](http://ejje.weblio.jp/content/{0})"
         lookup_line_3 = lookup_line_3.format(name)
-        to_post = (lookup_line_1 + lookup_line_2 + "\n" + lookup_line_3)
-        logger.info("[ZW] JA-Name: '{}' is a Japanese name. Returned search results.".format(name))
+        to_post = lookup_line_1 + lookup_line_2 + "\n" + lookup_line_3
+        logger.info(
+            "[ZW] JA-Name: '{}' is a Japanese name. Returned search results.".format(
+                name
+            )
+        )
         return to_post
 
 
@@ -4227,22 +5173,30 @@ def ja_word(japanese_word):
     y_data = None
 
     # Fetch data from the API
-    link_json = 'https://jisho.org/api/v1/search/words?keyword={}%20%23words'.format(japanese_word)
+    link_json = "https://jisho.org/api/v1/search/words?keyword={}%20%23words".format(
+        japanese_word
+    )
     returned_data = requests.get(link_json)
     word_data = returned_data.json()
-    main_data = word_data['data']
+    main_data = word_data["data"]
 
     # Attempt to get the reading of it in hiragana. If there is an Key Error, then it's not a real Jisho entry.
     try:
         main_data = main_data[0]  # Choose the first result.
-        word_reading = main_data['japanese'][0]['reading']
+        word_reading = main_data["japanese"][0]["reading"]
     except (KeyError, IndexError):
         word_reading = ""
 
     if len(word_reading) == 0:  # It appears that this word doesn't exist on Jisho.
-        logger.info("[ZW] JA-Word: No results found for a Japanese word '{}'.".format(japanese_word))
+        logger.info(
+            "[ZW] JA-Word: No results found for a Japanese word '{}'.".format(
+                japanese_word
+            )
+        )
 
-        katakana_test = re.search('[\u30a0-\u30ff]', japanese_word)  # Check if katakana. Will return none if kanji.
+        katakana_test = re.search(
+            "[\u30a0-\u30ff]", japanese_word
+        )  # Check if katakana. Will return none if kanji.
         surname_data = ja_word_surname(japanese_word)  # Check to see if it's a surname.
         sfx_data = ja_word_sfx(japanese_word)
         given_name_data = ja_word_given_name_search(japanese_word)
@@ -4251,7 +5205,9 @@ def ja_word(japanese_word):
         if surname_data is None and sfx_data is None and given_name_data is None:
             if katakana_test is None:  # It's a character
                 to_post = ja_character(japanese_word)
-                logger.info("[ZW] JA-Word: No results found for a Japanese name. Getting individual character data.")
+                logger.info(
+                    "[ZW] JA-Word: No results found for a Japanese name. Getting individual character data."
+                )
             else:
                 to_post = "There were no results for `{}`.".format(japanese_word)
                 logger.info("[ZW] JA-Word: Unknown katakana word. No results.")
@@ -4267,16 +5223,22 @@ def ja_word(japanese_word):
             return sfx_data
 
     # Jisho data is good, format the data from the returned JSON.
-    word_reading_chunk = '{} (*{}*)'.format(word_reading, romkan.to_hepburn(word_reading))
-    word_meaning = main_data['senses'][0]['english_definitions']
-    word_meaning = '"{}."'.format(', '.join(word_meaning))
-    word_type = main_data['senses'][0]['parts_of_speech']
-    word_type = '*{}*'.format(', '.join(word_type))
+    word_reading_chunk = "{} (*{}*)".format(
+        word_reading, romkan.to_hepburn(word_reading)
+    )
+    word_meaning = main_data["senses"][0]["english_definitions"]
+    word_meaning = '"{}."'.format(", ".join(word_meaning))
+    word_type = main_data["senses"][0]["parts_of_speech"]
+    word_type = "*{}*".format(", ".join(word_type))
 
     # Construct the comment structure with the data.
-    return_comment = ('# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n'
-                      '##### {3}\n\n**Reading:** {1}\n\n**Meanings**: {2}')
-    return_comment = return_comment.format(japanese_word, word_reading_chunk, word_meaning, word_type)
+    return_comment = (
+        "# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n"
+        "##### {3}\n\n**Reading:** {1}\n\n**Meanings**: {2}"
+    )
+    return_comment = return_comment.format(
+        japanese_word, word_reading_chunk, word_meaning, word_type
+    )
 
     # Check if it's a yojijukugo.
     if len(japanese_word) == 4:
@@ -4286,14 +5248,22 @@ def ja_word(japanese_word):
             return_comment += y_data
 
     # Add the footer
-    footer = ('\n\n^Information ^from ^[Jisho](http://jisho.org/search/{0}%23words) ^| '
-              '[^Kotobank](https://kotobank.jp/word/{0}) ^| '
-              '[^Tangorin](http://tangorin.com/general/{0}) ^| '
-              '[^Weblio ^EJJE](http://ejje.weblio.jp/content/{0})')
+    footer = (
+        "\n\n^Information ^from ^[Jisho](http://jisho.org/search/{0}%23words) ^| "
+        "[^Kotobank](https://kotobank.jp/word/{0}) ^| "
+        "[^Tangorin](http://tangorin.com/general/{0}) ^| "
+        "[^Weblio ^EJJE](http://ejje.weblio.jp/content/{0})"
+    )
     if y_data is not None:  # Add attribution for yojijukugo
-        footer += ' ^| [^Yoji ^Jitenon](https://yoji.jitenon.jp/cat/search.php?getdata={0})'
+        footer += (
+            " ^| [^Yoji ^Jitenon](https://yoji.jitenon.jp/cat/search.php?getdata={0})"
+        )
     return_comment += footer.format(japanese_word)
-    logger.info("[ZW] JA-Word: Received a lookup command for the word '{}' in Japanese.".format(japanese_word))
+    logger.info(
+        "[ZW] JA-Word: Received a lookup command for the word '{}' in Japanese.".format(
+            japanese_word
+        )
+    )
 
     return return_comment
 
@@ -4309,7 +5279,11 @@ def ja_word_yojijukugo(yojijukugo):
     """
 
     # Fetch the page and its data.
-    url_search = 'https://yoji.jitenon.jp/cat/search.php?getdata={}&search=part&page=1'.format(yojijukugo)
+    url_search = (
+        "https://yoji.jitenon.jp/cat/search.php?getdata={}&search=part&page=1".format(
+            yojijukugo
+        )
+    )
     eth_page = requests.get(url_search, headers=ZW_USERAGENT)
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
     url = tree.xpath('//th[contains(@scope,"row")]/a/@href')
@@ -4317,20 +5291,28 @@ def ja_word_yojijukugo(yojijukugo):
     if len(url) != 0:  # There's data. Get the url.
         url_entry = url[0]  # Get the actual url of the entry.
         entry_page = requests.get(url_entry, headers=ZW_USERAGENT)
-        entry_tree = html.fromstring(entry_page.content)  # now contains the whole HTML page
+        entry_tree = html.fromstring(
+            entry_page.content
+        )  # now contains the whole HTML page
 
         # Check to make sure the data is the same.
-        entry_title = entry_tree.xpath('//h1/text()')[0]
-        entry_title = entry_title.split('」', 1)[0][1:]  # Retrieve only the main title of the page.
+        entry_title = entry_tree.xpath("//h1/text()")[0]
+        entry_title = entry_title.split("」", 1)[0][
+            1:
+        ]  # Retrieve only the main title of the page.
         if entry_title != yojijukugo:  # If the data doesn't match
-            logger.debug('[ZW] JA-Chengyu: The titles don\'t match.')
+            logger.debug("[ZW] JA-Chengyu: The titles don't match.")
             return None
 
         # Format the data properly.
-        row_data = [td.text_content() for td in entry_tree.xpath('//td')]
+        row_data = [td.text_content() for td in entry_tree.xpath("//td")]
         y_meaning = row_data[1].strip()
         y_meaning = "\n\n**Japanese Explanation**: {}\n\n".format(y_meaning)
-        logger.info('[ZW] JA-Chengyu: Retrieved information on {} from {}.'.format(yojijukugo, url_entry))
+        logger.info(
+            "[ZW] JA-Chengyu: Retrieved information on {} from {}.".format(
+                yojijukugo, url_entry
+            )
+        )
 
         # Add the literary source.
         y_source = row_data[2].strip()
@@ -4354,26 +5336,32 @@ def lookup_cjk_matcher(content_text):
     :return: A list of all matching Chinese characters.
     """
 
-    # Making sure we only have stuff between the graves. 
+    # Making sure we only have stuff between the graves.
     try:
         content_text = content_text.split("`", 1)[1]  # Delete stuff before
-        content_text = content_text.rsplit('`', 1)[0]  # Delete stuff after
+        content_text = content_text.rsplit("`", 1)[0]  # Delete stuff after
         content_text = "`{}`".format(content_text)  # Re-add the graves.
     except IndexError:  # Split improperly
         return []
 
-    content_text = content_text.replace(" ", "``")  # Delete spaces, we don't need this for CJK.
-    content_text = content_text.replace("\\", "")  # Delete slashes, since the redesign may introduce them.
+    content_text = content_text.replace(
+        " ", "``"
+    )  # Delete spaces, we don't need this for CJK.
+    content_text = content_text.replace(
+        "\\", ""
+    )  # Delete slashes, since the redesign may introduce them.
 
     # Regular CJK Unified Ideographs range with CJK Unified Ideographs Extension A
-    matches = re.findall('`([\u2E80-\u9FFF]+)`', content_text, re.DOTALL)
+    matches = re.findall("`([\u2E80-\u9FFF]+)`", content_text, re.DOTALL)
 
     # CJK Unified Ideographs Extension B-F (obscure characters that do not have online sources)
-    b_matches = re.findall('`([\U00020000-\U0002EBEF]+)`', content_text, re.DOTALL)
+    b_matches = re.findall("`([\U00020000-\U0002EBEF]+)`", content_text, re.DOTALL)
 
     if len(b_matches) != 0:  # We found something in the B sets
         for match in b_matches:
-            if not any(match in s for s in matches):  # Make sure the a match is not already in the regular set.
+            if not any(
+                match in s for s in matches
+            ):  # Make sure the a match is not already in the regular set.
                 matches.append(match)
 
     if len(matches) != 0:
@@ -4396,7 +5384,7 @@ def lookup_matcher(content_text, language_name):
     """
     original_text = str(content_text)
     master_dictionary = {}
-    language_mentions = (language_mention_search(content_text))
+    language_mentions = language_mention_search(content_text)
 
     # If there is an identification command, we should classify this as the identified language.
     # First we check to see if there is another identification command here.
@@ -4406,7 +5394,7 @@ def lookup_matcher(content_text, language_name):
         parsed_data = comment_info_parser(original_text, "!identify:")[0]
 
         # Code to help make sense of CJK script codes if they're identified.
-        language_keys = ['Chinese', 'Japanese', 'Korean']
+        language_keys = ["Chinese", "Japanese", "Korean"]
         for key in language_keys:
             if len(parsed_data) == 4 and parsed_data.title() in CJK_LANGUAGES[key]:
                 parsed_data = key
@@ -4421,13 +5409,17 @@ def lookup_matcher(content_text, language_name):
     # Work with the text and clean it up.
     try:
         content_text = content_text.split("`", 1)[1]  # Delete stuff before
-        content_text = content_text.rsplit('`', 1)[0]  # Delete stuff after
+        content_text = content_text.rsplit("`", 1)[0]  # Delete stuff after
         content_text = "`{}`".format(content_text)  # Re-add the graves.
     except IndexError:  # Split improperly
         return []
-    content_text = content_text.replace(" ", "``")  # Delete spaces, we don't need this for CJK.
-    content_text = content_text.replace("\\", "")  # Delete slashes, since the redesign may introduce them.
-    matches = re.findall('`(.*?)`', content_text, re.DOTALL)
+    content_text = content_text.replace(
+        " ", "``"
+    )  # Delete spaces, we don't need this for CJK.
+    content_text = content_text.replace(
+        "\\", ""
+    )  # Delete slashes, since the redesign may introduce them.
+    matches = re.findall("`(.*?)`", content_text, re.DOTALL)
 
     # Tokenize, remove empty strings
     for match in matches:
@@ -4437,11 +5429,17 @@ def lookup_matcher(content_text, language_name):
             matches.append(new_matches)
     matches = [x for x in matches if x]
 
-    combined_text = "".join(matches)  # A simple string to allow for quick detection of languages that fall in Unicode.
-    zhja_true = re.findall('([\u2E80-\u9FFF]+)', combined_text, re.DOTALL)
-    zh_b_true = re.findall('([\U00020000-\U0002EBEF]+)', combined_text, re.DOTALL)
-    kana_true = re.findall('([\u3041-\u309f]+|[\u30a0-\u30ff]+)', combined_text, re.DOTALL)
-    ko_true = re.findall('([\uac00-\ud7af]+)', combined_text, re.DOTALL)  # Checks if there's hangul there
+    combined_text = "".join(
+        matches
+    )  # A simple string to allow for quick detection of languages that fall in Unicode.
+    zhja_true = re.findall("([\u2E80-\u9FFF]+)", combined_text, re.DOTALL)
+    zh_b_true = re.findall("([\U00020000-\U0002EBEF]+)", combined_text, re.DOTALL)
+    kana_true = re.findall(
+        "([\u3041-\u309f]+|[\u30a0-\u30ff]+)", combined_text, re.DOTALL
+    )
+    ko_true = re.findall(
+        "([\uac00-\ud7af]+)", combined_text, re.DOTALL
+    )  # Checks if there's hangul there
 
     if language_name is None:
         return matches
@@ -4449,7 +5447,9 @@ def lookup_matcher(content_text, language_name):
     if zhja_true:  # Chinese or Japanese Characters were detected.
         zhja_temp_list = []
         for match in matches:
-            zhja_matches = re.findall('([\u2E80-\u9FFF]+|[\U00020000-\U0002EBEF]+)', match, re.DOTALL)
+            zhja_matches = re.findall(
+                "([\u2E80-\u9FFF]+|[\U00020000-\U0002EBEF]+)", match, re.DOTALL
+            )
             if zhja_matches:
                 for selection in zhja_matches:
                     zhja_temp_list.append(selection)
@@ -4473,13 +5473,13 @@ def lookup_matcher(content_text, language_name):
         if not kana_true:  # There's kana, so we'll mark this as Japanese.
             master_dictionary[language_name] = tokenized_list
         else:
-            master_dictionary['Japanese'] = tokenized_list
+            master_dictionary["Japanese"] = tokenized_list
 
     # There's text with Hangul, add it to the master dictionary with an Index of Korean.
     if ko_true:
         ko_temp_list = []
         for match in matches:
-            ko_matches = re.findall('([\uac00-\ud7af]+)', match, re.DOTALL)
+            ko_matches = re.findall("([\uac00-\ud7af]+)", match, re.DOTALL)
             if ko_matches:  # If it's actually containing data, let's append it.
                 for selection in ko_matches:
                     ko_temp_list.append(selection)
@@ -4491,8 +5491,12 @@ def lookup_matcher(content_text, language_name):
         all_cjk += value
 
     # For all other languages.
-    if len(zhja_true + zh_b_true + kana_true + ko_true) == 0:  # Nothing CJK-related. True if all are empty.
-        if len(matches) != 0 and language_name not in all_cjk:  # Making sure we don't return Latin words in CJK.
+    if (
+        len(zhja_true + zh_b_true + kana_true + ko_true) == 0
+    ):  # Nothing CJK-related. True if all are empty.
+        if (
+            len(matches) != 0 and language_name not in all_cjk
+        ):  # Making sure we don't return Latin words in CJK.
             other_temp_list = []
             for match in matches:
                 other_temp_list.append(match)
@@ -4510,28 +5514,40 @@ def lookup_ko_word(word):
     """
 
     # To replace the meaning output from Naver, which is often left untranslated in Korean.
-    ko_word_types = {'[동사]': '[verb]', '[형용사]': '[adjective]', '[관형사]': '[determiner]', '[명사]': '[noun]',
-                     '[대명사]': '[pronoun]', '[부사]': '[adverb]', '[조사]': '[particle]',
-                     '[감탄사]': '[interjection]', '[수사]': '[number]'}
+    ko_word_types = {
+        "[동사]": "[verb]",
+        "[형용사]": "[adjective]",
+        "[관형사]": "[determiner]",
+        "[명사]": "[noun]",
+        "[대명사]": "[pronoun]",
+        "[부사]": "[adverb]",
+        "[조사]": "[particle]",
+        "[감탄사]": "[interjection]",
+        "[수사]": "[number]",
+    }
 
-    eth_page = requests.get('http://endic.naver.com/search.nhn?sLn=kr&isOnlyViewEE=N&query=' + word,
-                            headers=ZW_USERAGENT)
+    eth_page = requests.get(
+        "http://endic.naver.com/search.nhn?sLn=kr&isOnlyViewEE=N&query=" + word,
+        headers=ZW_USERAGENT,
+    )
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
     word_exists = str(tree.xpath('//*[@id="content"]/div[2]/h4/text()'))
 
-    if "없습니다" in word_exists:  # Check to not return anything if the entry is invalid (means "there is not")
+    if (
+        "없습니다" in word_exists
+    ):  # Check to not return anything if the entry is invalid (means "there is not")
         to_post = str("> Sorry, but that Korean word doesn't look like anything to me.")
         return to_post
     else:
         hangul_romanization = _ko_romanizer.Romanizer(word).romanize()
-        hangul_chunk = word + ' (*' + hangul_romanization + '*)'
+        hangul_chunk = word + " (*" + hangul_romanization + "*)"
         hanja = tree.xpath('//*[@id="content"]/div[2]/dl/dt[1]/span/text()')
         if len(hanja) != 0:
-            hanja = ''.join(hanja)
+            hanja = "".join(hanja)
             hanja = hanja.strip()
         meaning = tree.xpath('//*[@id="content"]/div[2]/dl/dd[1]/div/p[1]//text()')
-        meaning = ' '.join(meaning)
-        meaning = ' '.join(meaning.split())
+        meaning = " ".join(meaning)
+        meaning = " ".join(meaning.split())
 
         # Here we want to replace the korean parts of speech with the english equiv.
         for key, value in ko_word_types.items():
@@ -4539,18 +5555,28 @@ def lookup_ko_word(word):
                 meaning = meaning.replace(key, value)
 
         if len(hanja) != 0:
-            lookup_line_1 = '# [{0}](https://en.wiktionary.org/wiki/{0}#Korean)\n\n'.format(word)
-            lookup_line_1 += '**Reading:** ' + hangul_chunk + ' (' + hanja + ')'
+            lookup_line_1 = (
+                "# [{0}](https://en.wiktionary.org/wiki/{0}#Korean)\n\n".format(word)
+            )
+            lookup_line_1 += "**Reading:** " + hangul_chunk + " (" + hanja + ")"
         else:
-            lookup_line_1 = '# [{0}](https://en.wiktionary.org/wiki/{0}#Korean)\n\n'.format(word)
-            lookup_line_1 += '**Reading:** ' + hangul_chunk
+            lookup_line_1 = (
+                "# [{0}](https://en.wiktionary.org/wiki/{0}#Korean)\n\n".format(word)
+            )
+            lookup_line_1 += "**Reading:** " + hangul_chunk
         lookup_line_2 = str('\n\n**Meanings**: "' + meaning + '."')
-        lookup_line_3 = ('\n\n\n^Information ^from ^[Naver](http://endic.naver.com/search.nhn'
-                         '?sLn=kr&isOnlyViewEE=N&query={0}) ^| ^[Daum](http://dic.daum.net/search.do?q={0}&dic=eng)')
+        lookup_line_3 = (
+            "\n\n\n^Information ^from ^[Naver](http://endic.naver.com/search.nhn"
+            "?sLn=kr&isOnlyViewEE=N&query={0}) ^| ^[Daum](http://dic.daum.net/search.do?q={0}&dic=eng)"
+        )
         lookup_line_3 = lookup_line_3.format(word)
 
-        to_post = (lookup_line_1 + lookup_line_2 + lookup_line_3)
-        logger.info("[ZW] lookup_ko_word: Received a word lookup for '{}' in Korean. Returned results.".format(word))
+        to_post = lookup_line_1 + lookup_line_2 + lookup_line_3
+        logger.info(
+            "[ZW] lookup_ko_word: Received a word lookup for '{}' in Korean. Returned results.".format(
+                word
+            )
+        )
         return to_post
 
 
@@ -4570,23 +5596,25 @@ def lookup_zhja_tokenizer(phrase, language):
 
     word_list = []
     final_list = []
-    if language == 'zh':
+    if language == "zh":
         seg_list = jieba.cut(phrase, cut_all=False)
         for item in seg_list:
             word_list.append(item)
-    elif language == 'ja':
+    elif language == "ja":
 
         if sys.platform == "win32":  # Windows
             segmenter = tinysegmenter.TinySegmenter()
             word_list = segmenter.tokenize(phrase)
         else:  # Mac/Linux
             '''
-            if sys.platform == "darwin":  # Different location of the dictionary files, 
+            if sys.platform == "darwin":  # Different location of the dictionary files,
                 mecab_directory = "/usr/local/lib/mecab/dic/mecab-ipadic-neologd"
             else:
                 mecab_directory = "/usr/lib/mecab/dic/mecab-ipadic-neologd"'''
             mt = MeCab.Tagger("r'-d {}'".format(FILE_ADDRESS_MECAB))
-            mt.parse(phrase)  # Per https://github.com/SamuraiT/mecab-python3/issues/3 to fix Unicode issue
+            mt.parse(
+                phrase
+            )  # Per https://github.com/SamuraiT/mecab-python3/issues/3 to fix Unicode issue
             parsed = mt.parseToNode(phrase.strip())
             components = []
 
@@ -4599,14 +5627,17 @@ def lookup_zhja_tokenizer(phrase, language):
             word_list = [x for x in components if x]
 
     for item in word_list:  # Get rid of punctuation and kana (for now)
-        if language == 'ja':
+        if language == "ja":
             kana_test = None
             if len(item) == 1:  # If it's only a single kana...
-                kana_test = re.search('[\u3040-\u309f]', item)
+                kana_test = re.search("[\u3040-\u309f]", item)
             if kana_test is None:
-                if item not in r"\.\!\/_,$%^*(+\"\']+|[+——！，。？、~@#￥%……&*（）：；《）《》“”()»〔〕「」％":
+                if (
+                    item
+                    not in r"\.\!\/_,$%^*(+\"\']+|[+——！，。？、~@#￥%……&*（）：；《）《》“”()»〔〕「」％"
+                ):
                     final_list.append(item)
-        if language == 'zh':
+        if language == "zh":
             if item not in r"\.\!\/_,$%^*(+\"\']+|[+——！，。？、~@#￥%……&*（）：；《）《》“”()»〔〕「」％":
                 final_list.append(item)
 
@@ -4630,7 +5661,9 @@ def lookup_wiktionary_search(search_term, language_name):
         return None
 
     try:
-        exist_test = word_info_list[0]['definitions']  # A simple second test to see if something really has definitions
+        exist_test = word_info_list[0][
+            "definitions"
+        ]  # A simple second test to see if something really has definitions
     except IndexError:
         return None
 
@@ -4641,26 +5674,30 @@ def lookup_wiktionary_search(search_term, language_name):
         return None
 
     # First, let's take care of the etymology section.
-    post_etymology = word_info['etymology']
+    post_etymology = word_info["etymology"]
     if len(post_etymology) > 0:  # There's actual information:
         post_etymology = post_etymology.replace(r"\*", "*")
         post_etymology = "\n\n#### Etymology\n\n{}".format(post_etymology.strip())
 
     # Secondly, let's add a pronunciation section if we can.
-    dict_pronunciations = word_info['pronunciations']
+    dict_pronunciations = word_info["pronunciations"]
     pronunciations_ipa = ""
     pronunciations_audio = ""
     if len(dict_pronunciations.values()) > 0:  # There's actual information:
-        if len(dict_pronunciations['text']) > 0:
-            pronunciations_ipa = dict_pronunciations['text'][0].strip()
+        if len(dict_pronunciations["text"]) > 0:
+            pronunciations_ipa = dict_pronunciations["text"][0].strip()
         else:
             pronunciations_ipa = ""
-        if len(dict_pronunciations['audio']) > 0:
-            pronunciations_audio = " ([Audio](https:{}))".format(dict_pronunciations['audio'][0])
+        if len(dict_pronunciations["audio"]) > 0:
+            pronunciations_audio = " ([Audio](https:{}))".format(
+                dict_pronunciations["audio"][0]
+            )
         else:
             pronunciations_audio = ""
     if len(pronunciations_ipa + pronunciations_audio) > 0:
-        post_pronunciations = "\n\n#### Pronunciations\n\n{}{}".format(pronunciations_ipa, pronunciations_audio)
+        post_pronunciations = "\n\n#### Pronunciations\n\n{}{}".format(
+            pronunciations_ipa, pronunciations_audio
+        )
     else:
         post_pronunciations = ""
 
@@ -4669,15 +5706,17 @@ def lookup_wiktionary_search(search_term, language_name):
     # A different part of speech is given as its own thing.
     total_post_definitions = []
 
-    if len(word_info['definitions']) > 0:
-        separate_definitions = word_info['definitions']
+    if len(word_info["definitions"]) > 0:
+        separate_definitions = word_info["definitions"]
         # If they are separate parts of speech they have different definitions.
         for dict_definitions in separate_definitions:
 
             # Deal with Examples
-            if len(dict_definitions['examples']) > 0:
-                examples_data = dict_definitions['examples']
-                if len(examples_data) > 3:  # If there are a lot of examples, we only want the first three.
+            if len(dict_definitions["examples"]) > 0:
+                examples_data = dict_definitions["examples"]
+                if (
+                    len(examples_data) > 3
+                ):  # If there are a lot of examples, we only want the first three.
                     examples_data = examples_data[:2]
                 post_examples = "* " + "\n* ".join(examples_data)
                 post_examples = "\n\n**Examples:**\n\n{}".format(post_examples)
@@ -4685,21 +5724,23 @@ def lookup_wiktionary_search(search_term, language_name):
                 post_examples = ""
 
             # Deal with parts of speech
-            if len(dict_definitions['partOfSpeech']) > 0:
-                post_part = dict_definitions['partOfSpeech'].strip()
+            if len(dict_definitions["partOfSpeech"]) > 0:
+                post_part = dict_definitions["partOfSpeech"].strip()
             else:
                 post_part = ""
 
             # Deal with gender/meaning
-            if len(dict_definitions['text']) > 0:
-                master_text = dict_definitions['text']
-                if '\xa0' in master_text:  # This is a separator generally used to denote Gender.
-                    master_text = master_text.replace('\xa0', ' ^')
-                master_text_list = master_text.split('\n')
+            if len(dict_definitions["text"]) > 0:
+                master_text = dict_definitions["text"]
+                if (
+                    "\xa0" in master_text
+                ):  # This is a separator generally used to denote Gender.
+                    master_text = master_text.replace("\xa0", " ^")
+                master_text_list = master_text.split("\n")
                 master_text_list = [x for x in master_text_list if x]
                 post_word_info = master_text_list[0]
 
-                meanings_format = "* " + '\n* '.join(master_text_list[1:])
+                meanings_format = "* " + "\n* ".join(master_text_list[1:])
                 post_meanings = "\n\n*Meanings*:\n\n{}".format(meanings_format)
                 post_total_info = post_word_info + post_meanings
             else:
@@ -4711,32 +5752,43 @@ def lookup_wiktionary_search(search_term, language_name):
                     info_header = post_part.title()
                 else:
                     info_header = "Information"
-                post_definitions = "\n\n##### {}\n\n{}{}".format(info_header, post_total_info, post_examples)
+                post_definitions = "\n\n##### {}\n\n{}{}".format(
+                    info_header, post_total_info, post_examples
+                )
                 total_post_definitions.append(post_definitions)
 
     total_post_definitions = "\n" + "\n\n".join(total_post_definitions)
 
     # Put it all together.
     post_template = "# [{0}](https://en.wiktionary.org/wiki/{0}#{1}) ({1}){2}{3}{4}"
-    post_template = post_template.format(search_term, language_name.title(), post_etymology, post_pronunciations,
-                                         total_post_definitions)
-    logger.info("[ZW] Looked up information for {} as a {} word..".format(search_term, language_name))
+    post_template = post_template.format(
+        search_term,
+        language_name.title(),
+        post_etymology,
+        post_pronunciations,
+        total_post_definitions,
+    )
+    logger.info(
+        "[ZW] Looked up information for {} as a {} word..".format(
+            search_term, language_name
+        )
+    )
 
     return post_template
 
 
-'''
+"""
 LANGUAGE REFERENCE FUNCTIONS
 
-These are functions that retrieve reference information about languages. 
+These are functions that retrieve reference information about languages.
 
 All reference functions are prefixed with `reference` in their name.
-'''
+"""
 
 
 def reference_search(lookup_term):
     """
-    Function to look up reference languages on Ethnologue and Wikipedia. 
+    Function to look up reference languages on Ethnologue and Wikipedia.
     This also searches MultiTree (no longer a
     separate function) for languages which may be constructed or dead.
     Due to web settings the live search function of this has been
@@ -4747,15 +5799,19 @@ def reference_search(lookup_term):
     """
 
     # Regex to check if code is in the private use area qaa-qtz
-    private_check = re.search('^q[a-t][a-z]$', lookup_term)
-    if private_check is not None:  # This is a private use code. If it's None, it did not match.
+    private_check = re.search("^q[a-t][a-z]$", lookup_term)
+    if (
+        private_check is not None
+    ):  # This is a private use code. If it's None, it did not match.
         return None  # Just exit.
 
     # Get the language code (specifically the ISO 639-3 one)
     language_code = converter(lookup_term)[0]
     language_lookup_code = str(language_code)
     if len(language_code) == 2:  # This appears to be an ISO 639-1 code.
-        language_code = MAIN_LANGUAGES[language_code]['language_code_3']  # Get the ISO 639-3 version.
+        language_code = MAIN_LANGUAGES[language_code][
+            "language_code_3"
+        ]  # Get the ISO 639-3 version.
     if len(language_code) == 4:  # This is a script code.
         return None
 
@@ -4774,7 +5830,10 @@ def reference_search(lookup_term):
         if reference_results is not None:  # We found a cached value for this language
             reference_cached_info = reference_results[1]
             logger.info(
-                "[ZW] Reference: Retrieved the cached reference information for {}.".format(language_lookup_code))
+                "[ZW] Reference: Retrieved the cached reference information for {}.".format(
+                    language_lookup_code
+                )
+            )
             return reference_cached_info
 
     return
@@ -4795,12 +5854,17 @@ def reference_reformatter(original_entry):
     new_lines = []
 
     # Define which lines to exclude.
-    excluded_lines = ["Language Name", "Alternate Names", "Writing system", "Population"]
+    excluded_lines = [
+        "Language Name",
+        "Alternate Names",
+        "Writing system",
+        "Population",
+    ]
 
     # Go over the lines and delete links we don't need.
     for line in original_lines:
         if "##" in line and "]" in line:
-            sole_language = line.split(']')[0]
+            sole_language = line.split("]")[0]
             sole_language = sole_language.replace("[", "")
             line = sole_language
 
@@ -4815,12 +5879,12 @@ def reference_reformatter(original_entry):
     return new_entry
 
 
-'''
+"""
 EDIT FINDER
 
-This is a single function that helps detect changes in r/translator comments, especially checking for the addition of 
-commands are changes in the content that's looked up. 
-'''
+This is a single function that helps detect changes in r/translator comments, especially checking for the addition of
+commands are changes in the content that's looked up.
+"""
 
 
 def edit_finder():
@@ -4836,7 +5900,9 @@ def edit_finder():
 
     # Fetch the comments from Reddit.
     comments = []
-    comments += list(r.comments(limit=comment_limit))  # Only get the last `comment_limit` comments.
+    comments += list(
+        r.comments(limit=comment_limit)
+    )  # Only get the last `comment_limit` comments.
     cleanup_database = False
 
     # Process the comments we've retrieved.
@@ -4853,20 +5919,28 @@ def edit_finder():
 
         if time_diff > 3600 and not cedited:  # The edit is older than an hour.
             continue
-        '''
+        """
         # Strip punctuation to allow for safe SQL storage.
         replaced_characters = ['\n', '\x00', '(', ')', '[', "]", "'", "\""]
         for character in replaced_characters:
             cbody = cbody.replace(character, " ")
-        '''
+        """
 
         # Let's retrieve any matching comment text in the cache.
         get_old_sql = "SELECT * FROM comment_cache WHERE id = ?"  # Look for previous data for comment ID
         cursor_cache.execute(get_old_sql, (cid,))
-        old_matching_data = cursor_cache.fetchall()  # Returns a list that contains a tuple (comment ID, comment text).
+        old_matching_data = (
+            cursor_cache.fetchall()
+        )  # Returns a list that contains a tuple (comment ID, comment text).
 
-        if len(old_matching_data) != 0:  # This comment has previously been stored. Let's check it.
-            logger.debug("[ZW] Edit Finder: Comment '{}' was previously stored in the cache.".format(cid))
+        if (
+            len(old_matching_data) != 0
+        ):  # This comment has previously been stored. Let's check it.
+            logger.debug(
+                "[ZW] Edit Finder: Comment '{}' was previously stored in the cache.".format(
+                    cid
+                )
+            )
 
             # Define a way to override and force a change even if there is no difference in detected commands.
             force_change = False
@@ -4878,11 +5952,15 @@ def edit_finder():
             if cbody == old_cbody:  # The cached comment is the same as the current one.
                 continue  # Do nothing.
             else:  # There is a change of some sort.
-                logger.debug("[ZW] Edit Finder: An edit for comment '{}' was detected. Processing...".format(cid))
+                logger.debug(
+                    "[ZW] Edit Finder: An edit for comment '{}' was detected. Processing...".format(
+                        cid
+                    )
+                )
                 cleanup_database = True
 
                 # We detected a possible `lookup` change, where the words looked up are now different.
-                if '`' in cbody:
+                if "`" in cbody:
                     # First thing is compare the data in a lookup comment against what we have.
 
                     # Here we use the lookup_matcher function to get a LIST of everything that used to be in the graves.
@@ -4891,16 +5969,28 @@ def edit_finder():
                     # Then we get data from Komento, specifically looking for its version of results.
                     new_vars = komento_analyzer(komento_submission_from_comment(cid))
 
-                    if 'bot_lookup_correspond' in new_vars:  # This will be a dictionary
-                        new_overall_lookup_data = new_vars['bot_lookup_correspond']
-                        if cid in new_overall_lookup_data:  # This comment is in our data
+                    if "bot_lookup_correspond" in new_vars:  # This will be a dictionary
+                        new_overall_lookup_data = new_vars["bot_lookup_correspond"]
+                        if (
+                            cid in new_overall_lookup_data
+                        ):  # This comment is in our data
                             new_total_matches = new_overall_lookup_data[cid]
                             # Get the new matches
-                            if set(new_total_matches) == set(total_matches):  # Are they the same?
-                                logger.debug("[ZW] Edit-Finder: No change found for lookup comment '{}'.".format(cid))
+                            if set(new_total_matches) == set(
+                                total_matches
+                            ):  # Are they the same?
+                                logger.debug(
+                                    "[ZW] Edit-Finder: No change found for lookup comment '{}'.".format(
+                                        cid
+                                    )
+                                )
                                 continue
                             else:
-                                logger.debug("[ZW] Edit-Finder: Change found for lookup comment '{}'.".format(cid))
+                                logger.debug(
+                                    "[ZW] Edit-Finder: Change found for lookup comment '{}'.".format(
+                                        cid
+                                    )
+                                )
                                 force_change = True
 
                 # Code to swap out the stored comment text with the new text. This does NOT force a reprocess.
@@ -4920,17 +6010,29 @@ def edit_finder():
                 for keyword in main_keywords:
                     if keyword in cbody and keyword not in old_cbody:
                         # This means the keyword is a NEW addition to the edited comment.
-                        logger.debug("[ZW] Edit Finder: New command {} detected for comment '{}'.".format(keyword, cid))
+                        logger.debug(
+                            "[ZW] Edit Finder: New command {} detected for comment '{}'.".format(
+                                keyword, cid
+                            )
+                        )
                         force_change = True
 
-                if force_change:  # Delete the comment from the processed database to force it to update and reprocess.
+                if (
+                    force_change
+                ):  # Delete the comment from the processed database to force it to update and reprocess.
                     delete_comment_command = "DELETE FROM oldcomments WHERE id = ?"
                     cursor_main.execute(delete_comment_command, (cid,))
                     conn_main.commit()
-                    logger.debug("[ZW] Edit Finder: Removed edited comment `{}` from processed database.".format(cid))
+                    logger.debug(
+                        "[ZW] Edit Finder: Removed edited comment `{}` from processed database.".format(
+                            cid
+                        )
+                    )
 
         else:  # This is a comment that has not been stored.
-            logger.debug("[ZW] Edit Finder: New comment '{}' to store in the cache.".format(cid))
+            logger.debug(
+                "[ZW] Edit Finder: New comment '{}' to store in the cache.".format(cid)
+            )
             cleanup_database = True
 
             try:
@@ -4940,11 +6042,15 @@ def edit_finder():
                 cursor_cache.execute(cache_command, new_tuple)
                 conn_cache.commit()
             except ValueError:  # Some sort of invalid character, don't write it.
-                logger.debug("[ZW] Edit Finder: ValueError when inserting comment `{}` into cache.".format(cid))
+                logger.debug(
+                    "[ZW] Edit Finder: ValueError when inserting comment `{}` into cache.".format(
+                        cid
+                    )
+                )
                 pass
 
     if cleanup_database:  # There's a need to clean it up.
-        cleanup = 'DELETE FROM comment_cache WHERE id NOT IN (SELECT id FROM comment_cache ORDER BY id DESC LIMIT ?)'
+        cleanup = "DELETE FROM comment_cache WHERE id NOT IN (SELECT id FROM comment_cache ORDER BY id DESC LIMIT ?)"
         cursor_cache.execute(cleanup, (comment_limit,))
 
         # Delete all but the last comment_limit comments.
@@ -4954,12 +6060,12 @@ def edit_finder():
     return
 
 
-'''
+"""
 POSTS FILTERING & TESTING FUNCTIONS
 
 This is the main routine to check for incoming posts, assign them the appropriate category, and activate notifications.
 The function also removes posts that don't match the formatting guidelines.
-'''
+"""
 
 
 def is_mod(user):
@@ -5005,7 +6111,9 @@ def bad_title_commenter(title_text, author):
     :return: A formatted comment that `ziwen_posts` can reply to the post with.
     """
 
-    new_title = bad_title_reformat(title_text)  # Retrieve the reformed title from the routine in _languages
+    new_title = bad_title_reformat(
+        title_text
+    )  # Retrieve the reformed title from the routine in _languages
     new_url = new_title.replace(" ", "%20")  # replace spaces
     new_url = new_url.replace(")", r"\)")  # replace closing parentheses
     new_url = new_url.replace(">", "%3E")  # replace caret with HTML code
@@ -5028,7 +6136,7 @@ def ziwen_posts():
     """
 
     current_time = int(time.time())  # This is the current time.
-    logger.debug('[ZW] Fetching new r/{} posts at {}.'.format(SUBREDDIT, current_time))
+    logger.debug("[ZW] Fetching new r/{} posts at {}.".format(SUBREDDIT, current_time))
     posts = []
 
     # We get the last 80 new posts. Changed from the deprecated `submissions` method.
@@ -5041,7 +6149,9 @@ def ziwen_posts():
         oid = post.id
         otitle = post.title
         ourl = post.url
-        opermalink = post.permalink  # This is the comments page, not the URL of an image
+        opermalink = (
+            post.permalink
+        )  # This is the comments page, not the URL of an image
         oselftext = post.selftext
         oflair_css = post.link_flair_css_class
         ocreated = post.created_utc  # Unix time when this post was created.
@@ -5057,16 +6167,20 @@ def ziwen_posts():
             continue
 
         # Check the local database to see if this is in there.
-        cursor_main.execute('SELECT * FROM oldposts WHERE ID=?', [oid])
+        cursor_main.execute("SELECT * FROM oldposts WHERE ID=?", [oid])
         if cursor_main.fetchone():
             # Post is already in the database
-            logger.debug("[ZW] Posts: This post {} already exists in the processed database.".format(oid))
+            logger.debug(
+                "[ZW] Posts: This post {} already exists in the processed database.".format(
+                    oid
+                )
+            )
             continue
-        cursor_main.execute('INSERT INTO oldposts VALUES(?)', [oid])
+        cursor_main.execute("INSERT INTO oldposts VALUES(?)", [oid])
         conn_main.commit()
 
         if not css_check(oflair_css) and oflair_css is not None:
-            # If it's a Meta or Community post (that's what css_check does), just alert those signed up for it. 
+            # If it's a Meta or Community post (that's what css_check does), just alert those signed up for it.
             suggested_css_text = oflair_css
             logger.info("[ZW] Posts: New {} post.".format(suggested_css_text.title()))
 
@@ -5081,23 +6195,36 @@ def ziwen_posts():
 
             continue  # Then exit.
 
-        if oflair_css in ["translated", "doublecheck", "missing", "inprogress"]:  # We don't want to mess with these
+        if oflair_css in [
+            "translated",
+            "doublecheck",
+            "missing",
+            "inprogress",
+        ]:  # We don't want to mess with these
             continue  # Basically we only want to deal with untranslated posts
 
         # We're going to mark the original post author as someone different if it's a crosspost.
         if oauthor == "translator-BOT" and oflair_css != "community":
             komento_data = komento_analyzer(post)
-            if 'bot_xp_comment' in komento_data:
-                op_match = komento_data['bot_xp_op']
+            if "bot_xp_comment" in komento_data:
+                op_match = komento_data["bot_xp_op"]
                 oauthor = op_match
 
-        if oauthor.lower() in GLOBAL_BLACKLIST:  # This user is on our blacklist. (not used much, more precautionary)
+        if (
+            oauthor.lower() in GLOBAL_BLACKLIST
+        ):  # This user is on our blacklist. (not used much, more precautionary)
             post.mod.remove()
             action_counter(1, "Blacklisted posts")  # Write to the counter log
-            logger.info("[ZW] Posts: Filtered a post out because its author u/{} is on my blacklist.".format(oauthor))
+            logger.info(
+                "[ZW] Posts: Filtered a post out because its author u/{} is on my blacklist.".format(
+                    oauthor
+                )
+            )
             continue
 
-        if opost_age < CLAIM_PERIOD:  # If the post is younger than the claim period, we can act on it. (~8 hours)
+        if (
+            opost_age < CLAIM_PERIOD
+        ):  # If the post is younger than the claim period, we can act on it. (~8 hours)
 
             # If the post is under an hour, let's send notifications to people. Otherwise, we won't.
             # This is mainly for catching up with older posts - we want to process them but we don't want to send notes.
@@ -5106,7 +6233,9 @@ def ziwen_posts():
             else:
                 okay_send = False
 
-            returned_info = main_posts_filter(otitle)  # Applies a filtration test, see if it's okay. False if it is not
+            returned_info = main_posts_filter(
+                otitle
+            )  # Applies a filtration test, see if it's okay. False if it is not
 
             if returned_info[0] is not False:  # Everything appears to be fine.
                 otitle = returned_info[1]
@@ -5115,13 +6244,22 @@ def ziwen_posts():
 
                 # Remove this post, it failed all routines.
                 post.mod.remove()
-                post.reply(str(bad_title_commenter(title_text=otitle, author=oauthor)) + BOT_DISCLAIMER)
+                post.reply(
+                    str(bad_title_commenter(title_text=otitle, author=oauthor))
+                    + BOT_DISCLAIMER
+                )
 
                 # Write the title to the log.
                 filter_num = returned_info[2]
-                record_filter_log(filtered_title=otitle, ocreated=ocreated, filter_type=filter_num)
+                record_filter_log(
+                    filtered_title=otitle, ocreated=ocreated, filter_type=filter_num
+                )
                 action_counter(1, "Removed posts")  # Write to the counter log
-                logger.info("[ZW] Posts: Removed post that violated formatting guidelines. Title: {}".format(otitle))
+                logger.info(
+                    "[ZW] Posts: Removed post that violated formatting guidelines. Title: {}".format(
+                        otitle
+                    )
+                )
                 continue  # Exit
 
             try:
@@ -5133,7 +6271,9 @@ def ziwen_posts():
                 multiple_notifications = title_data[6]
                 # This is something that will return a list if it's a multiple request or two non English languages
                 # that can be split. None if false.
-                specific_sublanguage = title_data[7]  # This is a specific code, like ar-LB, unknown-cyrl
+                specific_sublanguage = title_data[
+                    7
+                ]  # This is a specific code, like ar-LB, unknown-cyrl
             except Exception as e_title:  # The title converter couldn't make sense of it. This should not happen.
                 # Skip! This will result it in getting whatever AM gave it. (which may be nothing)
                 # Send a message to let mods know
@@ -5141,18 +6281,26 @@ def ziwen_posts():
                 record_error_log(title_error_entry + e_title)  # Save the error.
 
                 # Report the post, so that mods know to take a look.
-                fail_reason = ("(Ziwen) Crashed my title formatting routine. "
-                               "Please check and assign this a language category.")
+                fail_reason = (
+                    "(Ziwen) Crashed my title formatting routine. "
+                    "Please check and assign this a language category."
+                )
                 post.report(fail_reason)
-                logger.warning("[ZW] Posts: Title formatting routine crashed and encountered an exception.")
+                logger.warning(
+                    "[ZW] Posts: Title formatting routine crashed and encountered an exception."
+                )
 
                 continue  # Exit
 
-            if suggested_source == suggested_target:  # If it's an English only post, filter it out.
+            if (
+                suggested_source == suggested_target
+            ):  # If it's an English only post, filter it out.
                 if "English" in suggested_source and "English" in suggested_target:
                     post.mod.remove()
                     post.reply(COMMENT_ENGLISH_ONLY.format(oauthor=oauthor))
-                    record_filter_log(filtered_title=otitle, ocreated=ocreated, filter_type="EE")
+                    record_filter_log(
+                        filtered_title=otitle, ocreated=ocreated, filter_type="EE"
+                    )
                     action_counter(1, "Removed posts")  # Write to the counter log
                     logger.info("[ZW] Posts: Removed an English-only post.")
 
@@ -5161,20 +6309,34 @@ def ziwen_posts():
             if suggested_css_text != "Generic":
                 final_css_text = str(suggested_css_text)
                 final_css_class = str(suggested_css)
-                if "generic" in suggested_css:  # It's a supported language but not a supported flair.
+                if (
+                    "generic" in suggested_css
+                ):  # It's a supported language but not a supported flair.
                     # Write to the saved page
-                    record_to_wiki(odate=ocreated, otitle=otitle, oid=oid, oflair_text=suggested_css_text, s_or_i=True,
-                                   oflair_new="")
+                    record_to_wiki(
+                        odate=ocreated,
+                        otitle=otitle,
+                        oid=oid,
+                        oflair_text=suggested_css_text,
+                        s_or_i=True,
+                        oflair_new="",
+                    )
             else:  # This is fully generic.
                 # Set generic categories.
                 final_css_text = "Generic"
                 final_css_class = "generic"
 
                 # Report the post, so that mods know to take a look.
-                generic_reason = ("(Ziwen) Failed my title formatting routine. "
-                                  "Please check and assign this a language category.")
+                generic_reason = (
+                    "(Ziwen) Failed my title formatting routine. "
+                    "Please check and assign this a language category."
+                )
                 post.report(generic_reason)
-                logger.info("[ZW] Posts: Title formatting routine couldn't make sense of '{}'.".format(otitle))
+                logger.info(
+                    "[ZW] Posts: Title formatting routine couldn't make sense of '{}'.".format(
+                        otitle
+                    )
+                )
 
             # Check to see if we should add (Long) to the flair. There's a YouTube test and a text length test.
             if "youtube.com" in ourl or "youtu.be" in ourl:
@@ -5182,23 +6344,45 @@ def ziwen_posts():
                 try:
                     # Let's try to get the length of the video.
                     video_url = pafy.new(ourl)
-                    logger.debug("[ZW] Posts: Analyzing YouTube video post at: {}".format(video_url))
+                    logger.debug(
+                        "[ZW] Posts: Analyzing YouTube video post at: {}".format(
+                            video_url
+                        )
+                    )
 
                     if video_url.length > 300 and "t=" not in ourl:
                         # We make an exception if someone posts the exact timestamp
                         logger.info("[ZW] Posts: This is a long YouTube video.")
-                        if final_css_text is not None:  # Let's leave None flair text alone
+                        if (
+                            final_css_text is not None
+                        ):  # Let's leave None flair text alone
                             final_css_text += " (Long)"
                             post.reply(COMMENT_LONG + BOT_DISCLAIMER)
-                except (ValueError, TypeError, UnicodeEncodeError, youtube_dl.utils.ExtractorError,
-                        youtube_dl.utils.RegexNotFoundError, OSError, IOError, pafy.util.GdataError):
+                except (
+                    ValueError,
+                    TypeError,
+                    UnicodeEncodeError,
+                    youtube_dl.utils.ExtractorError,
+                    youtube_dl.utils.RegexNotFoundError,
+                    OSError,
+                    IOError,
+                    pafy.util.GdataError,
+                ):
                     # The pafy routine cannot make sense of it.
                     logger.debug("[ZW] Posts: Unable to process this YouTube link.")
                 else:
-                    logger.warning("[ZW] Posts: Unable to process YouTube link at {}. Non-listed error.".format(ourl))
-            if len(oselftext) > 1400:  # This changes the CSS text to indicate if it's a long wall of text
+                    logger.warning(
+                        "[ZW] Posts: Unable to process YouTube link at {}. Non-listed error.".format(
+                            ourl
+                        )
+                    )
+            if (
+                len(oselftext) > 1400
+            ):  # This changes the CSS text to indicate if it's a long wall of text
                 logger.info("[ZW] Posts: This is a long piece of text.")
-                if final_css_text is not None and post.author.name != USERNAME:  # Let's leave None flair text alone
+                if (
+                    final_css_text is not None and post.author.name != USERNAME
+                ):  # Let's leave None flair text alone
                     final_css_text += " (Long)"
                     post.reply(COMMENT_LONG + BOT_DISCLAIMER)
 
@@ -5206,25 +6390,43 @@ def ziwen_posts():
             user_posted_too_much = notifier_over_frequency_checker(oauthor)
 
             # We don't want to send notifications if we're just testing. We also verify that user is not too extra.
-            contacted = []  # A placeholder variable that normally contains a list of users notified.
+            contacted = (
+                []
+            )  # A placeholder variable that normally contains a list of users notified.
             if MESSAGES_OKAY and okay_send and not user_posted_too_much:
                 action_counter(1, "New posts")  # Write to the counter log
-                if multiple_notifications is None and specific_sublanguage is None:  # This is a regular post.
-                    contacted = ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, False)
+                if (
+                    multiple_notifications is None and specific_sublanguage is None
+                ):  # This is a regular post.
+                    contacted = ziwen_notifier(
+                        suggested_css_text, otitle, opermalink, oauthor, False
+                    )
                     # Now we notify people who are signed up on the list.
-                elif multiple_notifications is not None and specific_sublanguage is None:
+                elif (
+                    multiple_notifications is not None and specific_sublanguage is None
+                ):
                     # This is a multiple post with a fixed number of languages or two non-English ones.
                     # Also called a "defined multiple language post"
                     # This part of the function also sends notifications if both languages are non-English
                     for notification in multiple_notifications:
-                        multiple_language_text = converter(notification)[1]  # This is the language name for consistency
-                        contacted = ziwen_notifier(multiple_language_text, otitle, opermalink, oauthor, False)
-                    if final_css_class is "multiple":  # We wanna leave an advisory comment if it's a defined multiple
+                        multiple_language_text = converter(notification)[
+                            1
+                        ]  # This is the language name for consistency
+                        contacted = ziwen_notifier(
+                            multiple_language_text, otitle, opermalink, oauthor, False
+                        )
+                    if (
+                        final_css_class is "multiple"
+                    ):  # We wanna leave an advisory comment if it's a defined multiple
                         post.reply(COMMENT_DEFINED_MULTIPLE + BOT_DISCLAIMER)
-                elif multiple_notifications is None and specific_sublanguage is not None:
+                elif (
+                    multiple_notifications is None and specific_sublanguage is not None
+                ):
                     # There is a specific subcategory for us to look at (ar-LB, unknown-cyrl) etc
                     # The notifier routine will be able to make sense of the hyphenated code.
-                    contacted = ziwen_notifier(specific_sublanguage, otitle, opermalink, oauthor, False)
+                    contacted = ziwen_notifier(
+                        specific_sublanguage, otitle, opermalink, oauthor, False
+                    )
                     # Now we notify people who are signed up on the list.
 
             # If it's an unknown post, add an informative comment.
@@ -5232,10 +6434,16 @@ def ziwen_posts():
                 unknown_already = False
                 if not unknown_already:
                     post.reply(COMMENT_UNKNOWN + BOT_DISCLAIMER)
-                    logger.info("[ZW] Posts: Added the default 'Unknown' information comment.")
+                    logger.info(
+                        "[ZW] Posts: Added the default 'Unknown' information comment."
+                    )
 
             # Actually update the flair. Legacy version first.
-            logger.info("[ZW] Posts: Set flair to class '{}' and text '{}.'".format(final_css_class, final_css_text))
+            logger.info(
+                "[ZW] Posts: Set flair to class '{}' and text '{}.'".format(
+                    final_css_class, final_css_text
+                )
+            )
 
             # New Redesign Version to update flair
             # Check the global template dictionary
@@ -5245,21 +6453,25 @@ def ziwen_posts():
                 logger.debug("[ZW] Posts: Flair template selected for post.")
 
             # Finally, create an Ajo object and save it locally.
-            if final_css_class not in ['meta', 'community']:
-                pajo = Ajo(reddit.submission(id=post.id))  # Create an Ajo object, reload the post.
+            if final_css_class not in ["meta", "community"]:
+                pajo = Ajo(
+                    reddit.submission(id=post.id)
+                )  # Create an Ajo object, reload the post.
                 if len(contacted) != 0:  # We have a list of notified users.
                     pajo.add_notified(contacted)
                 ajo_writer(pajo)  # Save it to the local database
-                logger.debug("[ZW] Posts: Created Ajo for new post and saved to local database.")
+                logger.debug(
+                    "[ZW] Posts: Created Ajo for new post and saved to local database."
+                )
 
     return
 
 
-'''
+"""
 MAIN COMMANDS RUNTIME
 
 This is the main routine that processes commands from r/translator users.
-'''
+"""
 
 
 def ziwen_bot():
@@ -5269,7 +6481,7 @@ def ziwen_bot():
     :return: Nothing.
     """
 
-    logger.debug('Fetching new r/{} comments...'.format(SUBREDDIT))
+    logger.debug("Fetching new r/{} comments...".format(SUBREDDIT))
     posts = []
     posts += list(r.comments(limit=MAXPOSTS))
 
@@ -5286,31 +6498,37 @@ def ziwen_bot():
         if pauthor == USERNAME:  # Will not reply to my own comments
             continue
 
-        cursor_main.execute('SELECT * FROM oldcomments WHERE ID=?', [pid])
+        cursor_main.execute("SELECT * FROM oldcomments WHERE ID=?", [pid])
         if cursor_main.fetchone():
             # Post is already in the database
             continue
 
-        '''KEY ORIGINAL POST VARIABLES (NON-COMMENT) (o-)'''
-        osubmission = post.submission  # Returns a submission object of the parent to work with
+        """KEY ORIGINAL POST VARIABLES (NON-COMMENT) (o-)"""
+        osubmission = (
+            post.submission
+        )  # Returns a submission object of the parent to work with
         oid = osubmission.id
         opermalink = osubmission.permalink
         otitle = osubmission.title
         oflair_text = osubmission.link_flair_text  # This is the linkflair text
-        oflair_css = osubmission.link_flair_css_class  # This is the linkflair css class (lowercase)
+        oflair_css = (
+            osubmission.link_flair_css_class
+        )  # This is the linkflair css class (lowercase)
         ocreated = post.created_utc  # Unix time when this post was created.
         osaved = post.saved  # We save verification requests so we don't work on them.
         requester = "Zamenhof"  # Dummy thing just to have data
         current_time = int(time.time())  # This is the current time.
 
         try:
-            oauthor = osubmission.author.name  # Check to see if the submission author deleted their post already
+            oauthor = (
+                osubmission.author.name
+            )  # Check to see if the submission author deleted their post already
         except AttributeError:  # No submission author found.
             oauthor = None
 
         if oid != VERIFIED_POST_ID:
             # Enter it into the processed comments database
-            cursor_main.execute('INSERT INTO oldcomments VALUES(?)', [pid])
+            cursor_main.execute("INSERT INTO oldcomments VALUES(?)", [pid])
             conn_main.commit()
 
         pbody = post.body
@@ -5319,38 +6537,52 @@ def ziwen_bot():
 
         # Calculate points for the person.
         if oflair_text is not None and osaved is not True and oauthor is not None:
-            # We don't want to process it without the oflair text. Or if its vaerified comment 
+            # We don't want to process it without the oflair text. Or if its vaerified comment
             logger.debug("[ZW] Bot: Processing points for u/{}".format(pauthor))
             points_tabulator(oid, oauthor, oflair_text, oflair_css, post)
 
-        '''AJO CREATION'''
+        """AJO CREATION"""
         # Create an Ajo object.
         if css_check(oflair_css):
 
             # Check the database for the Ajo.
             oajo = ajo_loader(oid)
 
-            if oajo is None:  # We couldn't find a stored dict, so we will generate it from the submission.
+            if (
+                oajo is None
+            ):  # We couldn't find a stored dict, so we will generate it from the submission.
                 logger.debug("[ZW] Bot: Couldn't find an AJO in the local database.")
                 oajo = Ajo(osubmission)
 
             if oajo.is_bot_crosspost:
                 komento_data = komento_analyzer(komento_submission_from_comment(pid))
-                if 'bot_xp_comment' in komento_data:
-                    op_match = komento_data['bot_xp_op']
+                if "bot_xp_comment" in komento_data:
+                    op_match = komento_data["bot_xp_op"]
                     oauthor = op_match  # We're going to mark the original post author as another if it's a crosspost.
-                    requester = komento_data['bot_xp_requester']
+                    requester = komento_data["bot_xp_requester"]
         else:  # This is either a meta or a community post
-            logger.debug("[ZW] Bot: Post appears to be either a meta or community post.")
+            logger.debug(
+                "[ZW] Bot: Post appears to be either a meta or community post."
+            )
             continue
 
-        if not any(key.lower() in pbody for key in KEYWORDS) and not any(phrase in pbody for phrase in THANKS_KEYWORDS):
+        if not any(key.lower() in pbody for key in KEYWORDS) and not any(
+            phrase in pbody for phrase in THANKS_KEYWORDS
+        ):
             # Does not contain our keyword
-            logger.debug("[ZW] Bot: Post {} does not contain any operational keywords.".format(oid))
+            logger.debug(
+                "[ZW] Bot: Post {} does not contain any operational keywords.".format(
+                    oid
+                )
+            )
             continue
 
-        if TESTING_MODE:  # This is a function to help stop the incessant commenting on older posts when testing
-            if current_time - ocreated >= 3600:  # If the comment is older than an hour, ignore
+        if (
+            TESTING_MODE
+        ):  # This is a function to help stop the incessant commenting on older posts when testing
+            if (
+                current_time - ocreated >= 3600
+            ):  # If the comment is older than an hour, ignore
                 continue
 
         # Record to the counter with the keyword.
@@ -5358,7 +6590,7 @@ def ziwen_bot():
             if keyword in pbody:
                 action_counter(1, keyword)  # Write to the counter log
 
-        '''RESTORE COMMAND'''
+        """RESTORE COMMAND"""
 
         # This is the `!restore` command, which can try and check Pushshift data. It can be triggered if user deleted it
         if KEYWORDS[17] in pbody and oauthor is None:
@@ -5370,72 +6602,101 @@ def ziwen_bot():
             if not osubmission.is_self:
                 # Reply and let them know this only works on text-only posts.
                 post.reply(MSG_RESTORE_LINK_FAIL + BOT_DISCLAIMER)
-                logger.info('[ZW] Bot: !restore request is for a link post. Skipped.')
+                logger.info("[ZW] Bot: !restore request is for a link post. Skipped.")
                 continue
 
             try:  # Get the people who are eligible to check for this.
                 try:
                     eligible_people = oajo.notified
                 except AttributeError:  # Since this is a new attribute it's possible older Ajos don't have it.
-                    logger.error('[ZW] Bot: Error retrieving notified list from Ajo.')
+                    logger.error("[ZW] Bot: Error retrieving notified list from Ajo.")
                     eligible_people = []
                 eligible_people += oajo.recorded_translators
             except AttributeError:
-                logger.error('[ZW] Bot: Error in retrieving recorded translators list from Ajo.')
+                logger.error(
+                    "[ZW] Bot: Error in retrieving recorded translators list from Ajo."
+                )
                 continue
 
             # The person asking for a restore isn't eligible for it.
-            if pauthor not in eligible_people and not is_mod(pauthor):  # mods should be able to call it.
-                logger.info('[ZW] Bot: u/{} is not eligible to make a !restore request for this.'.format(pauthor))
+            if pauthor not in eligible_people and not is_mod(
+                pauthor
+            ):  # mods should be able to call it.
+                logger.info(
+                    "[ZW] Bot: u/{} is not eligible to make a !restore request for this.".format(
+                        pauthor
+                    )
+                )
                 post.reply(MSG_RESTORE_NOT_ELIGIBLE + BOT_DISCLAIMER)
                 continue
             else:  # Format a search query to Pushshift.
-                search_query = "https://api.pushshift.io/reddit/search/submission/?ids={}".format(oid)
+                search_query = (
+                    "https://api.pushshift.io/reddit/search/submission/?ids={}".format(
+                        oid
+                    )
+                )
                 retrieved_data = requests.get(search_query).json()
 
-                if 'data' in retrieved_data:  # We've got some data.
-                    returned_submission = retrieved_data['data'][0]
-                    original_title = "> **{}**\n\n".format(returned_submission['title'])
-                    original_text = returned_submission['selftext']
+                if "data" in retrieved_data:  # We've got some data.
+                    returned_submission = retrieved_data["data"][0]
+                    original_title = "> **{}**\n\n".format(returned_submission["title"])
+                    original_text = returned_submission["selftext"]
                     if len(original_text.strip()) > 0:  # We have text.
-                        original_text = "> " + original_text.strip().replace('\n', '\n > ')
+                        original_text = "> " + original_text.strip().replace(
+                            "\n", "\n > "
+                        )
                     else:  # The retrieved text is of zero length.
-                        original_text = "> *It appears this text-only post had no text.*"
+                        original_text = (
+                            "> *It appears this text-only post had no text.*"
+                        )
                     original_text = original_title + original_text
                 else:
                     # Tell them we were not able to get any proper data.
-                    subject_line = '[Notification] About your !restore request'
+                    subject_line = "[Notification] About your !restore request"
                     try:
-                        reddit.redditor(pauthor).message(subject_line, MSG_RESTORE_TEXT_FAIL.format(opermalink))
+                        reddit.redditor(pauthor).message(
+                            subject_line, MSG_RESTORE_TEXT_FAIL.format(opermalink)
+                        )
                     except praw.exceptions.APIException:
                         pass
                     else:
-                        logger.info('[ZW] Bot: Replied to u/{} with message, '
-                                    'unable to retrieve data.'.format(pauthor))
+                        logger.info(
+                            "[ZW] Bot: Replied to u/{} with message, "
+                            "unable to retrieve data.".format(pauthor)
+                        )
                     continue
 
                 # Actually send them the message, including the original text.
-                subject_line = '[Notification] Restored text for your !restore request'
+                subject_line = "[Notification] Restored text for your !restore request"
                 try:
-                    reddit.redditor(pauthor).message(subject_line, MSG_RESTORE_TEXT_TEMPLATE.format(opermalink,
-                                                                                                    original_text) + BOT_DISCLAIMER)
+                    reddit.redditor(pauthor).message(
+                        subject_line,
+                        MSG_RESTORE_TEXT_TEMPLATE.format(opermalink, original_text)
+                        + BOT_DISCLAIMER,
+                    )
                 except praw.exceptions.APIException:
                     pass
                 else:
-                    logger.info('[ZW] Bot: Replied to u/{} with restored text.'.format(pauthor))
+                    logger.info(
+                        "[ZW] Bot: Replied to u/{} with restored text.".format(pauthor)
+                    )
 
         # We move the exit point if there is no author here. Since !restore relies on there being no author.
         if oauthor is None:
             continue
 
-        '''REFERENCE COMMANDS (!identify, !page, !reference, !search, `lookup`)'''
+        """REFERENCE COMMANDS (!identify, !page, !reference, !search, `lookup`)"""
 
-        if KEYWORDS[4] in pbody or KEYWORDS[10] in pbody:  # This is the general !identify command (synonym: !id)
+        if (
+            KEYWORDS[4] in pbody or KEYWORDS[10] in pbody
+        ):  # This is the general !identify command (synonym: !id)
 
             determined_data = comment_info_parser(pbody, "!identify:")
             # This should return what was actually identified. Normally will be a tuple or None.
-            if determined_data is None:  # The command is problematic. Wrong punctuation, not enough arguments
-                logger.debug('[ZW] Bot: !identify data is invalid.')
+            if (
+                determined_data is None
+            ):  # The command is problematic. Wrong punctuation, not enough arguments
+                logger.debug("[ZW] Bot: !identify data is invalid.")
                 continue
 
             # Set some defaults just in case. These should be overwritten later.
@@ -5447,113 +6708,188 @@ def ziwen_bot():
             match = determined_data[0]
             advanced_mode = determined_data[1]
             language_country = None  # Default value
-            o_language_name = str(oajo.language_name)  # Store the original language defined in the Ajo
+            o_language_name = str(
+                oajo.language_name
+            )  # Store the original language defined in the Ajo
             # This should return a boolean as to whether or not it's in advanced mode.
 
             logger.info("[ZW] Bot: COMMAND: !identify, from u/{}.".format(pauthor))
-            logger.info('[ZW] Bot: !identify data is: {}'.format(determined_data))
+            logger.info("[ZW] Bot: !identify data is: {}".format(determined_data))
 
             if "+" not in match:  # This is just a regular single !identify command.
                 if not advanced_mode:  # This is the regular results conversion
                     language_code = converter(match)[0]
                     language_name = converter(match)[1]
-                    language_country = converter(match)[3]  # The country code for the language. Regularly none.
+                    language_country = converter(match)[
+                        3
+                    ]  # The country code for the language. Regularly none.
                     match_script = False
                 elif advanced_mode:
-                    if len(match) == 3:  # The advanced mode only accepts codes of a certain length.
-                        language_data = lang_code_search(match, False)  # Run a search for the specific thing
+                    if (
+                        len(match) == 3
+                    ):  # The advanced mode only accepts codes of a certain length.
+                        language_data = lang_code_search(
+                            match, False
+                        )  # Run a search for the specific thing
                         language_code = match
                         language_name = language_data[0]
                         match_script = language_data[1]
-                        if len(language_name) == 0:  # If there are no results from the advanced converter...
+                        if (
+                            len(language_name) == 0
+                        ):  # If there are no results from the advanced converter...
                             language_code = ""
                             # is_supported = False
-                    elif len(match) == 4:  # This is a script, resets it to an Unknown state.
-                        language_data = lang_code_search(match, True)  # Run a search for the specific script
-                        logger.info("[ZW] Bot: Returned script data is for {}.".format(language_data))
+                    elif (
+                        len(match) == 4
+                    ):  # This is a script, resets it to an Unknown state.
+                        language_data = lang_code_search(
+                            match, True
+                        )  # Run a search for the specific script
+                        logger.info(
+                            "[ZW] Bot: Returned script data is for {}.".format(
+                                language_data
+                            )
+                        )
                         if language_data is None:  # Probably an invalid script.
                             bad_script_reply = COMMENT_INVALID_SCRIPT + BOT_DISCLAIMER
                             post.reply(bad_script_reply.format(match))
-                            logger.info("[ZW] Bot: But '{}' is not a valid script code. Skipping...".format(match))
+                            logger.info(
+                                "[ZW] Bot: But '{}' is not a valid script code. Skipping...".format(
+                                    match
+                                )
+                            )
                             continue
                         else:
                             language_code = match
                             language_name = language_data[0]
                             match_script = True
-                            if len(language_name) == 0:  # If there are no results from the advanced converter...
+                            if (
+                                len(language_name) == 0
+                            ):  # If there are no results from the advanced converter...
                                 language_code = ""
                     else:  # a catch all for advanced mode that ISN'T a 3 or 4-letter code.
                         post.reply(COMMENT_ADVANCED_IDENTIFY_ERROR + BOT_DISCLAIMER)
-                        logger.info("[ZW] Bot: This is an invalid use of advanced !identify. Skipping this one...")
+                        logger.info(
+                            "[ZW] Bot: This is an invalid use of advanced !identify. Skipping this one..."
+                        )
                         continue
 
                 if not match_script:
-                    if len(language_code) == 0:  # The converter didn't give us any results.
+                    if (
+                        len(language_code) == 0
+                    ):  # The converter didn't give us any results.
                         no_match_text = COMMENT_INVALID_CODE.format(match, opermalink)
                         try:
                             post.reply(no_match_text + BOT_DISCLAIMER)
                         except praw.exceptions.APIException:  # Comment has been deleted.
                             pass
-                        logger.info("[ZW] Bot: But '{}' has no match in the database. Skipping this...".format(match))
+                        logger.info(
+                            "[ZW] Bot: But '{}' has no match in the database. Skipping this...".format(
+                                match
+                            )
+                        )
                         continue
                     elif len(language_code) != 0:  # This is a valid language.
                         # Insert code for updating country as well here.
-                        if language_country is not None:  # There is a country code listed.
-                            oajo.set_country(language_country)  # Add that code to the Ajo
+                        if (
+                            language_country is not None
+                        ):  # There is a country code listed.
+                            oajo.set_country(
+                                language_country
+                            )  # Add that code to the Ajo
                         else:  # There was no country listed, so let's reset the code to none.
                             oajo.set_country(None)
                         oajo.set_language(language_code, True)  # Set the language.
-                        logger.info("[ZW] Bot: Changed flair to {}.".format(language_name))
+                        logger.info(
+                            "[ZW] Bot: Changed flair to {}.".format(language_name)
+                        )
                 elif match_script:  # This is a script.
                     oajo.set_script(language_code)
-                    logger.info("[ZW] Bot: Changed flair to '{}', with an Unknown+script flair.".format(language_name))
+                    logger.info(
+                        "[ZW] Bot: Changed flair to '{}', with an Unknown+script flair.".format(
+                            language_name
+                        )
+                    )
 
-                if not match_script and o_language_name != oajo.language_name or not converter(oajo.language_name)[2]:
+                if (
+                    not match_script
+                    and o_language_name != oajo.language_name
+                    or not converter(oajo.language_name)[2]
+                ):
                     # Definitively a language. Let's archive this to the wiki.
                     # We've also made sure that it's not just a change of state, and write to the `identified` page.
-                    record_to_wiki(odate=int(ocreated), otitle=otitle, oid=oid, oflair_text=o_language_name,
-                                   s_or_i=False, oflair_new=oajo.language_name, user=pauthor)
+                    record_to_wiki(
+                        odate=int(ocreated),
+                        otitle=otitle,
+                        oid=oid,
+                        oflair_text=o_language_name,
+                        s_or_i=False,
+                        oflair_new=oajo.language_name,
+                        user=pauthor,
+                    )
             else:  # This is an !identify command for multiple defined languages (e.g. !identify:ru+es+ja
                 oajo.set_defined_multiple(match)
                 logger.info("[ZW] Bot: Changed flair to a defined multiple one.")
 
-            if KEYWORDS[3] not in pbody and KEYWORDS[9] not in pbody and oajo.status == "untranslated":
+            if (
+                KEYWORDS[3] not in pbody
+                and KEYWORDS[9] not in pbody
+                and oajo.status == "untranslated"
+            ):
                 # Just a check that we're not sending notifications AGAIN if the identified language is the same as orig
                 # This makes sure that they're different languages. So !identify:Chinese on Chinese won't send messages.
                 if o_language_name != language_name and MESSAGES_OKAY:
                     if not match_script:  # This is not a script.
-                        contacted = ziwen_notifier(language_name, otitle, opermalink, oauthor, True)
+                        contacted = ziwen_notifier(
+                            language_name, otitle, opermalink, oauthor, True
+                        )
                         # Notify people on the list if the post hasn't already been marked as translated
                         # no use asking people to see something that's translated
                     else:  # This is a script... Adapt the proper format. (unknown-cyrl for example)
-                        contacted = ziwen_notifier("unknown-{}".format(language_code), otitle,
-                                                   opermalink, oauthor, True)
-                    oajo.add_notified(contacted)  # Add those who have been contacted to the notified list.
+                        contacted = ziwen_notifier(
+                            "unknown-{}".format(language_code),
+                            otitle,
+                            opermalink,
+                            oauthor,
+                            True,
+                        )
+                    oajo.add_notified(
+                        contacted
+                    )  # Add those who have been contacted to the notified list.
 
             # Update the comments with the language reference comment
-            if language_code not in ['unknown', "multiple", 'zxx', 'art', 'app'] and not match_script:
+            if (
+                language_code not in ["unknown", "multiple", "zxx", "art", "app"]
+                and not match_script
+            ):
 
                 komento_data = komento_analyzer(komento_submission_from_comment(pid))
 
-                if 'bot_unknown' in komento_data or 'bot_reference' in komento_data:
+                if "bot_unknown" in komento_data or "bot_reference" in komento_data:
 
-                    if 'bot_unknown' in komento_data:  # Previous Unknown template comment
-                        unknown_default = komento_data['bot_unknown']
+                    if (
+                        "bot_unknown" in komento_data
+                    ):  # Previous Unknown template comment
+                        unknown_default = komento_data["bot_unknown"]
                         unknown_default = reddit.comment(id=unknown_default)
                         unknown_default.delete()  # Changed from remove
                         logger.debug(">> Deleted my default Unknown comment...")
-                    if 'bot_invalid_code' in komento_data:
-                        invalid_comment = komento_data['bot_invalid_code']
+                    if "bot_invalid_code" in komento_data:
+                        invalid_comment = komento_data["bot_invalid_code"]
                         invalid_comment = reddit.comment(id=invalid_comment)
                         invalid_comment.delete()
                         logger.debug(">> Deleted my invalid code comment...")
-                    if 'bot_reference' in komento_data:  # Previous reference template comment
-                        previous_reference = komento_data['bot_reference']
+                    if (
+                        "bot_reference" in komento_data
+                    ):  # Previous reference template comment
+                        previous_reference = komento_data["bot_reference"]
                         previous_reference = reddit.comment(id=previous_reference)
                         previous_reference.delete()
-                        logger.debug(">> Deleted my previous language reference comment...")
+                        logger.debug(
+                            ">> Deleted my previous language reference comment..."
+                        )
             """
-                    # Get the data from the language cache *if* it's not a defined multiple 
+                    # Get the data from the language cache *if* it's not a defined multiple
                     # identification. This is disabled for now.
                     if "+" not in match:
                         to_post = reference_search(language_code)
@@ -5579,8 +6915,10 @@ def ziwen_bot():
 
             determined_data = comment_info_parser(pbody, "!page:")
             # This should return what was actually identified. Normally will be a Tuple or None
-            if determined_data is None:  # The command is problematic. Wrong punctuation, not enough arguments
-                logger.info('[ZW] Bot: >> !page data is invalid.')
+            if (
+                determined_data is None
+            ):  # The command is problematic. Wrong punctuation, not enough arguments
+                logger.info("[ZW] Bot: >> !page data is invalid.")
                 continue
 
             # CODE FOR A 14-DAY VERIFICATION SYSTEM
@@ -5588,23 +6926,41 @@ def ziwen_bot():
             current_time = int(time.time())
             if current_time - int(poster.created_utc) > 1209600:
                 # checks to see if the user account is older than 14 days
-                logger.debug("[ZW] Bot: > u/" + pauthor + "'s account is older than 14 days.")
+                logger.debug(
+                    "[ZW] Bot: > u/" + pauthor + "'s account is older than 14 days."
+                )
             else:
-                post.reply(COMMENT_PAGE_DISALLOWED.format(pauthor=pauthor) + BOT_DISCLAIMER)
-                logger.info("[ZW] Bot: > However, u/" + pauthor + " is a new account. Replied to them and skipping...")
+                post.reply(
+                    COMMENT_PAGE_DISALLOWED.format(pauthor=pauthor) + BOT_DISCLAIMER
+                )
+                logger.info(
+                    "[ZW] Bot: > However, u/"
+                    + pauthor
+                    + " is a new account. Replied to them and skipping..."
+                )
                 continue
 
-            if oflair_css == 'meta' or oflair_css == 'community':
+            if oflair_css == "meta" or oflair_css == "community":
                 logger.debug("[ZW] Bot: > However, this is not a valid pageable post.")
                 continue
 
             # Okay, it's valid, let's start processing data.
             page_results = notifier_page_multiple_detector(pbody)
 
-            if page_results is None:  # There were no valid page results. (it is a placeholder)
-                post.reply(COMMENT_NO_LANGUAGE.format(pauthor=pauthor, language_name="it",
-                                                      language_code="") + BOT_DISCLAIMER)
-                logger.info("[ZW] Bot: No one listed. Replied to the pager u/{} and skipping...".format(pauthor))
+            if (
+                page_results is None
+            ):  # There were no valid page results. (it is a placeholder)
+                post.reply(
+                    COMMENT_NO_LANGUAGE.format(
+                        pauthor=pauthor, language_name="it", language_code=""
+                    )
+                    + BOT_DISCLAIMER
+                )
+                logger.info(
+                    "[ZW] Bot: No one listed. Replied to the pager u/{} and skipping...".format(
+                        pauthor
+                    )
+                )
             else:  # There were results. Let's loop through them.
                 for result in page_results:
                     language_code = result
@@ -5616,25 +6972,36 @@ def ziwen_bot():
                         is_nsfw = False
 
                     # Send a message via the paging system.
-                    paged_users = notifier_page_translators(language_code, language_name, pauthor, otitle,
-                                                            opermalink, oauthor, is_nsfw)
+                    paged_users = notifier_page_translators(
+                        language_code,
+                        language_name,
+                        pauthor,
+                        otitle,
+                        opermalink,
+                        oauthor,
+                        is_nsfw,
+                    )
                     if paged_users is not None:
-                        oajo.add_notified(paged_users)  # Add the notified users to the list.
+                        oajo.add_notified(
+                            paged_users
+                        )  # Add the notified users to the list.
 
-        if KEYWORDS[1] in pbody:  # This function returns data for character lookups with `character`.
+        if (
+            KEYWORDS[1] in pbody
+        ):  # This function returns data for character lookups with `character`.
             post_content = []
             logger.info("[ZW] Bot: COMMAND: `lookup`, from u/{}.".format(pauthor))
 
             if pauthor == USERNAME:  # Don't respond to !search results from myself.
                 continue
 
-            if oflair_css in ['meta', 'community', 'missing']:
+            if oflair_css in ["meta", "community", "missing"]:
                 continue
 
             if oajo.language_name is None:
                 continue
             elif type(oajo.language_name) is not str:
-                # Multiple post? 
+                # Multiple post?
                 search_language = oajo.language_name[0]
             else:
                 search_language = oajo.language_name
@@ -5644,32 +7011,40 @@ def ziwen_bot():
 
             # This section allows for the deletion of previous responses if the content changes.
             komento_data = komento_analyzer(komento_submission_from_comment(pid))
-            if 'bot_lookup_correspond' in komento_data:  # This may have had a comment before.
-                relevant_comments = komento_data['bot_lookup_correspond']
+            if (
+                "bot_lookup_correspond" in komento_data
+            ):  # This may have had a comment before.
+                relevant_comments = komento_data["bot_lookup_correspond"]
 
-                # This returns a dictionary with the called comment as key. 
+                # This returns a dictionary with the called comment as key.
                 for key in relevant_comments:
                     if key == pid:  # This is the key for our current comment.
-                        if 'bot_lookup_replies' in komento_data:  # We try to find any corresponding bot replies
-                            relevant_replies = komento_data['bot_lookup_replies']
+                        if (
+                            "bot_lookup_replies" in komento_data
+                        ):  # We try to find any corresponding bot replies
+                            relevant_replies = komento_data["bot_lookup_replies"]
                             # Previous replies will be a list
                             previous_responses = relevant_replies[pid]
                             for response in previous_responses:
                                 earlier_comment = reddit.comment(id=response)
                                 earlier_comment.delete()
                                 logger.debug("[ZW] Bot: >>> Previous response deleted")
-                                # We delete the earlier versions. 
+                                # We delete the earlier versions.
 
             if len(total_matches.keys()) == 0:
-                # Checks to see if there's actually anything in between those two graves. 
+                # Checks to see if there's actually anything in between those two graves.
                 # If there's nothing, it skips it.
-                logger.debug("[ZW] Bot: > Received a word lookup command, but found nothing. Skipping...")
+                logger.debug(
+                    "[ZW] Bot: > Received a word lookup command, but found nothing. Skipping..."
+                )
                 # We are just not going to reply if there is literally nothing found.
                 continue
 
-            logger.info("[ZW] Bot: >> Determined Lookup Dictionary: {}".format(total_matches))
+            logger.info(
+                "[ZW] Bot: >> Determined Lookup Dictionary: {}".format(total_matches)
+            )
             for key, value in total_matches.items():
-                if key in CJK_LANGUAGES['Chinese']:
+                if key in CJK_LANGUAGES["Chinese"]:
                     logger.info("[ZW] Bot: >> Conducting lookup search in Chinese.")
                     for match in total_matches[key]:
                         match_length = len(match)
@@ -5683,7 +7058,7 @@ def ziwen_bot():
                         # Create a randomized wait time between requests.
                         wait_sec = random.randint(3, 12)
                         time.sleep(wait_sec)
-                elif key in CJK_LANGUAGES['Japanese']:
+                elif key in CJK_LANGUAGES["Japanese"]:
                     logger.info("[ZW] Bot: >> Conducting lookup search in Japanese.")
                     for match in total_matches[key]:
                         match_length = len(str(match))
@@ -5693,7 +7068,7 @@ def ziwen_bot():
                         elif match_length > 1:
                             find_word = str(match)
                             post_content.append(ja_word(find_word))
-                elif key in CJK_LANGUAGES['Korean']:
+                elif key in CJK_LANGUAGES["Korean"]:
                     logger.info("[ZW] Bot: >> Conducting lookup search in Korean.")
                     for match in total_matches[key]:
                         find_word = str(match)
@@ -5709,7 +7084,7 @@ def ziwen_bot():
             # Join the content together.
             if len(post_content) > 0:  # If we have results lets post them
                 # Join the resulting content together as a string.
-                post_content = '\n\n'.join(post_content)
+                post_content = "\n\n".join(post_content)
             else:  # No results, let's set it to None.
                 post_content = None
                 # For now we are simply not going to reply if there are no results.
@@ -5717,7 +7092,11 @@ def ziwen_bot():
             try:
                 if post_content is not None:
                     post.reply(post_content + BOT_DISCLAIMER)
-                    logger.info("[ZW] Bot: >> Looked up the term(s) in {}.".format(search_language))
+                    logger.info(
+                        "[ZW] Bot: >> Looked up the term(s) in {}.".format(
+                            search_language
+                        )
+                    )
                 else:
                     logger.info("[ZW] Bot: >> No results found. Skipping...")
             except praw.exceptions.APIException:  # This means the comment is deleted.
@@ -5728,23 +7107,35 @@ def ziwen_bot():
             # to post as a reference
             determined_data = comment_info_parser(pbody, "!reference:")
             # This should return what was actually identified. Normally will be a Tuple or None
-            if determined_data is None:  # The command is problematic. Wrong punctuation, not enough arguments
+            if (
+                determined_data is None
+            ):  # The command is problematic. Wrong punctuation, not enough arguments
                 logger.debug("[ZW] Bot: >> !reference data is invalid.")
                 continue
 
             language_match = determined_data[0]
             logger.info("[ZW] Bot: COMMAND: !reference, from u/{}.".format(pauthor))
             post_content = reference_search(language_match)
-            if post_content is None:  # There was no good data. We return the invalid comment.
+            if (
+                post_content is None
+            ):  # There was no good data. We return the invalid comment.
                 post_content = COMMENT_INVALID_REFERENCE
             post.reply(post_content)
-            logger.info("[ZW] Bot: Posted the reference results for '{}'.".format(language_match))
+            logger.info(
+                "[ZW] Bot: Posted the reference results for '{}'.".format(
+                    language_match
+                )
+            )
 
-        if KEYWORDS[8] in pbody:  # The !search function looks for strings in other posts on r/translator
+        if (
+            KEYWORDS[8] in pbody
+        ):  # The !search function looks for strings in other posts on r/translator
 
             determined_data = comment_info_parser(pbody, "!search:")
             # This should return what was actually identified. Normally will be a Tuple or None
-            if determined_data is None:  # The command is problematic. Wrong punctuation, not enough arguments
+            if (
+                determined_data is None
+            ):  # The command is problematic. Wrong punctuation, not enough arguments
                 logger.debug("[ZW] Bot: >> !search data is invalid.")
                 continue
 
@@ -5755,25 +7146,35 @@ def ziwen_bot():
             reddit_id = []
             reply_body = []
 
-            for url in googlesearch.search(search_term + ' site:reddit.com/r/translator', num=4, stop=4):
-                if 'comments' not in url:
+            for url in googlesearch.search(
+                search_term + " site:reddit.com/r/translator", num=4, stop=4
+            ):
+                if "comments" not in url:
                     continue
                 google_url.append(url)
-                oid = re.search(r'comments/(.*)/\w', url).group(1)
+                oid = re.search(r"comments/(.*)/\w", url).group(1)
                 reddit_id.append(oid)
 
             if len(google_url) == 0:
 
                 post.reply(COMMENT_NO_RESULTS + BOT_DISCLAIMER)
-                logger.info("[ZW] Bot: > There were no results for " + search_term + ". Moving on...")
+                logger.info(
+                    "[ZW] Bot: > There were no results for "
+                    + search_term
+                    + ". Moving on..."
+                )
                 continue
 
             for oid in reddit_id:
                 submission = reddit.submission(id=oid)
                 s_title = submission.title
-                s_date = datetime.datetime.fromtimestamp(submission.created).strftime('%Y-%m-%d')
+                s_date = datetime.datetime.fromtimestamp(submission.created).strftime(
+                    "%Y-%m-%d"
+                )
                 s_permalink = submission.permalink
-                header_string = "#### [{}]({}) ({})\n\n".format(s_title, s_permalink, s_date)
+                header_string = "#### [{}]({}) ({})\n\n".format(
+                    s_title, s_permalink, s_date
+                )
                 reply_body.append(header_string)
                 submission.comments.replace_more(limit=None)
                 s_comments = submission.comments.list()
@@ -5788,7 +7189,9 @@ def ziwen_bot():
                     if c_author == USERNAME:  # I posted this comment.
                         continue
 
-                    if KEYWORDS[8] in comment.body.lower():  # This contains the !search string.
+                    if (
+                        KEYWORDS[8] in comment.body.lower()
+                    ):  # This contains the !search string.
                         continue  # We don't want this.
 
                     # Format a comment body nicely.
@@ -5796,43 +7199,67 @@ def ziwen_bot():
 
                     # Replace any keywords
                     for keyword in KEYWORDS:
-                        c_body = c_body.replace(keyword, '')
-                    c_body = str("\n> ".join(c_body.split("\n")))  # Indent the lines with Markdown >
+                        c_body = c_body.replace(keyword, "")
+                    c_body = str(
+                        "\n> ".join(c_body.split("\n"))
+                    )  # Indent the lines with Markdown >
                     c_votes = str(comment.score)  # Get the score of the comment
 
                     if search_term.lower() in c_body.lower():
-                        comment_string = "##### Comment by u/" + c_author + " (+" + c_votes + "):\n\n>" + c_body
+                        comment_string = (
+                            "##### Comment by u/"
+                            + c_author
+                            + " (+"
+                            + c_votes
+                            + "):\n\n>"
+                            + c_body
+                        )
                         reply_body.append(comment_string)
                         continue
                     else:
                         continue
 
-            reply_body = '\n\n'.join(reply_body[:6])  # Limit it to 6 responses. To avoid excessive length.
-            post.reply('## Search results on r/translator for "' + search_term + '":\n\n' + reply_body)
+            reply_body = "\n\n".join(
+                reply_body[:6]
+            )  # Limit it to 6 responses. To avoid excessive length.
+            post.reply(
+                '## Search results on r/translator for "'
+                + search_term
+                + '":\n\n'
+                + reply_body
+            )
             logger.info("[ZW] Bot: > Posted my findings for the search term.")
 
-        '''STATE COMMANDS (!doublecheck, !translated, !claim, !missing, short thanks)'''
+        """STATE COMMANDS (!doublecheck, !translated, !claim, !missing, short thanks)"""
 
         if KEYWORDS[9] in pbody:
             # !doublecheck function, used for asking for reviews of one's work.
 
             logger.info("[ZW] Bot: COMMAND: !doublecheck, from u/{}.".format(pauthor))
 
-            if oajo.type is 'multiple':
+            if oajo.type is "multiple":
 
-                if isinstance(oajo.language_name, list):  # It is a defined multiple post.
+                if isinstance(
+                    oajo.language_name, list
+                ):  # It is a defined multiple post.
                     # Try to see if there's data in the comment.
                     # If the comment is just the command, we take the parent comment and together check to see.
                     checked_text = str(pbody_original)
-                    if len(pbody) < 12:  # This is just the command, so let's get the parent comment.
+                    if (
+                        len(pbody) < 12
+                    ):  # This is just the command, so let's get the parent comment.
                         # Get the parent comment
                         parent_item = post.parent_id
                         if "t1" in parent_item:  # The parent is a comment
                             parent_comment = post.parent()
                             # Combine the two together.
-                            checked_text = "{} {}".format(parent_comment.body, pbody_original)
+                            checked_text = "{} {}".format(
+                                parent_comment.body, pbody_original
+                            )
 
-                    comment_check = ajo_defined_multiple_comment_parser(checked_text, oajo.language_name)
+                    comment_check = ajo_defined_multiple_comment_parser(
+                        checked_text, oajo.language_name
+                    )
 
                     # We have data, we can set the status as different in the flair.
                     if comment_check is not None:
@@ -5840,50 +7267,76 @@ def ziwen_bot():
                         for language in comment_check[0]:
                             language_code = converter(language)[0]
                             oajo.set_status_multiple(language_code, "doublecheck")
-                            logger.info("[ZW] Bot: > {} in defined multiple post for doublechecking".format(language))
+                            logger.info(
+                                "[ZW] Bot: > {} in defined multiple post for doublechecking".format(
+                                    language
+                                )
+                            )
                 else:
-                    logger.info("[ZW] Bot: > This is a general multiple post that is not eligible for status changes.")
-            elif oflair_css in ['translated', 'meta', 'community', 'doublecheck']:
-                logger.info("[ZW] Bot: > This post isn't eligible for double-checking. Skipping this one...")
+                    logger.info(
+                        "[ZW] Bot: > This is a general multiple post that is not eligible for status changes."
+                    )
+            elif oflair_css in ["translated", "meta", "community", "doublecheck"]:
+                logger.info(
+                    "[ZW] Bot: > This post isn't eligible for double-checking. Skipping this one..."
+                )
                 continue
             else:
                 oajo.set_status("doublecheck")
-                oajo.set_time('doublecheck', current_time)
+                oajo.set_time("doublecheck", current_time)
                 logger.info("[ZW] Bot: > Marked post as 'Needs Review.'")
 
             # Delete any claimed comment.
             komento_data = komento_analyzer(osubmission)
-            if 'bot_claim_comment' in komento_data:
-                claim_comment = komento_data['bot_claim_comment']
+            if "bot_claim_comment" in komento_data:
+                claim_comment = komento_data["bot_claim_comment"]
                 claim_comment = reddit.comment(claim_comment)
                 claim_comment.delete()
 
-        if KEYWORDS[2] in pbody:  # This function picks up a !missing command and messages the OP about it.
+        if (
+            KEYWORDS[2] in pbody
+        ):  # This function picks up a !missing command and messages the OP about it.
 
-            if not css_check(oflair_css):  # Basic check to see if this is something that can be acted on.
+            if not css_check(
+                oflair_css
+            ):  # Basic check to see if this is something that can be acted on.
                 continue
 
             logger.info("[ZW] Bot: COMMAND: !missing, from u/" + pauthor + ".")
 
-            total_message = MSG_MISSING_ASSETS.format(oauthor=oauthor, opermalink=opermalink)
+            total_message = MSG_MISSING_ASSETS.format(
+                oauthor=oauthor, opermalink=opermalink
+            )
             try:
-                reddit.redditor(oauthor).message('A message from r/translator regarding your translation request',
-                                                 total_message + BOT_DISCLAIMER)
+                reddit.redditor(oauthor).message(
+                    "A message from r/translator regarding your translation request",
+                    total_message + BOT_DISCLAIMER,
+                )
             except praw.exceptions.APIException:
                 pass
             # Send a message to the OP about their post missing content.
 
             oajo.set_status("missing")
-            oajo.set_time('missing', current_time)
-            logger.info("[ZW] Bot: > Marked a post by u/{} as missing assets and messaged them.".format(oauthor))
+            oajo.set_time("missing", current_time)
+            logger.info(
+                "[ZW] Bot: > Marked a post by u/{} as missing assets and messaged them.".format(
+                    oauthor
+                )
+            )
 
-        if any(keyword in pbody for keyword in THANKS_KEYWORDS) and KEYWORDS[3] not in pbody and len(pbody) <= 20:
+        if (
+            any(keyword in pbody for keyword in THANKS_KEYWORDS)
+            and KEYWORDS[3] not in pbody
+            and len(pbody) <= 20
+        ):
             # This processes simple thanks into translated, but leaves alone if it's an exception.
             # Has to be a short thanks, and not have !translated in the body.
-            if oflair_css in ['meta', 'community', 'multiple', 'app', 'generic']:
+            if oflair_css in ["meta", "community", "multiple", "app", "generic"]:
                 continue
 
-            if pauthor != oauthor:  # Is the author of the comment the author of the post?
+            if (
+                pauthor != oauthor
+            ):  # Is the author of the comment the author of the post?
                 continue  # If not, continue, we don't care about this.
 
             # This should only be marked if it's untranslated. So it shouldn't affect
@@ -5894,23 +7347,39 @@ def ziwen_bot():
             if oajo.is_identified:
                 continue
 
-            exceptions_list = ['but', 'however', "no"]  # Did the OP have reservations?
+            exceptions_list = ["but", "however", "no"]  # Did the OP have reservations?
             if any(exception in pbody for exception in exceptions_list):
                 continue
             else:  # Okay, it really is a short thanks
-                logger.info("[ZW] Bot: COMMAND: Short thanks from u/{}. Sending user a message...".format(pauthor))
+                logger.info(
+                    "[ZW] Bot: COMMAND: Short thanks from u/{}. Sending user a message...".format(
+                        pauthor
+                    )
+                )
                 oajo.set_status("translated")
-                oajo.set_time('translated', current_time)
-                short_msg = MSG_SHORT_THANKS_TRANSLATED.format(oauthor, opermalink) + BOT_DISCLAIMER
+                oajo.set_time("translated", current_time)
+                short_msg = (
+                    MSG_SHORT_THANKS_TRANSLATED.format(oauthor, opermalink)
+                    + BOT_DISCLAIMER
+                )
                 try:
-                    reddit.redditor(oauthor).message('[Notification] A message about your translation request',
-                                                     short_msg)
+                    reddit.redditor(oauthor).message(
+                        "[Notification] A message about your translation request",
+                        short_msg,
+                    )
                 except praw.exceptions.APIException:  # Likely shadowbanned.
                     pass
 
         if KEYWORDS[14] in pbody:  # Claiming posts with the !claim command
 
-            if oflair_css in ["translated", "doublecheck", "community", "meta", "multiple", "app"]:
+            if oflair_css in [
+                "translated",
+                "doublecheck",
+                "community",
+                "meta",
+                "multiple",
+                "app",
+            ]:
                 # We don't want to process these posts.
                 continue
 
@@ -5921,33 +7390,58 @@ def ziwen_bot():
 
             logger.info("[ZW] Bot: COMMAND: !claim, from u/{}.".format(pauthor))
             current_time = int(time.time())
-            utc_timestamp = datetime.datetime.utcfromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S')
+            utc_timestamp = datetime.datetime.utcfromtimestamp(current_time).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
             claimed_already = False  # Boolean to see if it has been claimed as of now.
 
             komento_data = komento_analyzer(osubmission)
 
-            if 'bot_claim_comment' in komento_data:  # Found an already claimed comment
+            if "bot_claim_comment" in komento_data:  # Found an already claimed comment
                 # claim_comment = komento_data['bot_claim_comment']
-                claimer_name = komento_data['claim_user']
-                remaining_time = komento_data['claim_time_diff']
+                claimer_name = komento_data["claim_user"]
+                remaining_time = komento_data["claim_time_diff"]
                 remaining_time_text = str(datetime.timedelta(seconds=remaining_time))
-                if pauthor == claimer_name:  # If it's another claim by the same person listed...
+                if (
+                    pauthor == claimer_name
+                ):  # If it's another claim by the same person listed...
                     post.reply("You've already claimed this post." + BOT_DISCLAIMER)
                     claimed_already = True
-                    logger.info("[ZW] Bot: >> But this post is already claimed by them. Replied to them.")
+                    logger.info(
+                        "[ZW] Bot: >> But this post is already claimed by them. Replied to them."
+                    )
                 else:
-                    post.reply(COMMENT_CURRENTLY_CLAIMED.format(claimer_name=claimer_name,
-                                                                remaining_time=remaining_time_text) + BOT_DISCLAIMER)
+                    post.reply(
+                        COMMENT_CURRENTLY_CLAIMED.format(
+                            claimer_name=claimer_name,
+                            remaining_time=remaining_time_text,
+                        )
+                        + BOT_DISCLAIMER
+                    )
                     claimed_already = True
-                    logger.info("[ZW] Bot: >> But this post is already claimed. Replied to the claimer about it.")
+                    logger.info(
+                        "[ZW] Bot: >> But this post is already claimed. Replied to the claimer about it."
+                    )
 
-            if not claimed_already:  # This has not yet been claimed. We can claim it for the user.
+            if (
+                not claimed_already
+            ):  # This has not yet been claimed. We can claim it for the user.
                 oajo.set_status("inprogress")
-                oajo.set_time('inprogress', current_time)
-                claim_note = osubmission.reply(COMMENT_CLAIM.format(claimer=pauthor, time=utc_timestamp,
-                                                                    language_name=oajo.language_name) + BOT_DISCLAIMER)
+                oajo.set_time("inprogress", current_time)
+                claim_note = osubmission.reply(
+                    COMMENT_CLAIM.format(
+                        claimer=pauthor,
+                        time=utc_timestamp,
+                        language_name=oajo.language_name,
+                    )
+                    + BOT_DISCLAIMER
+                )
                 claim_note.mod.distinguish(sticky=True)  # Distinguish the bot's comment
-                logger.info("[ZW] Bot: > Marked a post by u/{} as claimed and in progress.".format(oauthor))
+                logger.info(
+                    "[ZW] Bot: > Marked a post by u/{} as claimed and in progress.".format(
+                        oauthor
+                    )
+                )
 
         if KEYWORDS[3] in pbody:
             # This is a !translated function that messages people when their post has been translated.
@@ -5957,22 +7451,30 @@ def ziwen_bot():
             logger.info("[ZW] Bot: COMMAND: !translated, from u/" + pauthor + ".")
 
             if oflair_css is None:  # If there is no CSS flair...
-                oflair_css = 'generic'  # Give it a generic flair.
+                oflair_css = "generic"  # Give it a generic flair.
 
-            if oajo.type is 'multiple':
-                if isinstance(oajo.language_name, list):  # It is a defined multiple post.
+            if oajo.type is "multiple":
+                if isinstance(
+                    oajo.language_name, list
+                ):  # It is a defined multiple post.
                     # Try to see if there's data in the comment.
                     # If the comment is just the command, we take the parent comment and together check to see.
                     checked_text = str(pbody_original)
-                    if len(pbody) < 12:  # This is just the command, so let's get the parent comment.
+                    if (
+                        len(pbody) < 12
+                    ):  # This is just the command, so let's get the parent comment.
                         # Get the parent comment
                         parent_item = post.parent_id
                         if "t1" in parent_item:  # The parent is a comment
                             parent_comment = post.parent()
                             # Combine the two together.
-                            checked_text = "{} {}".format(parent_comment.body, pbody_original)
+                            checked_text = "{} {}".format(
+                                parent_comment.body, pbody_original
+                            )
 
-                    comment_check = ajo_defined_multiple_comment_parser(checked_text, oajo.language_name)
+                    comment_check = ajo_defined_multiple_comment_parser(
+                        checked_text, oajo.language_name
+                    )
 
                     # We have data, we can set the status as different in the flair.
                     if comment_check is not None:
@@ -5980,46 +7482,68 @@ def ziwen_bot():
                         for language in comment_check[0]:
                             language_code = converter(language)[0]
                             oajo.set_status_multiple(language_code, "translated")
-                            logger.info("[ZW] Bot: > Marked {} in this defined multiple post as done.".format(language))
+                            logger.info(
+                                "[ZW] Bot: > Marked {} in this defined multiple post as done.".format(
+                                    language
+                                )
+                            )
                 else:
-                    logger.debug("[ZW] Bot: > This is a general multiple post that is not eligible for status changes.")
+                    logger.debug(
+                        "[ZW] Bot: > This is a general multiple post that is not eligible for status changes."
+                    )
             elif oflair_css not in ["meta", "community", "translated"]:
                 # Make sure we're not altering certain flairs.
                 oajo.set_status("translated")
-                oajo.set_time('translated', current_time)
+                oajo.set_time("translated", current_time)
                 logger.info("[ZW] Bot: > Marked post as translated.")
 
             komento_data = komento_analyzer(osubmission)
 
             if oajo.is_bot_crosspost:  # This is a crosspost, lets work some magic.
-                if 'bot_xp_original_comment' in komento_data:
+                if "bot_xp_original_comment" in komento_data:
                     logger.debug("[ZW] Bot: >> Fetching original crosspost comment...")
-                    original_comment = reddit.comment(komento_data['bot_xp_original_comment'])
+                    original_comment = reddit.comment(
+                        komento_data["bot_xp_original_comment"]
+                    )
                     original_comment_text = original_comment.body
 
                     # We want to strip off the disclaimer
-                    original_comment_text = original_comment_text.split('---')[0].strip()
+                    original_comment_text = original_comment_text.split("---")[
+                        0
+                    ].strip()
 
                     # Add the edited text
                     edited_header = "\n\n**Edit**: This crosspost has been marked as translated on r/translator."
                     original_comment_text += edited_header + BOT_DISCLAIMER
-                    if "**Edit**" not in original_comment.body:  # Has this already been edited?
+                    if (
+                        "**Edit**" not in original_comment.body
+                    ):  # Has this already been edited?
                         original_comment.edit(original_comment_text)
-                        logger.debug("[ZW] Bot: >> Edited my original comment on the other subreddit to alert people.")
+                        logger.debug(
+                            "[ZW] Bot: >> Edited my original comment on the other subreddit to alert people."
+                        )
 
-            if 'bot_long' in komento_data:  # Found a bot (Long) comment, delete it.
-                long_comment = komento_data['bot_long']
+            if "bot_long" in komento_data:  # Found a bot (Long) comment, delete it.
+                long_comment = komento_data["bot_long"]
                 long_comment = reddit.comment(long_comment)
                 long_comment.delete()
-            if 'bot_claim_comment' in komento_data:  # Found an older claim comment, delete it.
-                claim_comment = komento_data['bot_claim_comment']
+            if (
+                "bot_claim_comment" in komento_data
+            ):  # Found an older claim comment, delete it.
+                claim_comment = komento_data["bot_claim_comment"]
                 claim_comment = reddit.comment(claim_comment)
                 claim_comment.delete()
-            if 'op_thanks' in komento_data:  # OP has thanked someone in the thread before.
+            if (
+                "op_thanks" in komento_data
+            ):  # OP has thanked someone in the thread before.
                 thanks_already = True
                 translated_found = False
 
-            if translated_found and not thanks_already and oflair_css not in ['multiple', 'app']:
+            if (
+                translated_found
+                and not thanks_already
+                and oflair_css not in ["multiple", "app"]
+            ):
 
                 # First we check to see if the author has already been recorded as getting a message.
                 try:
@@ -6029,10 +7553,12 @@ def ziwen_bot():
 
                 # If the commentor is not the author of the post and they have not been messaged, we can tell them.
                 if pauthor != oauthor and not messaged_already:
-                    messaging_translated_message(oauthor=oauthor, opermalink=opermalink)  # Sends them notification msg
+                    messaging_translated_message(
+                        oauthor=oauthor, opermalink=opermalink
+                    )  # Sends them notification msg
                     oajo.set_author_messaged(True)
 
-        '''MODERATOR-ONLY COMMANDS (!delete, !reset, !note, !set)'''
+        """MODERATOR-ONLY COMMANDS (!delete, !reset, !note, !set)"""
 
         if KEYWORDS[13] in pbody:  # This is to allow OP or mods to !delete crossposts
             if not oajo.is_bot_crosspost:  # If this isn't actually a crosspost..
@@ -6043,16 +7569,24 @@ def ziwen_bot():
                     osubmission.mod.remove()  # We'll use remove for now -- can switch to delete() later.
                     logger.info("[ZW] Bot: >> Removed crosspost.")
 
-        if KEYWORDS[15] in pbody:  # !reset command, to revert a post back to as if it were freshly processed
+        if (
+            KEYWORDS[15] in pbody
+        ):  # !reset command, to revert a post back to as if it were freshly processed
 
-            if is_mod(pauthor) or pauthor == oauthor:  # Check if user is a mod or the OP.
-                logger.info("[ZW] Bot: COMMAND: !reset, from user u/{}.".format(pauthor))
+            if (
+                is_mod(pauthor) or pauthor == oauthor
+            ):  # Check if user is a mod or the OP.
+                logger.info(
+                    "[ZW] Bot: COMMAND: !reset, from user u/{}.".format(pauthor)
+                )
                 oajo.reset(otitle)
                 logger.info("[ZW] Bot: > Reset everything for the designated post.")
             else:
                 continue
 
-        if KEYWORDS[16] in pbody:  # !long command, for mods to mark a post as long for translators.
+        if (
+            KEYWORDS[16] in pbody
+        ):  # !long command, for mods to mark a post as long for translators.
 
             if is_mod(pauthor):  # Check if user is a mod.
                 logger.info("[ZW] Bot: COMMAND: !long, from mod u/{}.".format(pauthor))
@@ -6063,30 +7597,46 @@ def ziwen_bot():
 
                 # Delete any long informational comment.
                 komento_data = komento_analyzer(komento_submission_from_comment(pid))
-                if 'bot_long' in komento_data:
-                    long_comment = reddit.comment(id=komento_data['bot_long'])
+                if "bot_long" in komento_data:
+                    long_comment = reddit.comment(id=komento_data["bot_long"])
                     long_comment.delete()
-                    logger.debug('[ZW] Bot: Deleted my default long comment...')
+                    logger.debug("[ZW] Bot: Deleted my default long comment...")
 
                 # Set the status
                 oajo.set_long(new_status)
-                logger.info("[ZW] Bot: Changed the designated post's long state to '{}.'".format(new_status))
+                logger.info(
+                    "[ZW] Bot: Changed the designated post's long state to '{}.'".format(
+                        new_status
+                    )
+                )
 
         if KEYWORDS[6] in pbody:
             # the !note command saves posts which are not CSS/template supported so they can be used as reference.
             # This is now rarely used.
-            if not is_mod(pauthor):  # Check to see if the person calling this command is a moderator
+            if not is_mod(
+                pauthor
+            ):  # Check to see if the person calling this command is a moderator
                 continue
             match = comment_info_parser(pbody, "!note:")[0]
             language_name = converter(match)[1]
-            logger.info("[ZW] Bot: COMMAND: !note, from moderator u/{}.".format(pauthor))
-            record_to_wiki(odate=int(ocreated), otitle=otitle, oid=oid, oflair_text=language_name, s_or_i=True,
-                           oflair_new="")  # Write to the saved page
+            logger.info(
+                "[ZW] Bot: COMMAND: !note, from moderator u/{}.".format(pauthor)
+            )
+            record_to_wiki(
+                odate=int(ocreated),
+                otitle=otitle,
+                oid=oid,
+                oflair_text=language_name,
+                s_or_i=True,
+                oflair_new="",
+            )  # Write to the saved page
 
         if KEYWORDS[5] in pbody:
             # !set is a mod-accessible means of setting the post flair.
             # It removes the comment (through AM) so it looks like nothing happened.
-            if not is_mod(pauthor):  # Check to see if the person calling this command is a moderator
+            if not is_mod(
+                pauthor
+            ):  # Check to see if the person calling this command is a moderator
                 continue
 
             set_data = comment_info_parser(pbody, "!set:")
@@ -6106,28 +7656,43 @@ def ziwen_bot():
                 oajo.set_country(language_country)  # Add that code to the Ajo
 
             if reset_state:  # Advanced !set mode, we set it to untranslated.
-                oajo.set_status('untranslated')
+                oajo.set_status("untranslated")
 
             if "+" not in set_data[0]:  # This is a standard !set
                 # Set the language to the Ajo
                 oajo.set_language(language_code)
                 komento_data = komento_analyzer(komento_submission_from_comment(pid))
-                if 'bot_unknown' in komento_data:  # Delete previous Unknown template comment
-                    unknown_default = komento_data['bot_unknown']
+                if (
+                    "bot_unknown" in komento_data
+                ):  # Delete previous Unknown template comment
+                    unknown_default = komento_data["bot_unknown"]
                     unknown_default = reddit.comment(id=unknown_default)
                     unknown_default.delete()  # Changed from remove
                     logger.debug("[ZW] Bot: >> Deleted my default Unknown comment...")
-                logger.info("[ZW] Bot: > Updated the linkflair tag to '{}'.".format(language_code))
+                logger.info(
+                    "[ZW] Bot: > Updated the linkflair tag to '{}'.".format(
+                        language_code
+                    )
+                )
             else:  # This is a defined multiple !set
                 oajo.set_defined_multiple(set_data[0])
                 logger.info("[ZW] Bot: > Updated the post to a defined multiple one.")
 
         # Push the FINAL UPDATE TO REDDIT
-        if oflair_css not in ["community", "meta"]:  # There's nothing to change for these
+        if oflair_css not in [
+            "community",
+            "meta",
+        ]:  # There's nothing to change for these
             oajo.update_reddit()  # Push all changes to the server
             ajo_writer(oajo)  # Write the Ajo to the local database
-            logger.info("[ZW] Bot: Ajo for {} updated and saved to the local database.".format(oid))
-            messaging_user_statistics_writer(pbody, pauthor)  # Record data on user commands.
+            logger.info(
+                "[ZW] Bot: Ajo for {} updated and saved to the local database.".format(
+                    oid
+                )
+            )
+            messaging_user_statistics_writer(
+                pbody, pauthor
+            )  # Record data on user commands.
             logger.debug("[ZW] Bot: Recorded user commands in database.")
 
 
@@ -6157,11 +7722,11 @@ def verification_parser():
         except AttributeError:
             # Author is deleted. We don't care about this post.
             continue
-        cursor_main.execute('SELECT * FROM oldcomments WHERE ID=?', [cid])
+        cursor_main.execute("SELECT * FROM oldcomments WHERE ID=?", [cid])
         if cursor_main.fetchone():
             # Post is already in the database
             continue
-        cursor_main.execute('INSERT INTO oldcomments VALUES(?)', [cid])
+        cursor_main.execute("INSERT INTO oldcomments VALUES(?)", [cid])
         conn_main.commit()
 
         comment.save()  # Saves the comment on Reddit so we know not to use it. (bot will not process saved comments)
@@ -6176,19 +7741,22 @@ def verification_parser():
         if osave:  # Comment has been processed already.
             continue
 
-        c_body = c_body.replace('\n', '|')
-        c_body = c_body.replace('||', '|')
+        c_body = c_body.replace("\n", "|")
+        c_body = c_body.replace("||", "|")
 
-        components = c_body.split('|')
+        components = c_body.split("|")
         components = list(filter(None, components))
-        url_regex = r'https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)'
+        url_regex = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)"
 
         try:
             language_name = components[0].strip()
             url_1 = re.search(url_regex, components[1]).group(0).strip()
             url_2 = re.search(url_regex, components[2]).group(0).strip()
             url_3 = re.search(url_regex, components[3]).group(0).strip()
-        except (IndexError, AttributeError):  # There must be something wrong with the verification comment.
+        except (
+            IndexError,
+            AttributeError,
+        ):  # There must be something wrong with the verification comment.
             return  # Exit, don't do anything.
 
         try:
@@ -6198,22 +7766,33 @@ def verification_parser():
 
         # Try and get a native language thank-you from our main language dictionary.
         language_code = converter(language_name)[0]
-        thanks_phrase = MAIN_LANGUAGES.get(language_code, {}).get('thanks', 'Thank you')
+        thanks_phrase = MAIN_LANGUAGES.get(language_code, {}).get("thanks", "Thank you")
 
         # Form the entry for the verification log.
         entry = "| {} | {} | [1]({}), [2]({}), [3]({}) | {} |"
         entry = entry.format(c_author_string, language_name, url_1, url_2, url_3, notes)
         page_content = reddit.subreddit(SUBREDDIT).wiki["verification_log"]
-        page_content_new = str(page_content.content_md) + '\n' + entry
+        page_content_new = str(page_content.content_md) + "\n" + entry
 
         # Update the verification log.
-        page_content.edit(content=page_content_new,
-                          reason='Updating the verification log with a new request from u/{}'.format(c_author))
+        page_content.edit(
+            content=page_content_new,
+            reason="Updating the verification log with a new request from u/{}".format(
+                c_author
+            ),
+        )
 
         # Reply to the commenter, report so that moderators can take a look.
-        comment.reply(COMMENT_VERIFICATION_RESPONSE.format(thanks_phrase, c_author) + BOT_DISCLAIMER)
-        comment.report('Ziwen: Please check verification request from u/{}.'.format(c_author))
-        logger.info('[ZW] Updated the verification log with a new request from u/' + c_author)
+        comment.reply(
+            COMMENT_VERIFICATION_RESPONSE.format(thanks_phrase, c_author)
+            + BOT_DISCLAIMER
+        )
+        comment.report(
+            "Ziwen: Please check verification request from u/{}.".format(c_author)
+        )
+        logger.info(
+            "[ZW] Updated the verification log with a new request from u/" + c_author
+        )
 
     return
 
@@ -6228,10 +7807,16 @@ def progress_checker():
     """
 
     # Conduct a search on Reddit.
-    search_query = 'flair:"in progress"'  # Get the posts that are still marked as in progress
-    search_results = r.search(search_query, time_filter='month', sort='new')
+    search_query = (
+        'flair:"in progress"'  # Get the posts that are still marked as in progress
+    )
+    search_results = r.search(search_query, time_filter="month", sort="new")
 
-    for post in search_results:  # Now we process the ones that are stil marked as in progress to reset them.
+    for (
+        post
+    ) in (
+        search_results
+    ):  # Now we process the ones that are stil marked as in progress to reset them.
 
         # Variable Creation
         oid = post.id
@@ -6240,29 +7825,41 @@ def progress_checker():
 
         if oflair_css is None:
             continue
-        elif oflair_css != 'inprogress':  # If it's not actually an in progress one, let's skip it.
+        elif (
+            oflair_css != "inprogress"
+        ):  # If it's not actually an in progress one, let's skip it.
             continue
 
         # Load its Ajo.
         oajo = ajo_loader(oid)  # First check the local database for the Ajo.
-        if oajo is None:  # We couldn't find a stored dict, so we will generate it from the submission.
-            logger.debug("[ZW] progress_checker: Couldn't find an Ajo in the local database. Loading from Reddit.")
+        if (
+            oajo is None
+        ):  # We couldn't find a stored dict, so we will generate it from the submission.
+            logger.debug(
+                "[ZW] progress_checker: Couldn't find an Ajo in the local database. Loading from Reddit."
+            )
             oajo = Ajo(post)
 
         # Process the post and get some data out of it.
         komento_data = komento_analyzer(post)
-        if 'claim_time_diff' in komento_data:
+        if "claim_time_diff" in komento_data:
             # Get the time difference between its claimed time and now.
-            time_difference = komento_data['claim_time_diff']
-            if time_difference > CLAIM_PERIOD:  # This means the post is older than the claim time period.
+            time_difference = komento_data["claim_time_diff"]
+            if (
+                time_difference > CLAIM_PERIOD
+            ):  # This means the post is older than the claim time period.
 
                 # Delete my advisory notice.
-                claim_notice = reddit.comment(id=komento_data['bot_claim_comment'])
+                claim_notice = reddit.comment(id=komento_data["bot_claim_comment"])
                 claim_notice.delete()  # Delete the notice comment.
-                logger.info("[ZW] progress_checker: Post exceeded the claim time period. Reset. {}".format(opermalink))
+                logger.info(
+                    "[ZW] progress_checker: Post exceeded the claim time period. Reset. {}".format(
+                        opermalink
+                    )
+                )
 
                 # Update the Ajo.
-                oajo.set_status('untranslated')
+                oajo.set_status("untranslated")
                 oajo.update_reddit()  # Push all changes to the server
                 ajo_writer(oajo)  # Write the Ajo to the local database
             else:  # This post is still under the time limit. Do nothing.
@@ -6271,7 +7868,7 @@ def progress_checker():
     return
 
 
-'''LESSER RUNTIMES'''
+"""LESSER RUNTIMES"""
 
 
 def cc_ref():
@@ -6283,7 +7880,7 @@ def cc_ref():
     :return: Nothing.
     """
 
-    multireddit = reddit.multireddit(USERNAME, 'chinese')
+    multireddit = reddit.multireddit(USERNAME, "chinese")
     posts = []
     posts += list(multireddit.comments(limit=MAXPOSTS))
 
@@ -6291,7 +7888,7 @@ def cc_ref():
 
         pid = post.id
 
-        cursor_main.execute('SELECT * FROM oldcomments WHERE ID=?', [pid])
+        cursor_main.execute("SELECT * FROM oldcomments WHERE ID=?", [pid])
         if cursor_main.fetchone():
             # Post is already in the database
             continue
@@ -6303,15 +7900,14 @@ def cc_ref():
             # Does not contain our keyword
             continue
 
-        cursor_main.execute('INSERT INTO oldcomments VALUES(?)', [pid])
+        cursor_main.execute("INSERT INTO oldcomments VALUES(?)", [pid])
         conn_main.commit()
 
         if KEYWORDS[1] in pbody:
             post_content = []
             # This basically checks to make sure it's actually a Chinese/Japanese character.
             # It will return nothing if it is something else.
-            matches = re.findall('`([\u2E80-\u9FFF]+)`', pbody,
-                                 re.DOTALL)
+            matches = re.findall("`([\u2E80-\u9FFF]+)`", pbody, re.DOTALL)
             # match_length = len(str(matches))
             tokenized_list = []
             if len(matches) == 0:
@@ -6332,11 +7928,15 @@ def cc_ref():
                     find_word = str(match)
                     post_content.append(zh_word(find_word))
 
-            post_content = '\n\n'.join(post_content)
+            post_content = "\n\n".join(post_content)
             if len(post_content) > 10000:  # Truncate only if absolutely necessary.
                 post_content = post_content[:9900]
             post.reply(post_content + BOT_DISCLAIMER)
-            logger.info("[ZW] CC_REF: Replied to lookup request for {} on a Chinese subreddit.".format(tokenized_list))
+            logger.info(
+                "[ZW] CC_REF: Replied to lookup request for {} on a Chinese subreddit.".format(
+                    tokenized_list
+                )
+            )
 
     return
 
@@ -6351,12 +7951,22 @@ def ziwen_maintenance():
 
     global POST_TEMPLATES
     POST_TEMPLATES = maintenance_template_retriever()
-    logger.debug("[ZW] # Current post templates retrieved: {} templates".format(len(POST_TEMPLATES.keys())))
+    logger.debug(
+        "[ZW] # Current post templates retrieved: {} templates".format(
+            len(POST_TEMPLATES.keys())
+        )
+    )
 
     global VERIFIED_POST_ID
-    VERIFIED_POST_ID = maintenance_get_verified_thread()  # Get the last verification thread's ID and store it.
+    VERIFIED_POST_ID = (
+        maintenance_get_verified_thread()
+    )  # Get the last verification thread's ID and store it.
     if len(VERIFIED_POST_ID):
-        logger.info("[ZW] # Current verification post found: https://redd.it/{}\n\n".format(VERIFIED_POST_ID))
+        logger.info(
+            "[ZW] # Current verification post found: https://redd.it/{}\n\n".format(
+                VERIFIED_POST_ID
+            )
+        )
     else:
         logger.error("[ZW] # No current verification post found!")
 
@@ -6365,8 +7975,14 @@ def ziwen_maintenance():
     logger.debug("[ZW] # Current user agent: {}".format(ZW_USERAGENT))
 
     global GLOBAL_BLACKLIST
-    GLOBAL_BLACKLIST = maintenance_blacklist_checker()  # We download the blacklist of users.
-    logger.debug("[ZW] # Current global blacklist retrieved: {} users".format(len(GLOBAL_BLACKLIST)))
+    GLOBAL_BLACKLIST = (
+        maintenance_blacklist_checker()
+    )  # We download the blacklist of users.
+    logger.debug(
+        "[ZW] # Current global blacklist retrieved: {} users".format(
+            len(GLOBAL_BLACKLIST)
+        )
+    )
 
     global MOST_RECENT_OP
     MOST_RECENT_OP = maintenance_most_recent()
@@ -6379,7 +7995,7 @@ def ziwen_maintenance():
     return
 
 
-'''INITIAL VARIABLE SET-UP'''
+"""INITIAL VARIABLE SET-UP"""
 
 # We start the bot with a couple of routines to populate the data from our wiki.
 CYCLES = 0
@@ -6387,7 +8003,7 @@ ziwen_maintenance()
 logger.info("[ZW] Bot routine starting up...")
 
 
-'''RUNNING THE BOT'''
+"""RUNNING THE BOT"""
 
 # This is the actual loop that runs the top-level functions of the bot.
 
@@ -6408,7 +8024,9 @@ try:
             # Finally checks for posts that are still claimed and 'in progress.'
             progress_checker()
 
-            if not TESTING_MODE:  # Disable these functions if just testing on r/trntest.
+            if (
+                not TESTING_MODE
+            ):  # Disable these functions if just testing on r/trntest.
                 logger.debug("[ZW] Main: Searching other subreddits.")
                 verification_parser()  # The bot checks if there are any new requests for verification.
                 cc_ref()  # Finally the bot runs lookup searches on Chinese subreddits.
@@ -6423,22 +8041,30 @@ try:
             # Exclude saving the error if it's just a connection problem.
             if any(keyword in error_entry for keyword in CONNECTION_KEYWORDS):
                 for keyword in CONNECTION_KEYWORDS:
-                    if keyword in error_entry:  # We want to print the precise error we have.
-                        logger.debug("[ZW] Main: > Connection Error: {}".format(keyword))
+                    if (
+                        keyword in error_entry
+                    ):  # We want to print the precise error we have.
+                        logger.debug(
+                            "[ZW] Main: > Connection Error: {}".format(keyword)
+                        )
             else:  # Error is not a connection error, we want to save that.
                 record_error_log(error_entry)  # Save the error to a log.
                 logger.error("[ZW] Main: > Logged this error.")
 
-        if CYCLES >= CLEANCYCLES:  # The bot has reached its designated number of cycles.
+        if (
+            CYCLES >= CLEANCYCLES
+        ):  # The bot has reached its designated number of cycles.
 
             # Activate the maintenance functions to refresh information.
-            logger.debug('[ZW] Main: Cleaning database and running maintenance functions.')
+            logger.debug(
+                "[ZW] Main: Cleaning database and running maintenance functions."
+            )
             ziwen_maintenance()  # Update the global variables again.
             CYCLES = 0  # Reset the number of cycles.
 
         # Loop completed, go to sleep for the specified amount of time.
-        logger.debug('Running again in {} seconds.\n'.format(WAIT))
+        logger.debug("Running again in {} seconds.\n".format(WAIT))
         time.sleep(WAIT)
 except KeyboardInterrupt:  # Manual termination of the script with Ctrl-C.
-    logger.info('Manual user shutdown.')
+    logger.info("Manual user shutdown.")
     sys.exit()
