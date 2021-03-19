@@ -144,36 +144,36 @@ def streamer_duplicate_checker(post_author, original_title):
     :param original_title: The original title of the post.
     :return: True if this post has been posted before, and False if it hasn't.
     """
-    
-    # A list where we put the titles of things that match. 
+
+    # A list where we put the titles of things that match.
     matching_list = []
     fuzz_values = []
-    
-    # Conduct a search checking the author of this post. 
-    # Generally the author posts in a similar time period. 
+
+    # Conduct a search checking the author of this post.
+    # Generally the author posts in a similar time period.
     search_query = "author:{} OR author:translator-BOT NOT flair:community NOT flair:meta".format(post_author)
     search_results = r.search(search_query, sort='new', time_filter='week', limit=3)
-    
-    # If there are results, we add them to the list. 
+
+    # If there are results, we add them to the list.
     for result in search_results:
         rtitle = result.title
-        
+
         # If there are brackets in the result titles let's remove them for a more accurate fuzz ratio.
         if "]" in rtitle:
             rtitle = re.sub("\[[^)]*\]", "", rtitle).strip()
-        
+
         # Add the title to the list (sans brackets)
         matching_list.append(rtitle)
-    
+
     # There are items that match my criteria.
     if len(matching_list) > 0:
-        
+
         # Iterate over the titles, compare them to the original title to see how close they are.
         for title in matching_list:
             closeness = fuzz.ratio(original_title, title)
             # print(closeness)
             fuzz_values.append(closeness)
-        
+
         # If there's something over 80 fuzz value, it's probably a match.
         if max(fuzz_values) > 80:
             return True
@@ -260,8 +260,8 @@ def ziwen_streamer():
 
         # Check if the username or the subreddit is on the blacklist. True if the user is on the blacklist.
         blacklist_requester_test = blacklist_checker(b_username=pauthor.lower(), b_subreddit=oreddit.lower())
-        blacklist_op_test = blacklist_checker(b_username=oauthor.lower(), b_subreddit=oreddit.lower()) 
-        
+        blacklist_op_test = blacklist_checker(b_username=oauthor.lower(), b_subreddit=oreddit.lower())
+
         # If either are on the blacklist (that is, either are True), skip.
         if blacklist_requester_test or blacklist_op_test:
             if STREAMER_KEYWORDS[2] not in pbody and pauthor != "AutoModerator":  # Exclude r/translate mentions
@@ -395,7 +395,7 @@ def ziwen_streamer():
                     comment.reply(ZWS_COMMENT_WRONG_XPOST_COMMENT + BOT_DISCLAIMER)
                     continue
 
-            # If it hasn't been posted before, go ahead. 
+            # If it hasn't been posted before, go ahead.
             if not posted_before and not parent_comment_mode:  # Regular submission
                 cross_post = osubmission.crosspost(SUBREDDIT, title=new_title, send_replies=False)
             elif not posted_before and parent_comment_mode and parent_comment_text is not None:
@@ -405,7 +405,7 @@ def ziwen_streamer():
                 comment.reply(ZWS_COMMENT_ALREADY_POSTED + BOT_DISCLAIMER)
                 logger.info("[ZWS] >> Text has already been posted. Skipping...")
                 continue
-            
+
             # Get the permalink for the new crosspost.
             xlink = cross_post.permalink
 
@@ -496,7 +496,7 @@ def ziwen_streamer():
             if oauthor == pauthor:
                 pauthor += " (OP)"
 
-            otitle = otitle.replace("|", "-")  # Replace pipes, they can be problematic. 
+            otitle = otitle.replace("|", "-")  # Replace pipes, they can be problematic.
             page_content = reddit.subreddit("translatorBOT").wiki["mentions"]
             new_content_template = "{} | {} | u/{} | {} | [{}]({}) | [Link]({})"
             new_content = (new_content_template.format(s_format_created, oreddit, pauthor, has_posted_before, otitle,

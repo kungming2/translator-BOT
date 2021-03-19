@@ -11,15 +11,17 @@ import sys
 from time import strftime
 
 # Set up the directories based on the current location of the bots.
-script_directory = os.path.dirname(os.path.realpath(__file__))  # Fetch the absolute directory the script is in.
+script_directory = os.path.dirname(
+    os.path.realpath(__file__)
+)  # Fetch the absolute directory the script is in.
 script_directory += "/Data/"  # Where the main files are kept.
 SOURCE_FOLDER = script_directory
-    
+
 # Ziwen main database files (either static files or files that will be written to).
 FILE_ADDRESS_CREDENTIALS = os.path.join(script_directory, "_login.json")
 FILE_ADDRESS_UA = os.path.join(script_directory, "_ua.json")
 FILE_ADDRESS_ALL_STATISTICS = os.path.join(script_directory, "_statistics.json")
-FILE_ADDRESS_AJO_DB = os.path.join(script_directory, '_database_ajo.db')
+FILE_ADDRESS_AJO_DB = os.path.join(script_directory, "_database_ajo.db")
 FILE_ADDRESS_MAIN = os.path.join(script_directory, "_database_main.db")
 
 # Ziwen SQLite3 cache file (cache file data is generated as the bot runs and is volatile).
@@ -27,10 +29,16 @@ FILE_ADDRESS_CACHE = os.path.join(script_directory, "_cache_main.db")
 
 # Ziwen language database files (reference files for language-related functions).
 FILE_ADDRESS_OLD_CHINESE = os.path.join(script_directory, "_database_old_chinese.csv")
-FILE_ADDRESS_ZH_ROMANIZATION = os.path.join(script_directory, "_database_romanization_chinese.csv")
-FILE_ADDRESS_ZH_BUDDHIST = os.path.join(script_directory, "_database_buddhist_chinese.md")
+FILE_ADDRESS_ZH_ROMANIZATION = os.path.join(
+    script_directory, "_database_romanization_chinese.csv"
+)
+FILE_ADDRESS_ZH_BUDDHIST = os.path.join(
+    script_directory, "_database_buddhist_chinese.md"
+)
 FILE_ADDRESS_ZH_CCCANTO = os.path.join(script_directory, "_database_cccanto.md")
-FILE_ADDRESS_MECAB = os.path.join(script_directory, "mecab-ipadic-neologd")  # Folder where MeCab dict files are
+FILE_ADDRESS_MECAB = os.path.join(
+    script_directory, "mecab-ipadic-neologd"
+)  # Folder where MeCab dict files are
 
 # Ziwen Markdown output files (text files for saving information).
 FILE_ADDRESS_ERROR = os.path.join(script_directory, "_log_error.md")
@@ -49,23 +57,45 @@ FILE_ADDRESS_NOTIFY_EXCHANGE = os.path.join(script_directory, "hb_exchangelist.d
 FILE_ADDRESS_HUIBAN_OLDPOSTS = os.path.join(script_directory, "hb_processed.db")
 
 # These are keywords in errors thrown from Internet connection problems. We don't need to log those.
-CONNECTION_KEYWORDS = ['200 HTTP', '400 HTTP', '401 HTTP', '403 HTTP', '404 HTTP', '404 HTTP', '500 HTTP', '502 HTTP',
-                       '503 HTTP', '504 HTTP', 'CertificateError', 'ConnectionRefusedError', 'Errno 113', 'Error 503',
-                       'ProtocolError', 'ServerError', 'socket.gaierror', 'socket.timeout', 'ssl.SSLError']
+CONNECTION_KEYWORDS = [
+    "200 HTTP",
+    "400 HTTP",
+    "401 HTTP",
+    "403 HTTP",
+    "404 HTTP",
+    "404 HTTP",
+    "500 HTTP",
+    "502 HTTP",
+    "503 HTTP",
+    "504 HTTP",
+    "CertificateError",
+    "ConnectionRefusedError",
+    "Errno 113",
+    "Error 503",
+    "ProtocolError",
+    "ServerError",
+    "socket.gaierror",
+    "socket.timeout",
+    "ssl.SSLError",
+]
 
 # Testing subreddits for the bot. (mostly to test Ziwen Streamer's crossposting function)
 TESTING_SUBREDDITS = ["testingground4bots", "test", "andom"]
 
 # Footers for the comments that the bots make.
-BOT_DISCLAIMER = ("\n\n---\n^Ziwen: ^a ^bot ^for ^r/translator ^| "
-                  "^[Documentation](https://www.reddit.com/r/translatorBOT/wiki/ziwen) ^| "
-                  "^[FAQ](https://www.reddit.com/r/translatorBOT/wiki/faq) ^| "
-                  "^[Feedback](https://www.reddit.com/r/translatorBOT)")
-BOT_DISCLAIMER_EXCHANGE = ("\n\n---\n^Huiban: ^a ^bot ^for ^r/LanguageSwap ^| "
-                           "^[Contact](https://www.reddit.com/message/compose/?to=kungming2&subject=About+Huiban+Bot)")
+BOT_DISCLAIMER = (
+    "\n\n---\n^Ziwen: ^a ^bot ^for ^r/translator ^| "
+    "^[Documentation](https://www.reddit.com/r/translatorBOT/wiki/ziwen) ^| "
+    "^[FAQ](https://www.reddit.com/r/translatorBOT/wiki/faq) ^| "
+    "^[Feedback](https://www.reddit.com/r/translatorBOT)"
+)
+BOT_DISCLAIMER_EXCHANGE = (
+    "\n\n---\n^Huiban: ^a ^bot ^for ^r/LanguageSwap ^| "
+    "^[Contact](https://www.reddit.com/message/compose/?to=kungming2&subject=About+Huiban+Bot)"
+)
 
 
-'''DEFINING LOGIN CREDENTIALS'''
+"""DEFINING LOGIN CREDENTIALS"""
 
 
 def credentials_loader():
@@ -78,7 +108,7 @@ def credentials_loader():
     """
 
     # Access the JSON file with the credentials.
-    f = open(FILE_ADDRESS_CREDENTIALS, 'r', encoding='utf-8')
+    f = open(FILE_ADDRESS_CREDENTIALS, "r", encoding="utf-8")
     login_data = f.read()
     f.close()
 
@@ -88,27 +118,29 @@ def credentials_loader():
     # Declare the variables.
     globals().update(login_data)
 
-    return
-
 
 # Load the credentials from the JSON file.
 credentials_loader()
 
-''' LOGGING '''
+""" LOGGING """
 
 # Logging code, defining the basic logger.
-logformatter = '%(levelname)s: %(asctime)s - %(message)s'
-logging.basicConfig(format=logformatter, level=logging.INFO)  # By default only show INFO or higher levels.
+logformatter = "%(levelname)s: %(asctime)s - %(message)s"
+logging.basicConfig(
+    format=logformatter, level=logging.INFO
+)  # By default only show INFO or higher levels.
 logger = logging.getLogger(__name__)
 
 # Define the logging handler (the file to write to with formatting.)
 handler = logging.FileHandler(FILE_ADDRESS_EVENTS)
-handler.setLevel(logging.INFO)  # Change this level for debugging or to display more information.
+handler.setLevel(
+    logging.INFO
+)  # Change this level for debugging or to display more information.
 handler_format = logging.Formatter(logformatter, datefmt="%Y-%m-%d [%I:%M:%S %p]")
 handler.setFormatter(handler_format)
 logger.addHandler(handler)
 
-''' UNIVERSAL FUNCTIONS SHARED BY COMPONENTS '''
+""" UNIVERSAL FUNCTIONS SHARED BY COMPONENTS """
 
 
 def get_random_useragent():
@@ -120,18 +152,18 @@ def get_random_useragent():
     """
 
     # Load the JSON file
-    f = open(FILE_ADDRESS_UA, 'r', encoding='utf-8')
+    f = open(FILE_ADDRESS_UA, "r", encoding="utf-8")
     ua_data = f.read()
     f.close()
 
     # Convert the JSON data into a dictionary.
     ua_data = json.loads(ua_data)
-    ua_stored = ua_data['ua']
+    ua_stored = ua_data["ua"]
 
     # Select a random one from the list.
     random_ua = random.choice(ua_stored)
     accept_string = "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
-    headers = {'User-Agent': random_ua, 'Accept': accept_string}
+    headers = {"User-Agent": random_ua, "Accept": accept_string}
 
     return headers
 
@@ -148,13 +180,17 @@ def error_log_basic(entry, bot_version):
     """
 
     # Open the file for the error log in appending mode.
-    f = open(FILE_ADDRESS_ERROR, 'a+', encoding='utf-8')
+    f = open(FILE_ADDRESS_ERROR, "a+", encoding="utf-8")
     current_entries = f.read()
 
     # If this hasn't already been recorded, add it.
     if entry not in current_entries:
         error_date_format = strftime("%Y-%m-%d [%I:%M:%S %p]")
-        f.write("\n-----------------------------------\n{} ({})\n{}".format(error_date_format, bot_version, entry))
+        f.write(
+            "\n-----------------------------------\n{} ({})\n{}".format(
+                error_date_format, bot_version, entry
+            )
+        )
         f.close()
 
     return
@@ -185,7 +221,7 @@ def action_counter(messages_number, action_type):
     current_day = strftime("%Y-%m-%d")
 
     # Open the file for reading and access its content.
-    f = open(FILE_ADDRESS_COUNTER, 'r+', encoding='utf-8')
+    f = open(FILE_ADDRESS_COUNTER, "r+", encoding="utf-8")
     current_actions_dict = json.loads(f.read())  # Take the file's current contents
     f.close()  # Close the file
 
@@ -197,7 +233,7 @@ def action_counter(messages_number, action_type):
     else:  # This day hasn't been recorded.
         current_actions_dict[current_day] = {action_type: new_messages_number}
 
-    with open(os.path.join(FILE_ADDRESS_COUNTER), 'w', encoding="utf-8") as fp:
+    with open(os.path.join(FILE_ADDRESS_COUNTER), "w", encoding="utf-8") as fp:
         json.dump(current_actions_dict, fp, sort_keys=True, indent=4)
 
     return
@@ -212,7 +248,7 @@ def load_statistics_data(language_code):
     """
 
     # Open the file
-    f = open(FILE_ADDRESS_ALL_STATISTICS, 'r', encoding='utf-8')
+    f = open(FILE_ADDRESS_ALL_STATISTICS, "r", encoding="utf-8")
     stats_data = f.read()
     f.close()
 
