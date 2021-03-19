@@ -7,7 +7,6 @@ import json
 import logging
 import os
 import random
-import sys
 from time import strftime
 
 # Set up the directories based on the current location of the bots.
@@ -193,8 +192,6 @@ def error_log_basic(entry, bot_version):
         )
         f.close()
 
-    return
-
 
 def action_counter(messages_number, action_type):
     """
@@ -235,8 +232,6 @@ def action_counter(messages_number, action_type):
 
     with open(os.path.join(FILE_ADDRESS_COUNTER), "w", encoding="utf-8") as fp:
         json.dump(current_actions_dict, fp, sort_keys=True, indent=4)
-
-    return
 
 
 def load_statistics_data(language_code):

@@ -3554,8 +3554,6 @@ def language_lists_generator():
         if "language_code_2b" in language_module:
             ISO_639_2B[language_module["language_code_2b"]] = language_code
 
-    return
-
 
 # Form the lists from the dictionary that are needed for compatibility.
 language_lists_generator()

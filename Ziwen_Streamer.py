@@ -516,8 +516,6 @@ def ziwen_streamer():
             action_counter(1, "Subreddit reference")
             logger.info("[ZWS] >> Saved to the 'mentions' page.")
 
-    return
-
 
 '''RUNNING THE BOT'''
 
