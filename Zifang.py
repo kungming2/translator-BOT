@@ -15,17 +15,19 @@ from _languages import *
 from _config import *
 from _responses import *
 
-'''
+"""
 UNIVERSAL VARIABLES
 
 These variables (all denoted by UPPERCASE names) are variables used by many functions in Ziwen. These are important
 as they define many of the basic functions of the bot.
-'''
+"""
 
-BOT_NAME = 'Zifang'
-VERSION_NUMBER = '0.80'
-USER_AGENT = ('{} {}, another assistant for r/translator. '
-              'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
+BOT_NAME = "Zifang"
+VERSION_NUMBER = "0.80"
+USER_AGENT = (
+    "{} {}, another assistant for r/translator. "
+    "Written and maintained by u/kungming2.".format(BOT_NAME, VERSION_NUMBER)
+)
 SUBREDDIT = "translator"
 
 CLOSE_OUT_AGE = 7  # Age of posts (in days) that we inform people about.
@@ -34,19 +36,25 @@ DUPLICATES_AGE = 4  # Age of posts (in hours) that we check for duplicates.
 DUPLICATE_CONFIDENCE = 85  # Similarity level of posts to mark as duplicates.
 NUMERICAL_SIMILARITY = 20  # How close we want the numbers to be together.
 
-'''KEYWORDS LISTS'''
+"""KEYWORDS LISTS"""
 KEYWORDS = []  # for future use with !bot
-ZF_DISCLAIMER = BOT_DISCLAIMER.replace('Ziwen', 'Zifang')
+ZF_DISCLAIMER = BOT_DISCLAIMER.replace("Ziwen", "Zifang")
 
 # Connecting to the Reddit API via OAuth.
-logger.info('[ZF] Startup: Logging in as u/{}...'.format(USERNAME))
-reddit = praw.Reddit(client_id=ZIFANG_APP_ID, client_secret=ZIFANG_APP_SECRET, password=PASSWORD,
-                     user_agent=USER_AGENT, username=USERNAME)
+logger.info("[ZF] Startup: Logging in as u/{}...".format(USERNAME))
+reddit = praw.Reddit(
+    client_id=ZIFANG_APP_ID,
+    client_secret=ZIFANG_APP_SECRET,
+    password=PASSWORD,
+    user_agent=USER_AGENT,
+    username=USERNAME,
+)
 r = reddit.subreddit(SUBREDDIT)
-logger.info('[ZF] Startup: Initializing {} {} for r/{} with languages module {}.'.format(BOT_NAME,
-                                                                                         VERSION_NUMBER,
-                                                                                         SUBREDDIT,
-                                                                                         VERSION_NUMBER_LANGUAGES))
+logger.info(
+    "[ZF] Startup: Initializing {} {} for r/{} with languages module {}.".format(
+        BOT_NAME, VERSION_NUMBER, SUBREDDIT, VERSION_NUMBER_LANGUAGES
+    )
+)
 
 
 def record_error_log(error_save_entry):
@@ -58,7 +66,9 @@ def record_error_log(error_save_entry):
     :return: Nothing.
     """
 
-    f = open(FILE_ADDRESS_ERROR, 'a+', encoding='utf-8')  # File address for the error log, cumulative.
+    f = open(
+        FILE_ADDRESS_ERROR, "a+", encoding="utf-8"
+    )  # File address for the error log, cumulative.
     existing_log = f.read()  # Get the data that already exists
 
     # If this error entry doesn't exist yet, let's save it.
@@ -67,10 +77,13 @@ def record_error_log(error_save_entry):
 
         try:
             log_template = "\n-----------------------------------\n{} ({} {})\n{}\n{}"
-            log_template_txt = log_template.format(error_date, BOT_NAME, VERSION_NUMBER,
-                                                   error_save_entry)
+            log_template_txt = log_template.format(
+                error_date, BOT_NAME, VERSION_NUMBER, error_save_entry
+            )
             f.write(log_template_txt)
-        except UnicodeEncodeError:  # Occasionally this may fail on Windows thanks to its crap Unicode support.
+        except (
+            UnicodeEncodeError
+        ):  # Occasionally this may fail on Windows thanks to its crap Unicode support.
             logger.error("[ZF] Error_Log: Encountered a Unicode writing error.")
         f.close()
 
@@ -89,7 +102,7 @@ def is_mod(username):
         return False
 
 
-'''CLOSEOUT ROUTINE'''
+"""CLOSEOUT ROUTINE"""
 
 
 def wiki_access(post_ids, retrieve=False):
@@ -97,9 +110,11 @@ def wiki_access(post_ids, retrieve=False):
     This function either adds an ID of a post or just gets what's stored
     on the wikipage back.
     """
-    wiki_page = reddit.subreddit('translatorBOT').wiki['zifang_config']
+    wiki_page = reddit.subreddit("translatorBOT").wiki["zifang_config"]
     processed_data = wiki_page.content_md
-    previous_ids = yaml.safe_load(processed_data)  # Convert YAML text into a Python list.
+    previous_ids = yaml.safe_load(
+        processed_data
+    )  # Convert YAML text into a Python list.
 
     # In rare cases where the configuration page has no data.
     if previous_ids is None:
@@ -116,8 +131,9 @@ def wiki_access(post_ids, retrieve=False):
 
     # Edit the wikipage if there's changed data.
     if merged != previous_ids:
-        wiki_page.edit(content=str(merged),
-                       reason=f'Updating with new IDs ({diff_ids[0:2]}...).')
+        wiki_page.edit(
+            content=str(merged), reason=f"Updating with new IDs ({diff_ids[0:2]}...)."
+        )
         logger.info(f"[ZF]: Updated Zifang configuration page with new IDs.")
     else:
         logger.debug(f"[ZF]: No new IDs.")
@@ -155,7 +171,10 @@ def closeout(list_posts):
 
         # Exclude posts that would otherwise count as translated.
         post_flair = post.link_flair_text.lower()
-        if any(keyword in post_flair for keyword in ["translated", "review", "meta", "community"]):
+        if any(
+            keyword in post_flair
+            for keyword in ["translated", "review", "meta", "community"]
+        ):
             continue
 
         # Skip if we've already seen this post before.
@@ -165,21 +184,25 @@ def closeout(list_posts):
         if int(post.num_comments) >= CLOSE_OUT_COMMENTS_MINIMUM:
             actionable_posts.append(post)
 
-    logger.info(f"[ZF]: > There are {len(actionable_posts)} posts to message "
-                f"their author for.")
+    logger.info(
+        f"[ZF]: > There are {len(actionable_posts)} posts to message "
+        f"their author for."
+    )
 
     # Send the person a message regarding their post.
     for post in actionable_posts:
-        language = re.sub(r'\([^)]*\)', '', post.link_flair_text)
+        language = re.sub(r"\([^)]*\)", "", post.link_flair_text)
         if "[" in language:  # Generally for defined multiple tags.
-            language = language.split('[')[0].strip()
+            language = language.split("[")[0].strip()
         time_delta = round((current_time - post.created_utc) / 86400, 1)
         subject_line = ZF_CLOSING_OUT_SUBJECT.format(language=language)
-        closeout_message = ZF_CLOSING_OUT_MESSAGE.format(author=post.author.name,
-                                                         days=time_delta,
-                                                         language=language,
-                                                         permalink=post.permalink,
-                                                         num_comments=post.num_comments)
+        closeout_message = ZF_CLOSING_OUT_MESSAGE.format(
+            author=post.author.name,
+            days=time_delta,
+            language=language,
+            permalink=post.permalink,
+            num_comments=post.num_comments,
+        )
         closeout_message += ZF_DISCLAIMER
 
         try:
@@ -187,7 +210,9 @@ def closeout(list_posts):
         except praw.exceptions.APIException:
             pass
         else:
-            logger.info(f"[ZF]: >> Messaged u/{post.author} about closing out their post at {post.permalink}.")
+            logger.info(
+                f"[ZF]: >> Messaged u/{post.author} about closing out their post at {post.permalink}."
+            )
 
     # Save to the wikipage.
     actionable_posts_ids = [x.id for x in actionable_posts]
@@ -198,7 +223,7 @@ def closeout(list_posts):
     return
 
 
-'''DUPLICATE DETECTOR'''
+"""DUPLICATE DETECTOR"""
 
 
 def fetch_removal_reasons(subreddit):
@@ -211,8 +236,7 @@ def fetch_removal_reasons(subreddit):
     i = 1
 
     for removal_reason in reddit.subreddit(subreddit).mod.removal_reasons:
-        reasons[i] = (removal_reason.title, removal_reason.id,
-                      removal_reason.message)
+        reasons[i] = (removal_reason.title, removal_reason.id, removal_reason.message)
         i += 1
 
     if reasons:
@@ -246,7 +270,7 @@ def calculate_similarity(strings):
 
     # Iterate over each pair of strings
     for i in range(len(strings)):
-        for j in range(i+1, len(strings)):
+        for j in range(i + 1, len(strings)):
             similarity_score = fuzz.token_sort_ratio(strings[i], strings[j])
             similarity_scores.append(similarity_score)
 
@@ -264,7 +288,7 @@ def numerical_sequence(strings):
     :return:
     """
     numbers = []
-    pattern = r'\s(\d+)'  # Regular expression pattern to match one or more digits preceded by a space
+    pattern = r"\s(\d+)"  # Regular expression pattern to match one or more digits preceded by a space
 
     for string in strings:
         matches = re.findall(pattern, string)
@@ -280,7 +304,9 @@ def numerical_sequence(strings):
     # Go through the differences.
     logger.info(f">>> [ZF]: Numbers found in the titles were: {numbers}")
     total_sums = [sum(x) for x in numbers]
-    differences = [total_sums[i + 1] - total_sums[i] for i in range(len(total_sums) - 1)]
+    differences = [
+        total_sums[i + 1] - total_sums[i] for i in range(len(total_sums) - 1)
+    ]
     average_difference = sum(differences) / len(differences)
 
     logger.info(f">>> [ZF]: The numerical sequence difference is {average_difference}.")
@@ -324,14 +350,15 @@ def duplicate_detector(list_posts):
 
         # Check if the post is already approved.
         if post.approved:
-            logger.info(f"[ZF] > The post `{post.id}` has already been "
-                        "approved by a moderator.")
+            logger.info(
+                f"[ZF] > The post `{post.id}` has already been "
+                "approved by a moderator."
+            )
             continue
 
         # Exempt moderators.
         if is_mod(post_author):
-            logger.info(f"[ZF] > The post `{post.id}` was posted by "
-                        "a moderator.")
+            logger.info(f"[ZF] > The post `{post.id}` was posted by " "a moderator.")
             continue
 
         if post_author in author_list:
@@ -357,13 +384,17 @@ def duplicate_detector(list_posts):
         # rules can apply.
         numerical_similiarity = numerical_sequence(author_titles)
         if not numerical_similiarity:
-            logger.info(f"[ZF] >> Posts  by u/{author} pass the "
-                        "numerical similarity calculator. Skipped.")
+            logger.info(
+                f"[ZF] >> Posts  by u/{author} pass the "
+                "numerical similarity calculator. Skipped."
+            )
             continue
 
         # Calculate how similar these posts are.
         similarity_index = round(calculate_similarity(author_titles), 2)
-        logger.info(f"[ZF] > The posts by u/{author} have a similarity index of {similarity_index}.")
+        logger.info(
+            f"[ZF] > The posts by u/{author} have a similarity index of {similarity_index}."
+        )
         if similarity_index >= DUPLICATE_CONFIDENCE:
             author_post_ids = [t[1] for t in author_data]
             author_post_ids.sort()  # Oldest post will be first.
@@ -377,12 +408,12 @@ def duplicate_detector(list_posts):
     return
 
 
-'''WIKIPEDIA DETECTOR (COMMENTS'''
+"""WIKIPEDIA DETECTOR (COMMENTS"""
 
 
 def extract_text_within_curly_braces(text):
     """Gets text from between curly braces."""
-    pattern = r'\{{([^}}]+)\}'  # Regex pattern to match text within curly braces
+    pattern = r"\{{([^}}]+)\}"  # Regex pattern to match text within curly braces
     matches = re.findall(pattern, text)
     return matches
 
@@ -396,7 +427,7 @@ def wikipedia_lookup(terms, language="English"):
              results, otherwise `None`.
     """
     entries = []
-    entry_format = '\n**[{term}]({link})**\n\n> {summary}\n\n'
+    entry_format = "\n**[{term}]({link})**\n\n> {summary}\n\n"
 
     # Code for searching non-English Wikipedia, currently not needed.
     if language is not "English":
@@ -406,43 +437,49 @@ def wikipedia_lookup(terms, language="English"):
     # Look up the terms and format them appropriately.
     for term in terms[:5]:  # Limit to five terms.
         term_entry = None
-        term = re.sub(r'[^\w\s]', '', term)  # Strip punctuation.
+        term = re.sub(r"[^\w\s]", "", term)  # Strip punctuation.
         logger.info(f"[ZF]: > Now searching for '{term}'...")
 
         # By default, turn off auto suggest.
         try:
-            term_summary = wikipedia.summary(term, auto_suggest=False,
-                                             redirect=True, sentences=3)
-        except (wikipedia.exceptions.DisambiguationError, wikipedia.exceptions.PageError):
+            term_summary = wikipedia.summary(
+                term, auto_suggest=False, redirect=True, sentences=3
+            )
+        except (
+            wikipedia.exceptions.DisambiguationError,
+            wikipedia.exceptions.PageError,
+        ):
             # No direct matches, try auto suggest.
             try:
-                term_summary = wikipedia.summary(term.strip(),
-                                                 sentences=3)
+                term_summary = wikipedia.summary(term.strip(), sentences=3)
                 term_entry = wikipedia.page(term).url
-            except (wikipedia.exceptions.DisambiguationError, wikipedia.exceptions.PageError):
+            except (
+                wikipedia.exceptions.DisambiguationError,
+                wikipedia.exceptions.PageError,
+            ):
                 # Still no dice.
-                logger.info(f"[ZF]: >> Unable to resolve '{term}' on Wikipedia. Skipping.")
+                logger.info(
+                    f"[ZF]: >> Unable to resolve '{term}' on Wikipedia. Skipping."
+                )
                 continue  # Exit.
 
         # Clean up the text for the entry.
-        term_format = term.replace(' ', '_')
-        if '\n' in term_summary:
-            term_summary = term_summary.split('\n')[0].strip()
-        if '==' in term_summary:
-            term_summary = term_summary.split('==')[0].strip()
+        term_format = term.replace(" ", "_")
+        if "\n" in term_summary:
+            term_summary = term_summary.split("\n")[0].strip()
+        if "==" in term_summary:
+            term_summary = term_summary.split("==")[0].strip()
         if not term_entry:
-            term_entry = f'https://en.wikipedia.org/wiki/{term_format}'
-        term_entry = term_entry.replace(')', '\)')
+            term_entry = f"https://en.wikipedia.org/wiki/{term_format}"
+        term_entry = term_entry.replace(")", "\)")
 
         # Form the entry text.
-        entry = entry_format.format(term=term,
-                                    link=term_entry,
-                                    summary=term_summary)
+        entry = entry_format.format(term=term, link=term_entry, summary=term_summary)
         entries.append(entry)
         logger.info(f"[ZF]: >> Information for '{term}' retrieved.")
 
     if entries:
-        body_text = '\n'.join(entries)
+        body_text = "\n".join(entries)
         logger.info(f"[ZF]: > Wikpedia entry data obtained.")
         action_counter(len(entries), "Wikipedia lookup")
         return body_text
@@ -450,7 +487,7 @@ def wikipedia_lookup(terms, language="English"):
         return
 
 
-'''MAIN RUNTIME'''
+"""MAIN RUNTIME"""
 
 
 def zifang_posts():
@@ -477,10 +514,16 @@ def zifang_posts():
     if duplicate_data:
         for dupe_id in duplicate_data:
             dupe_post = reddit.submission(dupe_id)
-            dupe_post.mod.remove(reason_id=search_removal_reasons(REMOVAL_REASONS, 'duplicate'),
-                                 mod_note=f"Posted duplicate at {dupe_post.id}")
-            bot_reply = dupe_post.reply(ZF_DUPLICATE_COMMENT.format(author=dupe_post.author.name,
-                                                                    permalink=dupe_post.permalink) + ZF_DISCLAIMER)
+            dupe_post.mod.remove(
+                reason_id=search_removal_reasons(REMOVAL_REASONS, "duplicate"),
+                mod_note=f"Posted duplicate at {dupe_post.id}",
+            )
+            bot_reply = dupe_post.reply(
+                ZF_DUPLICATE_COMMENT.format(
+                    author=dupe_post.author.name, permalink=dupe_post.permalink
+                )
+                + ZF_DISCLAIMER
+            )
             bot_reply.mod.distinguish()  # Distinguish the bot's comment.
         action_counter(len(duplicate_data), "Removed duplicate")
         wiki_access(duplicate_data)  # Add them to the wiki.
@@ -507,7 +550,6 @@ def zifang_comments(comment_limit=200):
 
     # Look for search terms.
     for comment in comments:
-
         try:
             comment_author = comment.author.name
         except AttributeError:
@@ -535,11 +577,15 @@ def zifang_comments(comment_limit=200):
             except AttributeError:
                 continue  # No author to notify.
 
-            author_tag = (f"*u/{op} (OP), the following Wikipedia pages "
-                          "may be of interest to your request.*\n\n")
+            author_tag = (
+                f"*u/{op} (OP), the following Wikipedia pages "
+                "may be of interest to your request.*\n\n"
+            )
             comment.reply(author_tag + wp_info + ZF_DISCLAIMER)
-            logger.info(f"[ZF] >> Replied with Wikipedia page information for "
-                        f"the OP u/{op} on post `{post_id}`.")
+            logger.info(
+                f"[ZF] >> Replied with Wikipedia page information for "
+                f"the OP u/{op} on post `{post_id}`."
+            )
             acted_comments.append(comment.id)
 
     # Save the relevant comment IDs to the wikipage.
@@ -561,5 +607,5 @@ if __name__ == "__main__":
         record_error_log(error_entry)  # Save the error to a log.
         logger.error("[ZF] Main: > Logged this error. Ended run.")
     except KeyboardInterrupt:  # Manual termination of the script with Ctrl-C.
-        logger.info('Manual user shutdown.')
+        logger.info("Manual user shutdown.")
         sys.exit()
