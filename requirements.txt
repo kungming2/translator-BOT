@@ -2,11 +2,10 @@ bs4
 fuzzywuzzy[speedup]
 google
 hangul_romanize
-itertools
-jieba==0.38
+jieba
 lxml
 mafan
-Mecab
+mecab-python3
 pafy
 praw
 prawcore
