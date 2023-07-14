@@ -3,6 +3,8 @@
 """
 Zifang is a new addition to help Ziwen with some ancillary tasks.
 """
+from collections import defaultdict
+from itertools import combinations
 import sys
 import time
 import traceback
@@ -25,8 +27,8 @@ as they define many of the basic functions of the bot.
 BOT_NAME = "Zifang"
 VERSION_NUMBER = "0.80"
 USER_AGENT = (
-    "{} {}, another assistant for r/translator. "
-    "Written and maintained by u/kungming2.".format(BOT_NAME, VERSION_NUMBER)
+    f"{BOT_NAME} {VERSION_NUMBER}, another assistant for r/translator. "
+    "Written and maintained by u/kungming2."
 )
 SUBREDDIT = "translator"
 
@@ -41,7 +43,7 @@ KEYWORDS = []  # for future use with !bot
 ZF_DISCLAIMER = BOT_DISCLAIMER.replace("Ziwen", "Zifang")
 
 # Connecting to the Reddit API via OAuth.
-logger.info("[ZF] Startup: Logging in as u/{}...".format(USERNAME))
+logger.info(f"[ZF] Startup: Logging in as u/{USERNAME}...")
 reddit = praw.Reddit(
     client_id=ZIFANG_APP_ID,
     client_secret=ZIFANG_APP_SECRET,
@@ -51,9 +53,7 @@ reddit = praw.Reddit(
 )
 r = reddit.subreddit(SUBREDDIT)
 logger.info(
-    "[ZF] Startup: Initializing {} {} for r/{} with languages module {}.".format(
-        BOT_NAME, VERSION_NUMBER, SUBREDDIT, VERSION_NUMBER_LANGUAGES
-    )
+    f"[ZF] Startup: Initializing {BOT_NAME} {VERSION_NUMBER} for r/{SUBREDDIT} with languages module {VERSION_NUMBER_LANGUAGES}."
 )
 
 
@@ -76,10 +76,7 @@ def record_error_log(error_save_entry):
         error_date = strftime("%Y-%m-%d [%I:%M:%S %p]")
 
         try:
-            log_template = "\n-----------------------------------\n{} ({} {})\n{}\n{}"
-            log_template_txt = log_template.format(
-                error_date, BOT_NAME, VERSION_NUMBER, error_save_entry
-            )
+            log_template_txt = f"\n-----------------------------------\n{error_date} ({BOT_NAME} {VERSION_NUMBER})\n{error_save_entry}"
             f.write(log_template_txt)
         except (
             UnicodeEncodeError
@@ -92,14 +89,10 @@ def record_error_log(error_save_entry):
 
 def is_mod(username):
     """Checks if the user is a moderator of the subreddit."""
-    mod_list = r.moderator()
-    mod_list = [x.name.lower() for x in mod_list]
+    mod_list = [x.name.lower() for x in r.moderator()]
     print(mod_list)
 
-    if username in mod_list:
-        return True
-    else:
-        return False
+    return username in mod_list
 
 
 """CLOSEOUT ROUTINE"""
@@ -112,9 +105,8 @@ def wiki_access(post_ids, retrieve=False):
     """
     wiki_page = reddit.subreddit("translatorBOT").wiki["zifang_config"]
     processed_data = wiki_page.content_md
-    previous_ids = yaml.safe_load(
-        processed_data
-    )  # Convert YAML text into a Python list.
+    # Convert YAML text into a Python list.
+    previous_ids = yaml.safe_load(processed_data)
 
     # In rare cases where the configuration page has no data.
     if previous_ids is None:
@@ -138,8 +130,6 @@ def wiki_access(post_ids, retrieve=False):
     else:
         logger.debug(f"[ZF]: No new IDs.")
 
-    return
-
 
 def closeout(list_posts):
     """
@@ -159,7 +149,7 @@ def closeout(list_posts):
     # Compile a list of posts that we can take action on.
     for post in list_posts:
         try:
-            post.author.name.lower()
+            post.author.name
         except AttributeError:  # No use mailing to non-existent people.
             continue
 
@@ -194,7 +184,7 @@ def closeout(list_posts):
         language = re.sub(r"\([^)]*\)", "", post.link_flair_text)
         if "[" in language:  # Generally for defined multiple tags.
             language = language.split("[")[0].strip()
-        time_delta = round((current_time - post.created_utc) / 86400, 1)
+        time_delta = round(time_delta, 1)
         subject_line = ZF_CLOSING_OUT_SUBJECT.format(language=language)
         closeout_message = ZF_CLOSING_OUT_MESSAGE.format(
             author=post.author.name,
@@ -220,8 +210,6 @@ def closeout(list_posts):
         wiki_access(actionable_posts_ids)
         logger.debug(f"[ZF]: > Saved post IDs to the wikipage.")
 
-    return
-
 
 """DUPLICATE DETECTOR"""
 
@@ -232,17 +220,14 @@ def fetch_removal_reasons(subreddit):
     :param subreddit: Name of the subreddit.
     :return: `None` if there's nothing, a list otherwise.
     """
-    reasons = {}
-    i = 1
 
-    for removal_reason in reddit.subreddit(subreddit).mod.removal_reasons:
-        reasons[i] = (removal_reason.title, removal_reason.id, removal_reason.message)
-        i += 1
+    reasons = [
+        (removal_reason.title, removal_reason.id, removal_reason.message)
+        for removal_reason in reddit.subreddit(subreddit).mod.removal_reasons
+    ]
 
     if reasons:
-        return reasons
-    else:
-        return
+        return {index + 1: value for index, value in enumerate(reasons)}
 
 
 def search_removal_reasons(reasons_dict, prompt):
@@ -250,17 +235,10 @@ def search_removal_reasons(reasons_dict, prompt):
     `fetch_removal_reasons()` and allows for us to only grab it once
     from the site. Then, you can run a search amongst the reasons for
     it and get the specific removal reason ID."""
-    reason_id = None
 
-    for key, (entry, entry_id, description) in reasons_dict.items():
+    for entry, entry_id, _description in reasons_dict.values():
         if prompt.lower().strip() in entry.lower():
-            reason_id = entry_id
-            break
-
-    if reason_id is not None:
-        return reason_id
-    else:
-        return None
+            return entry_id
 
 
 def calculate_similarity(strings):
@@ -269,15 +247,13 @@ def calculate_similarity(strings):
     similarity_scores = []
 
     # Iterate over each pair of strings
-    for i in range(len(strings)):
-        for j in range(i + 1, len(strings)):
-            similarity_score = fuzz.token_sort_ratio(strings[i], strings[j])
-            similarity_scores.append(similarity_score)
+    similarity_scores = [
+        fuzz.token_sort_ratio(strings[i], strings[j])
+        for i, j in combinations(range(len(strings)), 2)
+    ]
 
     # Average out.
-    similarity_score = sum(similarity_scores) / len(similarity_scores)
-
-    return similarity_score
+    return sum(similarity_scores) / len(similarity_scores)
 
 
 def numerical_sequence(strings):
@@ -304,9 +280,7 @@ def numerical_sequence(strings):
     # Go through the differences.
     logger.info(f">>> [ZF]: Numbers found in the titles were: {numbers}")
     total_sums = [sum(x) for x in numbers]
-    differences = [
-        total_sums[i + 1] - total_sums[i] for i in range(len(total_sums) - 1)
-    ]
+    differences = [b - a for a, b in zip(total_sums, total_sums[1:])]
     average_difference = sum(differences) / len(differences)
 
     logger.info(f">>> [ZF]: The numerical sequence difference is {average_difference}.")
@@ -314,12 +288,7 @@ def numerical_sequence(strings):
     # If the average difference in numbers between the titles is lower
     # than our threshold, return `False`, telling the other function
     # NOT to remove it.
-    if average_difference == 0:
-        return True
-    elif average_difference < NUMERICAL_SIMILARITY:
-        return False
-    else:
-        return True
+    return average_difference == 0 or average_difference >= NUMERICAL_SIMILARITY
 
 
 def duplicate_detector(list_posts):
@@ -330,8 +299,8 @@ def duplicate_detector(list_posts):
     :param list_posts: A list of Reddit PRAW submissions.
     :return: A list of Reddit IDs to remove, or `None`.
     """
-    author_list = {}
-    titles = {}
+    author_list = defaultdict(int)
+    titles = defaultdict(list)
     actionable_posts = []
     current_time = int(time.time())
 
@@ -358,19 +327,15 @@ def duplicate_detector(list_posts):
 
         # Exempt moderators.
         if is_mod(post_author):
-            logger.info(f"[ZF] > The post `{post.id}` was posted by " "a moderator.")
+            logger.info(f"[ZF] > The post `{post.id}` was posted by a moderator.")
             continue
 
-        if post_author in author_list:
-            author_list[post_author] += 1
-            titles[post_author].append((post.title.lower(), post.id))
-        else:
-            author_list[post_author] = 1
-            titles[post_author] = [(post.title.lower(), post.id)]
+        author_list[post_author] += 1
+        titles[post_author].append((post.title.lower(), post.id))
 
     # Filter out key-value pairs with a value of 1, then
     # sort the dictionary by the largest values in descending order
-    final_dict = {key: value for key, value in author_list.items() if value != 1}
+    final_dict = dict(filter(lambda item: item[1] != 1, author_list.items()))
     final_dict = dict(sorted(final_dict.items(), key=lambda x: x[1], reverse=True))
 
     # Process the potential duplicates by the same author.
@@ -405,8 +370,6 @@ def duplicate_detector(list_posts):
     if actionable_posts:
         return actionable_posts
 
-    return
-
 
 """WIKIPEDIA DETECTOR (COMMENTS"""
 
@@ -427,7 +390,6 @@ def wikipedia_lookup(terms, language="English"):
              results, otherwise `None`.
     """
     entries = []
-    entry_format = "\n**[{term}]({link})**\n\n> {summary}\n\n"
 
     # Code for searching non-English Wikipedia, currently not needed.
     if language is not "English":
@@ -474,8 +436,7 @@ def wikipedia_lookup(terms, language="English"):
         term_entry = term_entry.replace(")", "\)")
 
         # Form the entry text.
-        entry = entry_format.format(term=term, link=term_entry, summary=term_summary)
-        entries.append(entry)
+        entries.append(f"\n**[{term}]({term_entry})**\n\n> {term_summary}\n\n")
         logger.info(f"[ZF]: >> Information for '{term}' retrieved.")
 
     if entries:
@@ -483,8 +444,6 @@ def wikipedia_lookup(terms, language="English"):
         logger.info(f"[ZF]: > Wikpedia entry data obtained.")
         action_counter(len(entries), "Wikipedia lookup")
         return body_text
-    else:
-        return
 
 
 """MAIN RUNTIME"""
@@ -531,8 +490,6 @@ def zifang_posts():
     # Check for close-out.
     closeout(posts)
 
-    return
-
 
 def zifang_comments(comment_limit=200):
     """
@@ -541,11 +498,10 @@ def zifang_comments(comment_limit=200):
     Currently acts as a Wikipedia lookup bot.
     :return: Nothing
     """
-    comments = []
     acted_comments = []
     previous_ids = wiki_access(None, retrieve=True)
 
-    comments += list(r.comments(limit=comment_limit))
+    comments = list(r.comments(limit=comment_limit))
     comments.reverse()  # Reverse it so that we start processing the older ones first. Newest ones last.
 
     # Look for search terms.
@@ -583,15 +539,13 @@ def zifang_comments(comment_limit=200):
             )
             comment.reply(author_tag + wp_info + ZF_DISCLAIMER)
             logger.info(
-                f"[ZF] >> Replied with Wikipedia page information for "
+                "[ZF] >> Replied with Wikipedia page information for "
                 f"the OP u/{op} on post `{post_id}`."
             )
             acted_comments.append(comment.id)
 
     # Save the relevant comment IDs to the wikipage.
     wiki_access(acted_comments)
-
-    return
 
 
 # */10 * * * *
