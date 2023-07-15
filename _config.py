@@ -108,7 +108,7 @@ credentials_loader()
 """ LOGGING """
 
 # Logging code, defining the basic logger.
-logformatter = "%(levelname)s: %(asctime)s - %(message)s"
+logformatter = "%(levelname)s: %(asctime)s [%(filename)s:%(lineno)d]- %(message)s"
 logging.basicConfig(
     format=logformatter, level=logging.INFO
 )  # By default only show INFO or higher levels.

@@ -34,7 +34,6 @@ from _language_consts import (
     MAIN_LANGUAGES,
     ISO_MACROLANGUAGES,
     CJK_LANGUAGES,
-    ISO_LANGUAGE_COUNTRY_ASSOCIATED,
 )
 from _config import *
 from _responses import *
@@ -1018,7 +1017,7 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
     points_status = [x for x in points_status if x[1] != 0]
 
     if translator_to_add is not None:  # We can record this information in the Ajo.
-        cajo = ajo_loader(oid, cursor_ajo, logger)
+        cajo = ajo_loader(oid, cursor_ajo, logger, POST_TEMPLATES, reddit)
         if cajo is not None:
             cajo.add_translators(translator_to_add)  # Add the name to the Ajo.
             ajo_writer(cajo, cursor_ajo, conn_ajo, logger)
@@ -1524,7 +1523,7 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
         mid = re.search(r"comments/(.*)/\w", opermalink).group(
             1
         )  # Get just the Reddit ID.
-        majo = ajo_loader(mid, cursor_ajo, logger)  # Load the Ajo
+        majo = ajo_loader(mid, cursor_ajo, logger, POST_TEMPLATES, reddit)  # Load the Ajo
 
         # Checking the language history and the user history of the particular submission.
         try:
@@ -3114,7 +3113,7 @@ def ziwen_posts():
                 )  # Create an Ajo object, reload the post.
                 if len(contacted) != 0:  # We have a list of notified users.
                     pajo.add_notified(contacted)
-                ajo_writer(pajo)  # Save it to the local database
+                ajo_writer(pajo, cursor_ajo, conn_ajo, logger)  # Save it to the local database
                 logger.debug(
                     "[ZW] Posts: Created Ajo for new post and saved to local database."
                 )
@@ -3200,7 +3199,7 @@ def ziwen_bot():
         # Create an Ajo object.
         if css_check(oflair_css):
             # Check the database for the Ajo.
-            oajo = ajo_loader(oid, cursor_ajo, logger)
+            oajo = ajo_loader(oid, cursor_ajo, logger, POST_TEMPLATES, reddit)
 
             if (
                 oajo is None
@@ -4339,7 +4338,7 @@ def ziwen_bot():
             "meta",
         ]:  # There's nothing to change for these
             oajo.update_reddit()  # Push all changes to the server
-            ajo_writer(oajo)  # Write the Ajo to the local database
+            ajo_writer(oajo, cursor_ajo, conn_ajo, logger)  # Write the Ajo to the local database
             logger.info(
                 f"[ZW] Bot: Ajo for {oid} updated and saved to the local database."
             )
@@ -4480,7 +4479,7 @@ def progress_checker():
 
         # Load its Ajo.
         oajo = ajo_loader(
-            oid, cursor_ajo, logger
+            oid, cursor_ajo, logger, POST_TEMPLATES, reddit
         )  # First check the local database for the Ajo.
         if (
             oajo is None
@@ -4488,7 +4487,7 @@ def progress_checker():
             logger.debug(
                 "[ZW] progress_checker: Couldn't find an Ajo in the local database. Loading from Reddit."
             )
-            oajo = Ajo(post)
+            oajo = Ajo(post, POST_TEMPLATES, reddit)
 
         # Process the post and get some data out of it.
         komento_data = komento_analyzer(post)
@@ -4510,7 +4509,7 @@ def progress_checker():
                 # Update the Ajo.
                 oajo.set_status("untranslated")
                 oajo.update_reddit()  # Push all changes to the server
-                ajo_writer(oajo)  # Write the Ajo to the local database
+                ajo_writer(oajo, cursor_ajo, conn_ajo, logger)  # Write the Ajo to the local database
             else:  # This post is still under the time limit. Do nothing.
                 continue
 

@@ -69,7 +69,7 @@ def ajo_writer(new_ajo, cursor_ajo, conn_ajo, logger):
     logger.debug("[ZW] ajo_writer: Wrote Ajo to local database.")
 
 
-def ajo_loader(ajo_id, cursor_ajo, logger):
+def ajo_loader(ajo_id, cursor_ajo, logger, post_templates, reddit):
     """
     This function takes an ID string and returns an Ajo object from a local database that matches that string.
     This ID is the same as the ID of the Reddit post it's associated with.
@@ -87,7 +87,7 @@ def ajo_loader(ajo_id, cursor_ajo, logger):
         return None
     else:  # We do have stored data.
         new_ajo_dict = eval(new_ajo[2])  # We only want the stored dict here.
-        new_ajo = Ajo(new_ajo_dict)
+        new_ajo = Ajo(new_ajo_dict, post_templates, reddit)
         logger.debug("[ZW] ajo_loader: Loaded Ajo from local database.")
         return new_ajo  # Note: the Ajo class can build itself from this dict.
 
