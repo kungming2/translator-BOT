@@ -1524,7 +1524,7 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
         mid = re.search(r"comments/(.*)/\w", opermalink).group(
             1
         )  # Get just the Reddit ID.
-        majo = ajo_loader(mid)  # Load the Ajo
+        majo = ajo_loader(mid, cursor_ajo, logger)  # Load the Ajo
 
         # Checking the language history and the user history of the particular submission.
         try:
@@ -3110,7 +3110,7 @@ def ziwen_posts():
             # Finally, create an Ajo object and save it locally.
             if final_css_class not in ["meta", "community"]:
                 pajo = Ajo(
-                    reddit.submission(id=post.id), POST_TEMPLATES
+                    reddit.submission(id=post.id), POST_TEMPLATES, reddit
                 )  # Create an Ajo object, reload the post.
                 if len(contacted) != 0:  # We have a list of notified users.
                     pajo.add_notified(contacted)
@@ -3200,13 +3200,13 @@ def ziwen_bot():
         # Create an Ajo object.
         if css_check(oflair_css):
             # Check the database for the Ajo.
-            oajo = ajo_loader(oid)
+            oajo = ajo_loader(oid, cursor_ajo, logger)
 
             if (
                 oajo is None
             ):  # We couldn't find a stored dict, so we will generate it from the submission.
                 logger.debug("[ZW] Bot: Couldn't find an AJO in the local database.")
-                oajo = Ajo(osubmission)
+                oajo = Ajo(osubmission, POST_TEMPLATES, reddit)
 
             if oajo.is_bot_crosspost:
                 komento_data = komento_analyzer(komento_submission_from_comment(pid))
@@ -4479,7 +4479,9 @@ def progress_checker():
             continue
 
         # Load its Ajo.
-        oajo = ajo_loader(oid)  # First check the local database for the Ajo.
+        oajo = ajo_loader(
+            oid, cursor_ajo, logger
+        )  # First check the local database for the Ajo.
         if (
             oajo is None
         ):  # We couldn't find a stored dict, so we will generate it from the submission.
