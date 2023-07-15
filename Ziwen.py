@@ -31,6 +31,12 @@ from mafan import simplify, tradify
 from wiktionaryparser import WiktionaryParser
 
 from _languages import *
+from _language_consts import (
+    MAIN_LANGUAGES,
+    ISO_MACROLANGUAGES,
+    CJK_LANGUAGES,
+    ISO_LANGUAGE_COUNTRY_ASSOCIATED,
+)
 from _config import *
 from _responses import *
 

@@ -15,3 +15,5 @@ tinysegmenter
 wikipedia
 wiktionaryparser
 youtube_dl
+psutil
+korean_romanizer
