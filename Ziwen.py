@@ -8,10 +8,10 @@ members with useful reference information and enforces the community's formattin
 """
 
 import calendar
-import datetime
 import sqlite3  # For processing and accessing the databases.
 import time
 import traceback  # For documenting errors that are encountered.
+import sys
 
 import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 import prawcore  # The base module praw for error logging.
@@ -22,12 +22,11 @@ import romkan  # Needed for automatic Japanese romaji conversion.
 import tinysegmenter  # Basic segmenter for Japanese; not used on Windows.
 
 import googlesearch
-import pafy  # Gets YouTube video length.
+import psutil
 import requests
-import youtube_dl  # Needed for some exception logging, also used by pafy.
-import wikipedia  # Needed to include Wikipedia content.
 
 from bs4 import BeautifulSoup as Bs
+from korean_romanizer.romanizer import Romanizer
 from lxml import html
 from mafan import simplify, tradify
 from wiktionaryparser import WiktionaryParser
@@ -35,7 +34,6 @@ from wiktionaryparser import WiktionaryParser
 from _languages import *
 from _config import *
 from _responses import *
-from Data import _ko_romanizer
 
 '''
 UNIVERSAL VARIABLES
@@ -45,7 +43,7 @@ as they define many of the basic functions of the bot.
 '''
 
 BOT_NAME = 'Ziwen'
-VERSION_NUMBER = '1.8.11'
+VERSION_NUMBER = '1.8.27'
 USER_AGENT = ('{} {}, a notifications messenger, general commands monitor, and moderator for r/translator. '
               'Written and maintained by u/kungming2.'.format(BOT_NAME, VERSION_NUMBER))
 SUBREDDIT = "translator"
@@ -65,7 +63,7 @@ MESSAGES_OKAY = True
 NOTIFICATIONS_LIMIT = 100
 
 '''KEYWORDS LISTS'''
-# These are the the commands on r/translator.
+# These are the commands on r/translator.
 KEYWORDS = ["!page:", "`", "!missing", "!translated", "!id:", "!set:", "!note:", "!reference:", "!search:",
             "!doublecheck", "!identify:", '!translate', '!translator', '!delete', '!claim',
             '!reset', '!long', '!restore']
@@ -612,7 +610,7 @@ class Ajo:
                 self.is_supported = True
                 self.language_history = []
 
-                # Handle DEFINED MULTIPLE
+                # Handle DEFINED MULTIPLE posts.
                 if "[" in reddit_submission.link_flair_text:  # There is a list of languages included in the flair
                     # Return their names from the code.
                     # test_list_string = "Multiple Languages [DE, FR]"
@@ -1013,7 +1011,8 @@ class Ajo:
     # noinspection PyAttributeOutsideInit,PyAttributeOutsideInit
     def update_reddit(self):
         """
-        Sets the flair properly on Reddit. No arguments taken. It collates all the attributes and decides what flair
+        Sets the flair properly on Reddit. No arguments taken.
+        It collates all the attributes and decides what flair
         to give it, then selects the appropriate template for it.
 
         :return:
@@ -1047,6 +1046,7 @@ class Ajo:
             elif self.language_name == "Unknown":  # It's an Unknown post.
                 code_tag = "[?]"
                 self.output_oflair_css = "unknown"
+                print(f">>> Update Reddit: Unknown post `{self.id}`.")
             elif self.language_name is None or self.language_name == "Generic" or self.language_name == "":
                 # There is no language flair defined.
                 code_tag = "[--]"
@@ -1101,6 +1101,7 @@ class Ajo:
                         self.output_oflair_text = "{} (Long)".format(self.output_oflair_text)
                 else:  # This is for Unknown posts
                     if self.is_script:
+                        print(f">>> Update Reddit: Is `{self.id}` script? `{self.is_script}`.")
                         self.output_oflair_text = self.script_name + " (Script)"
         else:  # Flair text for multiple posts
             if code_tag is None:
@@ -1115,11 +1116,17 @@ class Ajo:
         # original_submission.mod.flair(text=self.output_oflair_text, css_class=self.output_oflair_css)
 
         # Push the updated text to the server (redesign version)
-        # Check the global template dictionary
+        # Check the global template dictionary.
         # If we have the css in the keys as a proper flair, then we can mark it with the new template.
         if self.output_oflair_css in POST_TEMPLATES.keys():
             output_template = POST_TEMPLATES[self.output_oflair_css]
-            original_submission.flair.select(output_template, self.output_oflair_text)
+            logger.info("[ZW] Update Reddit: Template for CSS `{}` is `{}`.".format(self.output_oflair_css,
+                                                                                    output_template))
+            original_submission.flair.select(flair_template_id=output_template,
+                                             text=self.output_oflair_text)
+            logger.info("[ZW] Set post `{}` to CSS `{}` and text `{}`.".format(self.id,
+                                                                               self.output_oflair_css,
+                                                                               self.output_oflair_text))
 
 
 def ajo_writer(new_ajo):
@@ -1768,6 +1775,22 @@ Recording functions are all prefixed with `record` in their name.
 '''
 
 
+def record_activity_csv(data_tuple):
+    """
+    Function that writes tuples of data to a CSV. It can be used for
+    various things, but the first part should be activity type, then
+    the date and time. This is written to FILE_ADDRESS_ACTIVITY.
+    :param data_tuple: Package of data we want to insert.
+    :return:
+    """
+    with open(FILE_ADDRESS_ACTIVITY, mode="a", newline='') as csv_file:
+        data_writer = csv.writer(csv_file, delimiter=',', quotechar='"',
+                                 quoting=csv.QUOTE_MINIMAL)
+        data_writer.writerow(data_tuple)
+
+    return
+
+
 def record_filter_log(filtered_title, ocreated, filter_type):
     """
     Simple function to write the titles of removed posts to an external text file as an entry in a Markdown table.
@@ -1904,8 +1927,7 @@ def record_to_wiki(odate, otitle, oid, oflair_text, s_or_i, oflair_new, user=Non
 
     if s_or_i:  # Means we should write to the 'saved' page:
         page_content = reddit.subreddit(SUBREDDIT).wiki["saved"]
-        new_content = ("{} | [{}](https://redd.it/{}) | {} | u/{}".format(oformat_date, otitle, oid, oflair_text,
-                                                                          user))
+        new_content = ("| {} | [{}](https://redd.it/{}) | {} |".format(oformat_date, otitle, oid, oflair_text,))
         page_content_new = str(page_content.content_md) + '\n' + new_content
         # Adds this language entry to the 'saved page'
         page_content.edit(content=page_content_new, reason='Ziwen: updating the "Saved" page with a new link')
@@ -1966,7 +1988,7 @@ def messaging_user_statistics_writer(body_text, username):
     Function that records which commands are written by whom, cumulatively, and stores it into an SQLite file.
     Takes the body text of their comment as an input.
     The database used is the main one but with a different table.
-    
+
     :param body_text: The content of a comment, likely containing r/translator commands.
     :param username: The username of a Reddit user.
     :return: Nothing.
@@ -2173,7 +2195,8 @@ def messaging_language_frequency(language_name):
     overall_page = reddit.subreddit(SUBREDDIT).wiki[language_name.lower()]  # Fetch the wikipage.
     try:
         overall_page_content = str(overall_page.content_md)
-    except (prawcore.exceptions.NotFound, prawcore.exceptions.BadRequest):  # There is no page for this language
+    except (prawcore.exceptions.NotFound, prawcore.exceptions.BadRequest, KeyError, praw.exceptions.RedditAPIException):
+        # There is no page for this language
         return None  # Exit with nothing.
     except prawcore.exceptions.Redirect:  # Tends to happen with "community" requests
         return None  # Exit with nothing.
@@ -2356,7 +2379,7 @@ def notifier_duplicate_checker(language_code, username):
     """
     Function that checks to see if there is a duplicate entry in the notifications database. That is, there is a user
     who is signed up for this specific language code.
-    
+
     :param language_code: The language code the user may be signed up for.
     :param username: The username of a Reddit user.
     :return: True if entry pair is in there (the user is signed up for this language), False if not.
@@ -2554,13 +2577,20 @@ def notifier_equalizer(notify_users_list, language_name, monthly_limit):
         if language_name == "Unknown":  # Hardcode Unknown frequency
             monthly_number_notifications = 260
         else:
-            monthly_number_notifications = messaging_language_frequency(language_name)[1][1]
+            frequency_data = messaging_language_frequency(language_name)
+            if frequency_data:
+                monthly_number_notifications = frequency_data[1][1]
+            else:  # No results for this.
+                monthly_number_notifications = 1
     except TypeError:  # If there are no statistics for this language, just set it to low.
         monthly_number_notifications = 1
 
     # Get the number of users we're going to randomly pick for this language
-    users_to_contact = round(((users_number * monthly_limit) / monthly_number_notifications), 0)
-    users_to_contact = int(users_to_contact)
+    if monthly_number_notifications == 0:
+        users_to_contact = limit_number
+    else:
+        users_to_contact = round(((users_number * monthly_limit) / monthly_number_notifications), 0)
+        users_to_contact = int(users_to_contact)
 
     # There are more users to contact than the recommended amount. Randomize.
     if users_to_contact < users_number:
@@ -2809,6 +2839,11 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
     action_counter(len(notify_users_list), "Notifications")  # Write to the counter log how many we send
     otitle = notifier_title_cleaner(otitle)  # Clean up the title, prevent Markdown errors with square brackets
 
+    # Exit if there is nothing to send.
+    if len(notify_users_list) == 0:
+        return []
+
+    messaging_start = time.time()
     for username in notify_users_list:
         if not is_identify:  # This is just the regular notification
             message = MSG_NOTIFY.format(username=username, language_name=language_name, post_type=post_type,
@@ -2824,7 +2859,13 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
             logger.info("[ZW] Notifier: An error occured while sending a message to u/{}. Removing...".format(username))
             notifier_list_pruner(username)  # Remove the username from our database.
 
-    logger.info("[ZW] Notifier: Sent notifications to {} users signed up for {}.".format(str(len(notify_users_list)),
+    # Record to a log how long it took.
+    messaging_mins = (time.time() - messaging_start) / 60
+    seconds_per_message = (time.time() - messaging_start) / len(notify_users_list)
+    payload = (time_convert_to_string(messaging_start), "Messaging run", len(notify_users_list),
+               language_name, messaging_mins, round(seconds_per_message, 2))
+    record_activity_csv(payload)
+    logger.info("[ZW] Notifier: Sent notifications to {} users signed up for {}.".format(len(notify_users_list),
                                                                                          language_name))
 
     return notify_users_list
@@ -3109,8 +3150,80 @@ def zh_character_oc_search(character):
         return None
     else:  # Character exists!
         character_data = mc_oc_readings[character]  # Get the tuple
-        to_post = "\n**Middle Chinese** | \**{}*\n**Old Chinese** | \*{}*".format(character_data[0], character_data[1])
+        to_post = ("\n**Middle Chinese** | \**{}*"
+                   "\n**Old Chinese** | \*{}*".format(character_data[0], character_data[1]))
         return to_post
+
+
+def zh_character_variant_search(searchTerm, retries=3):
+    """
+    Function to search the MOE dictionary for a link to character
+    variants, and returns the link if found. None if nothing is found.
+    """
+
+    searchTerm = searchTerm.strip()
+    entry_url = None
+    timeout_amount = 4
+
+    session = requests.Session()
+    baseURL = "https://dict.variants.moe.edu.tw/variants/rbt"
+    try:
+        initialResp = session.get(
+            f"{baseURL}/query_by_standard_tiles.rbt",
+            timeout=0.5,
+        )
+    except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError):
+        logger.info("Issue with gathering session for variant search.")
+        return
+
+    try:
+        rci = re.search("componentId=(rci_.*_4)", initialResp.text).group(1)
+        cookies = session.cookies.get_dict()  # sets JSESSIONID
+    except AttributeError:
+        return
+
+    searchParams = {
+        "rbtType": "AJAX_INVOKE",
+        "componentId": rci,
+    }
+
+    data = {"searchedText": searchTerm}
+    try:
+        searchResponse = requests.post(
+            f"{baseURL}/query_by_standard.rbt",
+            params=searchParams,
+            cookies=cookies,
+            data=data,
+            timeout=1,
+        )
+        fetchID = Bs(searchResponse.text, "lxml").findAll("a")[0].get("id")
+    except (IndexError, requests.exceptions.ReadTimeout):
+        return
+
+    fetchParams = {"quote_code": fetchID}
+
+    # Regular function iteration.
+    for _ in range(retries):
+        try:
+            response = requests.get(
+                f"{baseURL}/word_attribute.rbt",
+                params=fetchParams,
+                cookies=cookies,
+                timeout=timeout_amount,
+            )
+
+            # Note that the full HTML of the page is response.text.
+            entry_url = response.url
+            if 'quote_code' not in entry_url:
+                entry_url = None
+
+            return entry_url
+        except (ConnectionError, requests.exceptions.ReadTimeout):
+            logger.info("Timed out for variant search, trying again.")
+            timeout_amount += 2
+            continue
+
+    return entry_url
 
 
 def zh_character_min_hak(character):
@@ -3142,11 +3255,13 @@ def zh_character_min_hak(character):
 
         if len(hak_reading) != 0:
             # Format the tones and words properly with superscript.
+            # Wrap in parentheses for consistency
             hak_reading_new = []
             hak_reading = re.sub(r'(\d{1,4})([a-z])', r'\1 ', hak_reading)  # Add spaces between words.
             hak_reading = hak_reading.split(" ")
             for word in hak_reading:
-                new_word = re.sub(r'([a-z])(\d)', r'\1^\2', word)
+                new_word = re.sub(r'([a-z])(\d)', r'\1^(\2', word)
+                new_word += ")"
                 hak_reading_new.append(new_word)
             hak_reading = " ".join(hak_reading_new)
 
@@ -3171,11 +3286,19 @@ def zh_character_calligraphy_search(character):
 
     character = simplify(character)
 
-    # First get data from http://shufa.guoxuedashi.com (this will be included as a URL)
+    # First get data from http://sfds.cn (this will be included as a URL)
     unicode_assignment = hex(ord(character)).upper()[2:]  # Get the Unicode assignment (eg 738B)
-    gx_url = 'http://shufa.guoxuedashi.com/{}/'.format(unicode_assignment)
+    gx_url = 'http://www.sfds.cn/{}/'.format(unicode_assignment)
 
-    # Next get an image from Shufazidian
+    # Secondly, get variant data from the MoE dictionary.
+    variant_link = zh_character_variant_search(tradify(character))
+    if variant_link:
+        variant_formatted = "[YTZZD]({})".format(variant_link)
+    else:
+        variant_formatted = ("[YTZZD](https://dict.variants.moe.edu.tw/variants/rbt/"
+                             "query_by_standard_tiles.rbt?command=clear)")
+
+    # Next get an image from Shufazidian.
     formdata = {'sort': '7', 'wd': character}  # Form data to pass on to the POST system.
     try:
         rdata = requests.post("http://www.shufazidian.com/", data=formdata)
@@ -3202,8 +3325,8 @@ def zh_character_calligraphy_search(character):
         if len(complete_image) != 0:
             logger.debug("[ZW] ZH-Calligraphy: There is a Chinese calligraphic image for " + character + ".")
             image_format = ("\n\n**Chinese Calligraphy Variants**: [{}]({}) (*[SFZD](http://www.shufazidian.com/)*, "
-                            "*[GXDS]({})*)")
-            image_string = image_format.format(character, complete_image, gx_url)
+                            "*[SFDS]({})*, *{}*)")
+            image_string = image_format.format(character, complete_image, gx_url, variant_formatted)
     else:
         image_string = None
 
@@ -3218,7 +3341,7 @@ def zh_character_other_readings(character):
     A function to get non-Chinese pronunciations of characters (Sino-Xenic readings) from the Chinese Character API.
     We use the Korean, Vietnamese, and Japanese readings.
     This information is attached to single-character lookups for Chinese and integrated into a table.
-    For more information, visit: http://ccdb.hemiola.com/
+    For more information, visit: https://ccdb.hemiola.com/
 
     :param character: Any Chinese character.
     :return: None or a string of several table lines with the readings formatted in Markdown.
@@ -3258,9 +3381,9 @@ def zh_character_other_readings(character):
             to_post.append(ja_string)
     if 'kHangul' in unicode_rep_jdict and 'kKorean' in unicode_rep_jdict:
         ko_hangul = unicode_rep_jdict['kHangul']
-        ko_latin = unicode_rep_jdict['kKorean']
-        if ko_latin is not None and ko_hangul is not None:
-            ko_latin = ko_latin.lower()
+        # We apply RR romanization to this.
+        if ko_hangul is not None:
+            ko_latin = Romanizer(ko_hangul).romanize().lower()
             ko_latin = ko_latin.replace(" ", ", ")  # Replace spaces with commas
             ko_hangul = ko_hangul.replace(" ", ", ")  # Replace spaces with commas
             ko_total = "{} / *{}*".format(ko_hangul, ko_latin)
@@ -3296,10 +3419,11 @@ def zh_character(character):
     if len(multi_character_list) > 1:  # Whether or not multiple characters are passed to this function
         multi_mode = True
 
-    eth_page = requests.get('https://www.mdbg.net/chindict/chindict.php?page=chardict&cdcanoce=0&cdqchi=' + character,
+    eth_page = requests.get('https://www.mdbg.net/chinese/dictionary?page=chardict&cdcanoce=0&cdqchi=' + character,
                             headers=ZW_USERAGENT)
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
     pronunciation = [div.text_content() for div in tree.xpath('//div[contains(@class,"pinyin")]')]
+    # Note that the Yue pronunciation is given as `['zyun2, zyun3']`
     cmn_pronunciation, yue_pronunciation = pronunciation[::2], pronunciation[1::2]
 
     if len(pronunciation) == 0:  # Check to not return anything if the entry is invalid
@@ -3311,11 +3435,17 @@ def zh_character(character):
         cmn_pronunciation = ' / '.join(cmn_pronunciation)
         yue_pronunciation = tree.xpath('//a[contains(@onclick,"pronounce-jyutping")]/text()')
         yue_pronunciation = ' / '.join(yue_pronunciation)
+        # Add superscript to the numbers. Wrapped in paragraphs so that
+        # it displays the same on both New and Old Reddit.
         for i in range(0, 9):
-            yue_pronunciation = yue_pronunciation.replace(str(i), "^%s " % str(i))
+            yue_pronunciation = yue_pronunciation.replace(str(i), "^(%s " % str(i))
+        for i in range(0, 9):
+            yue_pronunciation = yue_pronunciation.replace(str(i), "%s)" % str(i))
+
         meaning = tree.xpath('//div[contains(@class,"defs")]/text()')
         meaning = '/ '.join(meaning)
         meaning = meaning.strip()
+
         if tradify(character) == simplify(character):
             logger.debug('[ZW] ZH-Character: The two versions of {} are identical.'.format(character))
             lookup_line_1 = str('# [{0}](https://en.wiktionary.org/wiki/{0}#Chinese)'.format(character))
@@ -3416,17 +3546,19 @@ def zh_character(character):
 
     # Format the dictionary links footer
     lookup_line_2 = ('\n\n\n^Information ^from '
-                     '[^Unihan](http://www.unicode.org/cgi-bin/GetUnihanData.pl?codepoint={0}) ^| '
-                     '[^CantoDict](http://www.cantonese.sheik.co.uk/dictionary/characters/{0}/) ^| '
-                     '[^Chinese ^Etymology](http://hanziyuan.net/#{1}) ^| '
-                     '[^CHISE](http://www.chise.org/est/view/char/{0}) ^| '
-                     '[^CTEXT](http://ctext.org/dictionary.pl?if=en&char={1}) ^| '
-                     '[^MDBG](https://www.mdbg.net/chindict/chindict.php?page=chardict&cdcanoce=0&cdqchi={0}) ^| '
-                     '[^MFCCD](http://humanum.arts.cuhk.edu.hk/Lexis/lexi-mf/search.php?word={1})')
+                     '[^(Unihan)](https://www.unicode.org/cgi-bin/GetUnihanData.pl?codepoint={0}) ^| '
+                     '[^(CantoDict)](https://www.cantonese.sheik.co.uk/dictionary/characters/{0}/) ^| '
+                     '[^(Chinese Etymology)](https://hanziyuan.net/#{1}) ^| '
+                     '[^(CHISE)](https://www.chise.org/est/view/char/{0}) ^| '
+                     '[^(CTEXT)](https://ctext.org/dictionary.pl?if=en&char={1}) ^| '
+                     '[^(MDBG)](https://www.mdbg.net/chinese/dictionary?page=worddict&wdrst=1&wdqb={0}) ^| '
+                     "[^(MoE DICT)](https://www.moedict.tw/'{1}) ^| "
+                     '[^(MFCCD)](https://humanum.arts.cuhk.edu.hk/Lexis/lexi-mf/search.php?word={1})')
     lookup_line_2 = lookup_line_2.format(character, tradify(character))
 
     to_post = (lookup_line_1 + lookup_line_2)
-    logger.info("[ZW] ZH-Character: Received lookup command for " + character + " in Chinese. Returned search results.")
+    logger.info("[ZW] ZH-Character: Received lookup command for {} in "
+                "Chinese. Returned search results.".format(character))
 
     return to_post
 
@@ -3488,7 +3620,7 @@ def zh_word_decode_pinyin(s):
 def zh_word_buddhist_dictionary_search(chinese_word):
     """
     Function that allows us to consult the Soothill-Hodous 'Dictionary of Chinese Buddhist Terms.'
-    For more information, please visit: http://mahajana.net/texts/soothill-hodous.html
+    For more information, please visit: https://mahajana.net/texts/soothill-hodous.html
     Since the dictionary is saved in the CC-CEDICT format, this also serves as a template for entry conversion.
 
     :param chinese_word: Any Chinese word. This should be in its *traditional* form.
@@ -3543,7 +3675,7 @@ def zh_word_buddhist_dictionary_search(chinese_word):
 def zh_word_cccanto_search(cantonese_word):
     """
     Function that parses and returns data from the CC-Canto database, which uses CC-CEDICT's format.
-    More information can be found here: http://cantonese.org/download.html
+    More information can be found here: https://cantonese.org/download.html
 
     :param cantonese_word: Any Cantonese word. This should be in its *traditional* form.
     :return: None if there is nothing that matches, a dictionary with content otherwise.
@@ -3580,7 +3712,7 @@ def zh_word_cccanto_search(cantonese_word):
             raw_line=relevant_line)
 
         formatted_line = '\n\n**Cantonese Meanings**: "{}."'.format("; ".join(keywords['meanings']))
-        formatted_line += (" ([CC-Canto](http://cantonese.org/search.php?q={}))".format(cantonese_word))
+        formatted_line += (" ([CC-Canto](https://cantonese.org/search.php?q={}))".format(cantonese_word))
         for i in range(0, 9):
             keywords['jyutping'] = keywords['jyutping'].replace(str(i), "^%s " % str(i))  # Adds syntax for tones
         keywords['jyutping'] = keywords['jyutping'].replace("  ", " ").strip()  # Replace double spaces
@@ -3618,7 +3750,7 @@ def zh_word_tea_dictionary_search(chinese_word):
         head_word = word_content[2].strip()
     except IndexError:
         return None
-    
+
     if chinese_word not in head_word:  # If the characters don't match: Exit. This includes null searches.
         return None
     else:  # It exists.
@@ -3670,10 +3802,10 @@ def zh_word_alt_romanization(pinyin_string):
         tone = syllable[-1]
         syllable = syllable[:-1].lower()
 
-        # Make exception for null tones
+        # Make exception for null tones.
         if tone is not "5":  # Add tone as superscript
-            yale_equiv = "{}^{}".format(corresponding_dict[syllable][0], tone)
-            wadegiles_equiv = "{}^{}".format(corresponding_dict[syllable][1], tone)
+            yale_equiv = "{}^({})".format(corresponding_dict[syllable][0], tone)
+            wadegiles_equiv = "{}^({})".format(corresponding_dict[syllable][1], tone)
         else:  # Null tone, no need to add a number.
             yale_equiv = "{}".format(corresponding_dict[syllable][0])
             wadegiles_equiv = "{}".format(corresponding_dict[syllable][1])
@@ -3705,7 +3837,8 @@ def zh_word_chengyu(chengyu):
     chengyu_gb = chengyu_gb.replace('\\x', "%").upper()[2:-1]
 
     # Format the search link.
-    search_link = 'http://www.51bc.net/cy/serach.php?f_type=chengyu&f_type2=&f_key={}'  # Note: 'serach' is intentional.
+    search_link = 'http://cy.51bc.net/serach.php?f_type=chengyu&f_type2=&f_key={}'
+    # Note: 'serach' is intentional.
     search_link = search_link.format(chengyu_gb)
     logger.debug(search_link)
 
@@ -3715,17 +3848,21 @@ def zh_word_chengyu(chengyu):
         results.encoding = "gb2312"
         r_tree = html.fromstring(results.text)  # now contains the whole HTML page
         chengyu_exists = r_tree.xpath('//td[contains(@bgcolor,"#B4D8F5")]/text()')
-    except (UnicodeEncodeError, UnicodeDecodeError, requests.exceptions.ConnectionError):
+    except (UnicodeEncodeError, UnicodeDecodeError, requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError):
         # There may be an issue with the conversion. Skip if so.
         logger.error("[ZW] ZH-Chengyu: Unicode encoding error.")
         chengyu_exists = ["", '找到 0 个成语']  # Tell it to exit later.
+
+    if not chengyu_exists:
+        return
 
     if '找到 0 个成语' in chengyu_exists[1]:  # There are no results...
         logger.info("[ZW] ZH-Chengyu: No chengyu results found for {}.".format(chengyu))
         return None
     elif r_tree is not None:  # There are results.
         # Look through the results page.
-        link_results = r_tree.xpath('//td[contains(@width,"20%")]/a')
+        link_results = r_tree.xpath('//tr[contains(@bgcolor,"#ffffff")]/td/a')
         try:
             actual_link = link_results[0].attrib['href']
         except IndexError:
@@ -3733,12 +3870,15 @@ def zh_word_chengyu(chengyu):
         logger.info("[ZW] > ZH-Chengyu: Found a chengyu. Actual link at: {}".format(actual_link))
 
         # Get the data from the actual link
-        eth_page = requests.get(actual_link)
-        eth_page.encoding = "gb2312"
-        tree = html.fromstring(eth_page.text)  # now contains the whole HTML page
-
-        # Grab the data from the table.
-        zh_data = tree.xpath('//td[contains(@colspan, "5")]/text()')
+        try:
+            eth_page = requests.get(actual_link)
+            eth_page.encoding = "gb2312"
+            tree = html.fromstring(eth_page.text)  # now contains the whole HTML page
+        except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError):
+            return
+        else:
+            # Grab the data from the table.
+            zh_data = tree.xpath('//td[contains(@colspan, "5")]/text()')
 
         # Assign them to variables.
         chengyu_meaning = zh_data[1]
@@ -3767,7 +3907,7 @@ def zh_word(word):
     alternate_pinyin = ()
     alternate_jyutping = None
 
-    eth_page = requests.get('https://www.mdbg.net/chindict/chindict.php?page=worddict&wdrst=0&wdqb=c:' + word,
+    eth_page = requests.get('https://www.mdbg.net/chinese/dictionary?page=worddict&wdrst=0&wdqb=c:' + word,
                             headers=ZW_USERAGENT)
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
     word_exists = str(tree.xpath('//p[contains(@class,"nonprintable")]/strong/text()'))
@@ -3785,9 +3925,17 @@ def zh_word(word):
 
         # If both have nothing, we kick it down to the character search.
         if search_results_buddhist is None and search_results_tea is None and search_results_cccanto is None:
-            to_post = zh_character(word)
             logger.info("[ZW] ZH-Word: No results found. Getting individual characters instead.")
+            # This will split the word into character chunks.
+            if len(word) < 2:
+                to_post = zh_character(word)
+            else:  # The word is longer than one character.
+                to_post = ''
+                search_characters = list(word)
+                for character in search_characters:
+                    to_post += "\n\n" + zh_character(character)
             return to_post
+
         else:  # Otherwise, let's try to format the data nicely.
 
             if search_results_buddhist is not None:
@@ -3819,7 +3967,7 @@ def zh_word(word):
         meaning = meaning.strip()
 
         # Obtain the Cantonese information.
-        yue_page = requests.get('http://cantonese.org/search.php?q=' + word, headers=ZW_USERAGENT)
+        yue_page = requests.get('https://cantonese.org/search.php?q=' + word, headers=ZW_USERAGENT)
         yue_tree = html.fromstring(yue_page.content)  # now contains the whole HTML page
         yue_pronunciation = yue_tree.xpath('//h3[contains(@class,"resulthead")]/small/strong//text()')
         yue_pronunciation = yue_pronunciation[0:(len(word) * 2)]  # This Len needs to be double because of the numbers
@@ -3829,8 +3977,9 @@ def zh_word(word):
         # Combines the tones and the syllables together
         yue_pronunciation = ' '.join(yue_pronunciation)
         for i in range(0, 9):
-            yue_pronunciation = yue_pronunciation.replace(str(i), "^%s " % str(i))  # Adds Markdown syntax
+            yue_pronunciation = yue_pronunciation.replace(str(i), "^(%s) " % str(i))  # Adds Markdown syntax
         yue_pronunciation = yue_pronunciation.strip()
+
     else:  # This is for the alternate search with the specialty dictionaries.
         cmn_pronunciation = zh_word_decode_pinyin(alternate_pinyin)
         alt_romanize = zh_word_alt_romanization(alternate_pinyin)
@@ -3880,43 +4029,15 @@ def zh_word(word):
 
     # Format the footer with the dictionary links.
     lookup_line_3 = ('\n\n\n^Information ^from '
-                     '[^CantoDict](http://www.cantonese.sheik.co.uk/dictionary/search/?searchtype=1&text={0}) ^| '
-                     '[^Jukuu](http://jukuu.com/search.php?q={0}) ^| '
-                     '[^MDBG](https://www.mdbg.net/chindict/chindict.php?page=worddict&wdrst=0&wdqb={0}) ^| '
+                     '[^CantoDict](https://www.cantonese.sheik.co.uk/dictionary/search/?searchtype=1&text={0}) ^| '
+                     '[^MDBG](https://www.mdbg.net/chinese/dictionary?page=worddict&wdrst=0&wdqb=c:{0}) ^| '
                      '[^Yellowbridge](https://yellowbridge.com/chinese/dictionary.php?word={0}) ^| '
-                     '[^Youdao](http://dict.youdao.com/w/eng/{0}/#keyfrom=dict2.index)')
+                     '[^Youdao](https://dict.youdao.com/w/eng/{0}/#keyfrom=dict2.index)')
     lookup_line_3 = lookup_line_3.format(word)
 
     # Combine everything together.
     to_post = (lookup_line_1 + lookup_line_2 + "\n\n" + lookup_line_3)
     logger.info("[ZW] ZH-Word: Received a lookup command for " + word + " in Chinese. Returned search results.")
-    return to_post
-
-
-# Japanese Lookup Functions
-def ja_character_calligraphy_search(character):
-    """
-    A function to return a Japanese calligraphic image with three types of form (standard, running, cursive)
-
-    :param character: Any Japanese *kanji*
-    :return: None if none available, otherwise, a formatted string containing the URL.
-    """
-
-    try:
-        eth_page = requests.get('http://www013.upp.so-net.ne.jp/santai/santai.htm', headers=ZW_USERAGENT)
-        tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
-        page_url = tree.xpath('//a[contains(text(), "' + character + '")]/@href')
-        page_url = "http://www013.upp.so-net.ne.jp/santai/" + str(page_url[0])
-
-        if len(page_url) != 0:
-            logger.debug("[ZW] JA-Calligraphy: There is a Japanese calligraphic image for " + character + ".")
-            ja_calligraphy_format = "\n\n**Japanese Calligraphy Variants**: [{}]({}) "
-            ja_calligraphy_format += "(*[Source](http://www013.upp.so-net.ne.jp/santai/santai.htm)*)"
-            to_post = ja_calligraphy_format.format(character, page_url)
-        else:
-            return None
-    except IndexError:  # This character does not exist.
-        return None  # Return nothing since we have no results.
     return to_post
 
 
@@ -3977,11 +4098,6 @@ def ja_character(character):
                 on_chunk = on_chunk + ', ' + on_chunk_new
             lookup_line_1 = '# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n'.format(character)
             lookup_line_1 += '**Kun-readings:** ' + kun_chunk[2:] + '\n\n**On-readings:** ' + on_chunk[2:]
-
-            # Try to get a Japanese calligraphic image
-            ja_calligraphy_image = ja_character_calligraphy_search(character)
-            if ja_calligraphy_image is not None:
-                lookup_line_1 = lookup_line_1 + ja_calligraphy_image
 
             # Try to get a Chinese calligraphic image
             calligraphy_image = zh_character_calligraphy_search(character)
@@ -4051,15 +4167,15 @@ def ja_character(character):
             total_data = ooi_key + ooi_header + ooi_separator + ooi_kun + ooi_on + ooi_meaning
 
     if not is_kana:
-        ja_to_post = "\n\n^Information ^from [^Jisho](http://jisho.org/search/{0}%20%23kanji) ^| "
-        ja_to_post += "[^Goo ^Dictionary](https://dictionary.goo.ne.jp/word/en/{0}) ^| "
-        ja_to_post += "[^Tangorin](http://tangorin.com/kanji/{0}) ^| [^Weblio ^EJJE](http://ejje.weblio.jp/content/{0})"
+        ja_to_post = "\n\n^Information ^from [^(Jisho)](https://jisho.org/search/{0}%20%23kanji) ^| "
+        ja_to_post += "[^(Goo Dictionary)](https://dictionary.goo.ne.jp/word/en/{0}) ^| "
+        ja_to_post += "[^(Tangorin)](https://tangorin.com/kanji/{0}) ^| [^(Weblio EJJE)](https://ejje.weblio.jp/content/{0})"
         ja_to_post = ja_to_post.format(character)
         lookup_line_3 = ja_to_post
     else:
-        ja_to_post = "\n\n^Information ^from [^Jisho](http://jisho.org/search/{0}%20%23particle) ^| "
-        ja_to_post += "[^Tangorin](http://tangorin.com/general/{0}%20particle) ^| "
-        ja_to_post += "[^Weblio ^EJJE](http://ejje.weblio.jp/content/{0})"
+        ja_to_post = "\n\n^Information ^from [^(Jisho)](https://jisho.org/search/{0}%20%23particle) ^| "
+        ja_to_post += "[^(Tangorin)](https://tangorin.com/general/{0}%20particle) ^| "
+        ja_to_post += "[^(Weblio EJJE)](https://ejje.weblio.jp/content/{0})"
         ja_to_post = ja_to_post.format(character)
         lookup_line_3 = ja_to_post
 
@@ -4149,34 +4265,34 @@ def ja_word_given_name_search(ja_given_name):
     web_search = "http://kanji.reader.bz/{}".format(ja_given_name, headers=ZW_USERAGENT)
     eth_page = requests.get(web_search)
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
-    name_content = tree.xpath('//div[contains(@id,"container")]/p[1]/text()')
+    name_content = tree.xpath('//div[contains(@id,"main")]/p[1]/text()')
+    hiragana_content = tree.xpath('//div[contains(@id,"main")]/p[1]/a/text()')
+    print(name_content)
+    print(hiragana_content)
 
     # Check for validity.
-    try:
-        hiragana_names = name_content[0].split(" ", 1)[0]
-    except IndexError:  # This page doesn't exist.
-        return None
-    if "見つかりませんでした" in hiragana_names:  # Could not be found
+    if "見つかりませんでした" in str(name_content):  # Could not be found
         return None
 
-    # If there's more than one reading, split it.
-    if '、' in hiragana_names:
-        hiragana_names = hiragana_names.split('、')
-    else:
-        hiragana_names = [hiragana_names]
+    # Format the romaji properly.
+    name_content = [x for x in name_content if x != '\xa0\xa0']
+    if name_content:
+        name_content = name_content[0].split()
+        print(name_content)
 
     # Create the readings list.
-    for name in hiragana_names:
+    for name in hiragana_content:
         name_formatted = name.strip()
-        furigana_chunk = "{} (*{}*)".format(name_formatted, romkan.to_hepburn(name_formatted).title())
+        furigana_chunk = "{} (*{}*)".format(name_formatted,
+                                            name_content[hiragana_content.index(name)].title())
         names_w_readings.append(furigana_chunk)
     name_formatted_readings = ", ".join(names_w_readings)
 
     # Create the comment
     formatted_section = ('# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n'
                          '**Readings:** {1}\n\n**Meanings**: A Japanese name.'
-                         "\n\n\n^Information ^from [^Jinmei ^Kanji ^Jisho](http://kanji.reader.bz/{0}) "
-                         "^| [^Weblio ^EJJE](http://ejje.weblio.jp/content/{0})")
+                         "\n\n\n^(Information from) [^(Jinmei Kanji Jisho)](https://kanji.reader.bz/{0}) "
+                         "^| [^(Weblio EJJE)](https://ejje.weblio.jp/content/{0})")
     formatted_section = formatted_section.format(ja_given_name, name_formatted_readings)
 
     return formatted_section
@@ -4207,7 +4323,7 @@ def ja_word_surname(name):
         lookup_line_1 += '**Readings:** ' + furigana_chunk[2:]  # We return the formatted readings of this name
         lookup_line_2 = str('\n\n**Meanings**: A Japanese surname.')
         lookup_line_3 = "\n\n\n^Information ^from [^Myoji](https://myoji-yurai.net/searchResult.htm?myojiKanji={0}) "
-        lookup_line_3 += "^| [^Weblio ^EJJE](http://ejje.weblio.jp/content/{0})"
+        lookup_line_3 += "^| [^Weblio ^EJJE](https://ejje.weblio.jp/content/{0})"
         lookup_line_3 = lookup_line_3.format(name)
         to_post = (lookup_line_1 + lookup_line_2 + "\n" + lookup_line_3)
         logger.info("[ZW] JA-Name: '{}' is a Japanese name. Returned search results.".format(name))
@@ -4286,10 +4402,10 @@ def ja_word(japanese_word):
             return_comment += y_data
 
     # Add the footer
-    footer = ('\n\n^Information ^from ^[Jisho](http://jisho.org/search/{0}%23words) ^| '
+    footer = ('\n\n^Information ^from ^[Jisho](https://jisho.org/search/{0}%23words) ^| '
               '[^Kotobank](https://kotobank.jp/word/{0}) ^| '
-              '[^Tangorin](http://tangorin.com/general/{0}) ^| '
-              '[^Weblio ^EJJE](http://ejje.weblio.jp/content/{0})')
+              '[^Tangorin](https://tangorin.com/general/{0}) ^| '
+              '[^(Weblio EJJE)](https://ejje.weblio.jp/content/{0})')
     if y_data is not None:  # Add attribution for yojijukugo
         footer += ' ^| [^Yoji ^Jitenon](https://yoji.jitenon.jp/cat/search.php?getdata={0})'
     return_comment += footer.format(japanese_word)
@@ -4302,7 +4418,7 @@ def ja_word_yojijukugo(yojijukugo):
     """
     A newer rewrite of the yojijukugo function that has been changed to match the zh_word_chengyu function.
     That is, now its role is to grab a Japanese meaning and explanation in order to give some insight.
-    For examples, see http://www.edrdg.org/projects/yojijukugo.html
+    For examples, see https://www.edrdg.org/projects/yojijukugo.html
 
     :param yojijukugo: Any four-kanji Japanese idiom.
     :return: A formatted string for addition to ja_word or None if nothing is found.
@@ -4354,7 +4470,7 @@ def lookup_cjk_matcher(content_text):
     :return: A list of all matching Chinese characters.
     """
 
-    # Making sure we only have stuff between the graves. 
+    # Making sure we only have stuff between the graves.
     try:
         content_text = content_text.split("`", 1)[1]  # Delete stuff before
         content_text = content_text.rsplit('`', 1)[0]  # Delete stuff after
@@ -4496,6 +4612,7 @@ def lookup_matcher(content_text, language_name):
             other_temp_list = []
             for match in matches:
                 other_temp_list.append(match)
+            other_temp_list = [i for n, i in enumerate(other_temp_list) if i not in other_temp_list[:n]]  # De-dupe
             master_dictionary[language_name] = other_temp_list
 
     return master_dictionary
@@ -4503,27 +4620,27 @@ def lookup_matcher(content_text, language_name):
 
 def lookup_ko_word(word):
     """
-    A function to define Korean words from NAVER.
+    A function to define Korean words from KRDICT.
+    Deprecated.
 
     :param word: Any Korean word.
     :return: A formatted string containing meanings and information to post as a comment.
     """
 
-    # To replace the meaning output from Naver, which is often left untranslated in Korean.
-    ko_word_types = {'[동사]': '[verb]', '[형용사]': '[adjective]', '[관형사]': '[determiner]', '[명사]': '[noun]',
-                     '[대명사]': '[pronoun]', '[부사]': '[adverb]', '[조사]': '[particle]',
-                     '[감탄사]': '[interjection]', '[수사]': '[number]'}
+    eth_page = requests.get('https://krdict.korean.go.kr/m/eng/searchResult?nationCode=6'
+                            '&nation=eng&divSearch=search&pageNo=1&displayNum=10&preKeyword='
+                            '&sort=&proverb=&examples=&mainSearchWord=' + word)
 
-    eth_page = requests.get('http://endic.naver.com/search.nhn?sLn=kr&isOnlyViewEE=N&query=' + word,
-                            headers=ZW_USERAGENT)
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
-    word_exists = str(tree.xpath('//*[@id="content"]/div[2]/h4/text()'))
+    # word_exists = str(tree.xpath('//strong[@class="highlight"]/text()[1]'))
+    word_exists = str(tree.xpath('//em[@class="blue ml5"]/text()[1]'))
+    print(word_exists)
 
     if "없습니다" in word_exists:  # Check to not return anything if the entry is invalid (means "there is not")
         to_post = str("> Sorry, but that Korean word doesn't look like anything to me.")
         return to_post
     else:
-        hangul_romanization = _ko_romanizer.Romanizer(word).romanize()
+        hangul_romanization = Romanizer(word).romanize()
         hangul_chunk = word + ' (*' + hangul_romanization + '*)'
         hanja = tree.xpath('//*[@id="content"]/div[2]/dl/dt[1]/span/text()')
         if len(hanja) != 0:
@@ -4533,11 +4650,6 @@ def lookup_ko_word(word):
         meaning = ' '.join(meaning)
         meaning = ' '.join(meaning.split())
 
-        # Here we want to replace the korean parts of speech with the english equiv.
-        for key, value in ko_word_types.items():
-            if key in meaning:
-                meaning = meaning.replace(key, value)
-
         if len(hanja) != 0:
             lookup_line_1 = '# [{0}](https://en.wiktionary.org/wiki/{0}#Korean)\n\n'.format(word)
             lookup_line_1 += '**Reading:** ' + hangul_chunk + ' (' + hanja + ')'
@@ -4545,8 +4657,8 @@ def lookup_ko_word(word):
             lookup_line_1 = '# [{0}](https://en.wiktionary.org/wiki/{0}#Korean)\n\n'.format(word)
             lookup_line_1 += '**Reading:** ' + hangul_chunk
         lookup_line_2 = str('\n\n**Meanings**: "' + meaning + '."')
-        lookup_line_3 = ('\n\n\n^Information ^from ^[Naver](http://endic.naver.com/search.nhn'
-                         '?sLn=kr&isOnlyViewEE=N&query={0}) ^| ^[Daum](http://dic.daum.net/search.do?q={0}&dic=eng)')
+        lookup_line_3 = ('\n\n\n^Information ^from ^[Naver](https://en.dict.naver.com/#/'
+                         'search?range=all&query={0}) ^| ^[Daum](https://dic.daum.net/search.do?q={0}&dic=eng)')
         lookup_line_3 = lookup_line_3.format(word)
 
         to_post = (lookup_line_1 + lookup_line_2 + lookup_line_3)
@@ -4562,7 +4674,7 @@ def lookup_zhja_tokenizer(phrase, language):
 
     It will dynamically change the segmenters / tokenizers based on the OS. On Windows for testing it can use
     TinySegmenter for compatibility. But on Mac/Linux, we can use MeCab's dictionary instead for better
-    (but not perfect) tokenizing. See http://www.robfahey.co.uk/blog/japanese-text-analysis-in-python/ for more info.
+    (but not perfect) tokenizing. See https://www.robfahey.co.uk/blog/japanese-text-analysis-in-python/ for more info.
 
     :param phrase: The phrase we are seeking to tokenize.
     :param language: Which language it is for, expressed as a code.
@@ -4615,22 +4727,25 @@ def lookup_zhja_tokenizer(phrase, language):
 
 def lookup_wiktionary_search(search_term, language_name):
     """
-    This is a general lookup function for Wiktionary, updated and cleaned up to be better than the previous version.
+    This is a general lookup function for Wiktionary, updated and
+    cleaned up to be better than the previous version.
     This function is used for all non-CJK languages.
+    Using 0.0.97.
 
     :param search_term: The word we're looking for information.
     :param language_name: Name of the language we're looking up the word in.
     :return post_template: None if it can't find anything, a formatted string for comments otherwise.
     """
-
+    language_name = language_name.title()
     parser = WiktionaryParser()
     try:
         word_info_list = parser.fetch(search_term, language_name)
-    except TypeError:  # Doesn't properly exist, first check
+    except (TypeError, AttributeError):  # Doesn't properly exist, first check
         return None
 
     try:
-        exist_test = word_info_list[0]['definitions']  # A simple second test to see if something really has definitions
+        # A simple second test to see if something really has definitions
+        exist_test = word_info_list[0]['definitions']
     except IndexError:
         return None
 
@@ -4638,6 +4753,19 @@ def lookup_wiktionary_search(search_term, language_name):
         # Get the dictionary that is wrapped in the list.
         word_info = word_info_list[0]
     else:  # This information doesn't exist.
+        return None
+
+    # Do a check to see if the Wiktionary page exists, to prevent
+    # accidental returns of English stuff. It checks to see if a header
+    # exists in that language. If it doesn't then it will return None.
+    test_wikt_link = "https://en.wiktionary.org/wiki/{}#{}".format(search_term, language_name)
+    test_page = requests.get(test_wikt_link, headers=ZW_USERAGENT)
+    test_tree = html.fromstring(test_page.content)  # now contains the whole HTML page
+    test_language = test_tree.xpath('string(//span[contains(@id,"{}")])'.format(language_name))
+    if language_name == test_language:
+        logger.info("[ZW] This word exists in its proper language on Wiktionary.")
+    else:
+        logger.info("[ZW] This word does NOT exist in its proper language on Wiktionary.")
         return None
 
     # First, let's take care of the etymology section.
@@ -4692,11 +4820,10 @@ def lookup_wiktionary_search(search_term, language_name):
 
             # Deal with gender/meaning
             if len(dict_definitions['text']) > 0:
-                master_text = dict_definitions['text']
-                if '\xa0' in master_text:  # This is a separator generally used to denote Gender.
-                    master_text = master_text.replace('\xa0', ' ^')
-                master_text_list = master_text.split('\n')
+                master_text_list = dict_definitions['text']
+                master_text_list = [x.replace('\xa0', ' ^') for x in master_text_list if x]
                 master_text_list = [x for x in master_text_list if x]
+                print(master_text_list)
                 post_word_info = master_text_list[0]
 
                 meanings_format = "* " + '\n* '.join(master_text_list[1:])
@@ -4718,7 +4845,7 @@ def lookup_wiktionary_search(search_term, language_name):
 
     # Put it all together.
     post_template = "# [{0}](https://en.wiktionary.org/wiki/{0}#{1}) ({1}){2}{3}{4}"
-    post_template = post_template.format(search_term, language_name.title(), post_etymology, post_pronunciations,
+    post_template = post_template.format(search_term, language_name, post_etymology, post_pronunciations,
                                          total_post_definitions)
     logger.info("[ZW] Looked up information for {} as a {} word..".format(search_term, language_name))
 
@@ -4736,7 +4863,7 @@ All reference functions are prefixed with `reference` in their name.
 
 def reference_search(lookup_term):
     """
-    Function to look up reference languages on Ethnologue and Wikipedia. 
+    Function to look up reference languages on Ethnologue and Wikipedia.
     This also searches MultiTree (no longer a
     separate function) for languages which may be constructed or dead.
     Due to web settings the live search function of this has been
@@ -4836,7 +4963,10 @@ def edit_finder():
 
     # Fetch the comments from Reddit.
     comments = []
-    comments += list(r.comments(limit=comment_limit))  # Only get the last `comment_limit` comments.
+    try:
+        comments += list(r.comments(limit=comment_limit))  # Only get the last `comment_limit` comments.
+    except prawcore.exceptions.ServerError:  # Server issues.
+        return
     cleanup_database = False
 
     # Process the comments we've retrieved.
@@ -5066,7 +5196,7 @@ def ziwen_posts():
         conn_main.commit()
 
         if not css_check(oflair_css) and oflair_css is not None:
-            # If it's a Meta or Community post (that's what css_check does), just alert those signed up for it. 
+            # If it's a Meta or Community post (that's what css_check does), just alert those signed up for it.
             suggested_css_text = oflair_css
             logger.info("[ZW] Posts: New {} post.".format(suggested_css_text.title()))
 
@@ -5138,7 +5268,7 @@ def ziwen_posts():
                 # Skip! This will result it in getting whatever AM gave it. (which may be nothing)
                 # Send a message to let mods know
                 title_error_entry = traceback.format_exc()
-                record_error_log(title_error_entry + e_title)  # Save the error.
+                record_error_log(title_error_entry + str(e_title))  # Save the error.
 
                 # Report the post, so that mods know to take a look.
                 fail_reason = ("(Ziwen) Crashed my title formatting routine. "
@@ -5161,9 +5291,11 @@ def ziwen_posts():
             if suggested_css_text != "Generic":
                 final_css_text = str(suggested_css_text)
                 final_css_class = str(suggested_css)
-                if "generic" in suggested_css:  # It's a supported language but not a supported flair.
-                    # Write to the saved page
-                    record_to_wiki(odate=ocreated, otitle=otitle, oid=oid, oflair_text=suggested_css_text, s_or_i=True,
+                if "generic" in suggested_css and suggested_css_text != "English":
+                    # It's a supported language but not a supported
+                    # flair, so write to the saved page.
+                    record_to_wiki(odate=ocreated, otitle=otitle, oid=oid,
+                                   oflair_text=suggested_css_text, s_or_i=True,
                                    oflair_new="")
             else:  # This is fully generic.
                 # Set generic categories.
@@ -5176,6 +5308,7 @@ def ziwen_posts():
                 post.report(generic_reason)
                 logger.info("[ZW] Posts: Title formatting routine couldn't make sense of '{}'.".format(otitle))
 
+            """YouTube section currently deprecated due to Pafy not being updated.
             # Check to see if we should add (Long) to the flair. There's a YouTube test and a text length test.
             if "youtube.com" in ourl or "youtu.be" in ourl:
                 # This changes the CSS text to indicate if it's a long YouTube video
@@ -5196,6 +5329,7 @@ def ziwen_posts():
                     logger.debug("[ZW] Posts: Unable to process this YouTube link.")
                 else:
                     logger.warning("[ZW] Posts: Unable to process YouTube link at {}. Non-listed error.".format(ourl))
+            """
             if len(oselftext) > 1400:  # This changes the CSS text to indicate if it's a long wall of text
                 logger.info("[ZW] Posts: This is a long piece of text.")
                 if final_css_text is not None and post.author.name != USERNAME:  # Let's leave None flair text alone
@@ -5271,7 +5405,10 @@ def ziwen_bot():
 
     logger.debug('Fetching new r/{} comments...'.format(SUBREDDIT))
     posts = []
-    posts += list(r.comments(limit=MAXPOSTS))
+    try:
+        posts += list(r.comments(limit=MAXPOSTS))
+    except prawcore.exceptions.ServerError:  # Server issues.
+        return
 
     for post in posts:
 
@@ -5280,7 +5417,7 @@ def ziwen_bot():
         try:
             pauthor = post.author.name
         except AttributeError:
-            # Comment author is deleted. We don't care about this post.
+            # Comment author is deleted.
             continue
 
         if pauthor == USERNAME:  # Will not reply to my own comments
@@ -5319,7 +5456,7 @@ def ziwen_bot():
 
         # Calculate points for the person.
         if oflair_text is not None and osaved is not True and oauthor is not None:
-            # We don't want to process it without the oflair text. Or if its vaerified comment 
+            # We don't want to process it without the oflair text. Or if its vaerified comment
             logger.debug("[ZW] Bot: Processing points for u/{}".format(pauthor))
             points_tabulator(oid, oauthor, oflair_text, oflair_css, post)
 
@@ -5426,10 +5563,10 @@ def ziwen_bot():
 
         # We move the exit point if there is no author here. Since !restore relies on there being no author.
         if oauthor is None:
-            continue
+            logger.info('[ZW] Bot: >> Author is deleted or non-existent.')
+            oauthor = 'deleted'
 
         '''REFERENCE COMMANDS (!identify, !page, !reference, !search, `lookup`)'''
-
         if KEYWORDS[4] in pbody or KEYWORDS[10] in pbody:  # This is the general !identify command (synonym: !id)
 
             determined_data = comment_info_parser(pbody, "!identify:")
@@ -5448,7 +5585,7 @@ def ziwen_bot():
             advanced_mode = determined_data[1]
             language_country = None  # Default value
             o_language_name = str(oajo.language_name)  # Store the original language defined in the Ajo
-            # This should return a boolean as to whether or not it's in advanced mode.
+            # This should return a boolean whether it's in advanced mode.
 
             logger.info("[ZW] Bot: COMMAND: !identify, from u/{}.".format(pauthor))
             logger.info('[ZW] Bot: !identify data is: {}'.format(determined_data))
@@ -5480,9 +5617,10 @@ def ziwen_bot():
                             language_code = match
                             language_name = language_data[0]
                             match_script = True
+                            logger.info(f"[ZW] Bot: This is a script post with code `{language_code}`.")
                             if len(language_name) == 0:  # If there are no results from the advanced converter...
                                 language_code = ""
-                    else:  # a catch all for advanced mode that ISN'T a 3 or 4-letter code.
+                    else:  # a catch-all for advanced mode that ISN'T a 3 or 4-letter code.
                         post.reply(COMMENT_ADVANCED_IDENTIFY_ERROR + BOT_DISCLAIMER)
                         logger.info("[ZW] Bot: This is an invalid use of advanced !identify. Skipping this one...")
                         continue
@@ -5634,7 +5772,7 @@ def ziwen_bot():
             if oajo.language_name is None:
                 continue
             elif type(oajo.language_name) is not str:
-                # Multiple post? 
+                # Multiple post?
                 search_language = oajo.language_name[0]
             else:
                 search_language = oajo.language_name
@@ -5647,7 +5785,7 @@ def ziwen_bot():
             if 'bot_lookup_correspond' in komento_data:  # This may have had a comment before.
                 relevant_comments = komento_data['bot_lookup_correspond']
 
-                # This returns a dictionary with the called comment as key. 
+                # This returns a dictionary with the called comment as key.
                 for key in relevant_comments:
                     if key == pid:  # This is the key for our current comment.
                         if 'bot_lookup_replies' in komento_data:  # We try to find any corresponding bot replies
@@ -5658,20 +5796,21 @@ def ziwen_bot():
                                 earlier_comment = reddit.comment(id=response)
                                 earlier_comment.delete()
                                 logger.debug("[ZW] Bot: >>> Previous response deleted")
-                                # We delete the earlier versions. 
+                                # We delete the earlier versions.
 
             if len(total_matches.keys()) == 0:
-                # Checks to see if there's actually anything in between those two graves. 
+                # Checks to see if there's actually anything in between those two graves.
                 # If there's nothing, it skips it.
                 logger.debug("[ZW] Bot: > Received a word lookup command, but found nothing. Skipping...")
                 # We are just not going to reply if there is literally nothing found.
                 continue
 
+            limit_num_matches = 5
             logger.info("[ZW] Bot: >> Determined Lookup Dictionary: {}".format(total_matches))
             for key, value in total_matches.items():
                 if key in CJK_LANGUAGES['Chinese']:
                     logger.info("[ZW] Bot: >> Conducting lookup search in Chinese.")
-                    for match in total_matches[key]:
+                    for match in total_matches[key][:limit_num_matches]:
                         match_length = len(match)
                         if match_length == 1:  # Single-character
                             to_post = zh_character(match)
@@ -5685,7 +5824,7 @@ def ziwen_bot():
                         time.sleep(wait_sec)
                 elif key in CJK_LANGUAGES['Japanese']:
                     logger.info("[ZW] Bot: >> Conducting lookup search in Japanese.")
-                    for match in total_matches[key]:
+                    for match in total_matches[key][:limit_num_matches]:
                         match_length = len(str(match))
                         if match_length == 1:
                             to_post = ja_character(match)
@@ -5695,19 +5834,19 @@ def ziwen_bot():
                             post_content.append(ja_word(find_word))
                 elif key in CJK_LANGUAGES['Korean']:
                     logger.info("[ZW] Bot: >> Conducting lookup search in Korean.")
-                    for match in total_matches[key]:
+                    for match in total_matches[key][:limit_num_matches]:
                         find_word = str(match)
-                        post_content.append(lookup_ko_word(find_word))
+                        post_content.append(lookup_wiktionary_search(find_word, "Korean"))
                 else:  # Wiktionary search
                     logger.info("[ZW] Bot: >> Conducting Wiktionary lookup search.")
-                    for match in total_matches[key]:
+                    for match in total_matches[key][:limit_num_matches]:
                         find_word = str(match)
                         wiktionary_results = lookup_wiktionary_search(find_word, key)
                         if wiktionary_results is not None:
                             post_content.append(wiktionary_results)
 
             # Join the content together.
-            if len(post_content) > 0:  # If we have results lets post them
+            if post_content:  # If we have results lets post them
                 # Join the resulting content together as a string.
                 post_content = '\n\n'.join(post_content)
             else:  # No results, let's set it to None.
@@ -5716,7 +5855,9 @@ def ziwen_bot():
 
             try:
                 if post_content is not None:
-                    post.reply(post_content + BOT_DISCLAIMER)
+                    author_tag = ("*u/{} (OP), the following lookup results "
+                                  "may be of interest to your request.*\n\n".format(oauthor))
+                    post.reply(author_tag + post_content + BOT_DISCLAIMER)
                     logger.info("[ZW] Bot: >> Looked up the term(s) in {}.".format(search_language))
                 else:
                     logger.info("[ZW] Bot: >> No results found. Skipping...")
@@ -6100,6 +6241,7 @@ def ziwen_bot():
             logger.info("[ZW] Bot: COMMAND: !set, from moderator u/{}.".format(pauthor))
 
             language_code = converter(match)[0]
+            language_name = converter(match)[1]
             language_country = converter(match)[3]
 
             if language_country is not None:  # There is a country code listed.
@@ -6121,6 +6263,11 @@ def ziwen_bot():
             else:  # This is a defined multiple !set
                 oajo.set_defined_multiple(set_data[0])
                 logger.info("[ZW] Bot: > Updated the post to a defined multiple one.")
+
+            # Message the mod who called it.
+            set_msg = f"The [post]({opermalink}) has been set to the language code `{language_code}` (`{language_name}`)."
+            reddit.redditor(pauthor).message('[Notification] !set command successful',
+                                             set_msg)
 
         # Push the FINAL UPDATE TO REDDIT
         if oflair_css not in ["community", "meta"]:  # There's nothing to change for these
@@ -6335,8 +6482,13 @@ def cc_ref():
             post_content = '\n\n'.join(post_content)
             if len(post_content) > 10000:  # Truncate only if absolutely necessary.
                 post_content = post_content[:9900]
-            post.reply(post_content + BOT_DISCLAIMER)
-            logger.info("[ZW] CC_REF: Replied to lookup request for {} on a Chinese subreddit.".format(tokenized_list))
+            try:
+                post.reply(post_content + BOT_DISCLAIMER)
+                logger.info("[ZW] CC_REF: Replied to lookup request for {} "
+                            "on a Chinese subreddit.".format(tokenized_list))
+            except praw.exceptions.RedditAPIException:
+                post.reply("Sorry, but the character data you've requested"
+                           "exceeds the amount Reddit allows for a comment.")
 
     return
 
@@ -6382,7 +6534,6 @@ def ziwen_maintenance():
 '''INITIAL VARIABLE SET-UP'''
 
 # We start the bot with a couple of routines to populate the data from our wiki.
-CYCLES = 0
 ziwen_maintenance()
 logger.info("[ZW] Bot routine starting up...")
 
@@ -6390,13 +6541,15 @@ logger.info("[ZW] Bot routine starting up...")
 '''RUNNING THE BOT'''
 
 # This is the actual loop that runs the top-level functions of the bot.
+# */10 * * * *
 
-try:
-    while True:
-
+if __name__ == "__main__":
+    try:
         # noinspection PyBroadException
-        try:
+        set_start_time = time.time()
+        run_information = ()
 
+        try:
             # First it processes the titles of new posts.
             ziwen_posts()
             # Then it checks for any edits to comments.
@@ -6408,37 +6561,37 @@ try:
             # Finally checks for posts that are still claimed and 'in progress.'
             progress_checker()
 
+            # Record API usage limit.
+            probe = reddit.redditor(USERNAME).created_utc
+            used_calls = reddit.auth.limits["used"]
+
+            # Record memory usage at the end of an isochronism.
+            mem_num = psutil.Process(os.getpid()).memory_info().rss
+            mem_usage = "Memory usage: {:.2f} MB.".format(mem_num / (1024 * 1024))
+            logger.info(
+                "[ZW] Run complete. Calls used: {}. {}".format(used_calls, mem_usage)
+            )
+
             if not TESTING_MODE:  # Disable these functions if just testing on r/trntest.
                 logger.debug("[ZW] Main: Searching other subreddits.")
                 verification_parser()  # The bot checks if there are any new requests for verification.
                 cc_ref()  # Finally the bot runs lookup searches on Chinese subreddits.
 
-            CYCLES += 1
-
         except Exception as e:  # The bot encountered an error/exception.
-
+            logger.error(f"[ZW] Main: Encounted error {e}.")
             # Format the error text.
             error_entry = traceback.format_exc()
-
-            # Exclude saving the error if it's just a connection problem.
-            if any(keyword in error_entry for keyword in CONNECTION_KEYWORDS):
-                for keyword in CONNECTION_KEYWORDS:
-                    if keyword in error_entry:  # We want to print the precise error we have.
-                        logger.debug("[ZW] Main: > Connection Error: {}".format(keyword))
-            else:  # Error is not a connection error, we want to save that.
-                record_error_log(error_entry)  # Save the error to a log.
-                logger.error("[ZW] Main: > Logged this error.")
-
-        if CYCLES >= CLEANCYCLES:  # The bot has reached its designated number of cycles.
-
-            # Activate the maintenance functions to refresh information.
-            logger.debug('[ZW] Main: Cleaning database and running maintenance functions.')
-            ziwen_maintenance()  # Update the global variables again.
-            CYCLES = 0  # Reset the number of cycles.
-
-        # Loop completed, go to sleep for the specified amount of time.
-        logger.debug('Running again in {} seconds.\n'.format(WAIT))
-        time.sleep(WAIT)
-except KeyboardInterrupt:  # Manual termination of the script with Ctrl-C.
-    logger.info('Manual user shutdown.')
-    sys.exit()
+            record_error_log(error_entry)  # Save the error to a log.
+            logger.error("[ZW] Main: > Logged this error. Ended run.")
+        else:
+            # Package data for this run and write it to a record.
+            elapsed_time = (time.time() - set_start_time) / 60
+            run_time = time_convert_to_string(set_start_time)
+            run_information = (run_time, "Cycle run", used_calls, mem_usage, elapsed_time)
+            record_activity_csv(run_information)
+            logger.info("[ZW] Main: Run complete. {:.2f} minutes.\n".format(elapsed_time))
+    except KeyboardInterrupt:  # Manual termination of the script with Ctrl-C.
+        logger.info('Manual user shutdown.')
+        sys.exit()
+else:
+    logger.info("[ZW] Main: Running as imported module.")
