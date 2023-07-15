@@ -1481,6 +1481,8 @@ def messaging_translated_message(oauthor, opermalink):
         "[ZW] messaging_translated_message: >> Messaged the OP u/{} "
         "about their translated post.".format(oauthor)
     )
+
+
 """
 NOTIFICATIONS SYSTEM
 
@@ -1490,6 +1492,7 @@ languages.
 The two main functions are: `ziwen_notifier`, the actual function that sends messages to people.
                             `ziwen_messages`, the function that proccesses incoming messages to the bot.
 """
+
 
 def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify):
     """
@@ -1568,7 +1571,9 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
         language_name = converter(suggested_css_text)[1]
         if language_code == "unknown":  # Add a new script phrase
             language_name += " (Script)"  # This is to distinguish script notifications
-        regional_data = notifier_regional_language_fetcher(suggested_css_text, cursor_main)
+        regional_data = notifier_regional_language_fetcher(
+            suggested_css_text, cursor_main
+        )
         if len(regional_data) != 0:
             notify_users_list += (
                 regional_data  # add the additional people to the notifications list.
@@ -1664,6 +1669,7 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
     )
 
     return notify_users_list
+
 
 def ziwen_messages():
     """
@@ -3690,45 +3696,58 @@ def ziwen_bot():
 
             limit_num_matches = 5
             logger.info(f"[ZW] Bot: >> Determined Lookup Dictionary: {total_matches}")
-            for key, value in total_matches.items():
-                if key in CJK_LANGUAGES["Chinese"]:
-                    logger.info("[ZW] Bot: >> Conducting lookup search in Chinese.")
-                    for match in total_matches[key][:limit_num_matches]:
-                        match_length = len(match)
-                        if match_length == 1:  # Single-character
-                            to_post = zh_character(match, ZW_USERAGENT)
-                            post_content.append(to_post)
-                        elif match_length >= 2:  # A word or a phrase
-                            find_word = str(match)
-                            post_content.append(zh_word(find_word), ZW_USERAGENT)
 
-                        # Create a randomized wait time between requests.
-                        wait_sec = random.randint(3, 12)
-                        time.sleep(wait_sec)
-                elif key in CJK_LANGUAGES["Japanese"]:
-                    logger.info("[ZW] Bot: >> Conducting lookup search in Japanese.")
-                    for match in total_matches[key][:limit_num_matches]:
-                        match_length = len(str(match))
-                        if match_length == 1:
-                            to_post = ja_character(match, ZW_USERAGENT)
-                            post_content.append(to_post)
-                        elif match_length > 1:
-                            find_word = str(match)
-                            post_content.append(ja_word(find_word), ZW_USERAGENT)
-                elif key in CJK_LANGUAGES["Korean"]:
-                    logger.info("[ZW] Bot: >> Conducting lookup search in Korean.")
-                    for match in total_matches[key][:limit_num_matches]:
-                        find_word = str(match)
-                        post_content.append(
-                            lookup_wiktionary_search(find_word, "Korean")
-                        )
-                else:  # Wiktionary search
-                    logger.info("[ZW] Bot: >> Conducting Wiktionary lookup search.")
-                    for match in total_matches[key][:limit_num_matches]:
-                        find_word = str(match)
-                        wiktionary_results = lookup_wiktionary_search(find_word, key)
-                        if wiktionary_results is not None:
-                            post_content.append(wiktionary_results)
+            def processChinese(match, post_content):
+                match_length = len(match)
+                if match_length == 1:  # Single-character
+                    to_post = zh_character(match, ZW_USERAGENT)
+                    post_content.append(to_post)
+                elif match_length >= 2:  # A word or a phrase
+                    find_word = str(match)
+                    post_content.append(zh_word(find_word), ZW_USERAGENT)
+
+                # Create a randomized wait time between requests.
+                wait_sec = random.randint(3, 12)
+                time.sleep(wait_sec)
+
+            def processJapanese(match, post_content):
+                match_length = len(str(match))
+                if match_length == 1:
+                    to_post = ja_character(match, ZW_USERAGENT)
+                    post_content.append(to_post)
+                elif match_length > 1:
+                    find_word = str(match)
+                    post_content.append(ja_word(find_word), ZW_USERAGENT)
+
+            def processKorean(match, post_content):
+                find_word = str(match)
+                post_content.append(lookup_wiktionary_search(find_word, "Korean"))
+
+            def processOther(match, post_content):
+                find_word = str(match)
+                wiktionary_results = lookup_wiktionary_search(find_word, key)
+                if wiktionary_results is not None:
+                    post_content.append(wiktionary_results)
+
+            for key in total_matches.keys():
+                processFunc = processOther
+                curLang = None
+                for lang, func in {
+                    "Chinese": processChinese,
+                    "Japanese": processJapanese,
+                    "Korean": processKorean,
+                }.items():
+                    if key in CJK_LANGUAGES[lang]:
+                        processFunc = func
+                        curLang = lang
+                        break
+                logger.info(
+                    f"[ZW] Bot: >> Conducting lookup search in {curLang}."
+                    if curLang
+                    else "[ZW] Bot: >> Conducting Wiktionary lookup search."
+                )
+                for match in total_matches[key][:limit_num_matches]:
+                    processFunc(match, post_content)
 
             # Join the content together.
             if post_content:  # If we have results lets post them
