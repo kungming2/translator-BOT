@@ -3,11 +3,11 @@
 
 """Universal functions and variables for r/translator bots to use."""
 
+import datetime
 import json
 import logging
 import os
 import random
-import sys
 from time import strftime
 
 # Set up the directories based on the current location of the bots.
@@ -32,11 +32,12 @@ FILE_ADDRESS_ZH_BUDDHIST = os.path.join(script_directory, "_database_buddhist_ch
 FILE_ADDRESS_ZH_CCCANTO = os.path.join(script_directory, "_database_cccanto.md")
 FILE_ADDRESS_MECAB = os.path.join(script_directory, "mecab-ipadic-neologd")  # Folder where MeCab dict files are
 
-# Ziwen Markdown output files (text files for saving information).
+# Ziwen output files (text files for saving information).
 FILE_ADDRESS_ERROR = os.path.join(script_directory, "_log_error.md")
 FILE_ADDRESS_COUNTER = os.path.join(script_directory, "_log_counter.json")
 FILE_ADDRESS_FILTER = os.path.join(script_directory, "_log_filter.md")
 FILE_ADDRESS_EVENTS = os.path.join(script_directory, "_log_events.md")
+FILE_ADDRESS_ACTIVITY = os.path.join(script_directory, "_log_activity.csv")
 
 # Wenyuan Markdown output files (text files for saving information).
 FILE_ADDRESS_STATISTICS = os.path.join(script_directory, "wy_statistics_output.md")
@@ -49,15 +50,16 @@ FILE_ADDRESS_NOTIFY_EXCHANGE = os.path.join(script_directory, "hb_exchangelist.d
 FILE_ADDRESS_HUIBAN_OLDPOSTS = os.path.join(script_directory, "hb_processed.db")
 
 # These are keywords in errors thrown from Internet connection problems. We don't need to log those.
-CONNECTION_KEYWORDS = ['200 HTTP', '400 HTTP', '401 HTTP', '403 HTTP', '404 HTTP', '404 HTTP', '500 HTTP', '502 HTTP',
-                       '503 HTTP', '504 HTTP', 'CertificateError', 'ConnectionRefusedError', 'Errno 113', 'Error 503',
-                       'ProtocolError', 'ServerError', 'socket.gaierror', 'socket.timeout', 'ssl.SSLError']
+# CONNECTION_KEYWORDS = ['200 HTTP', '400 HTTP', '401 HTTP', '403 HTTP', '404 HTTP', '404 HTTP', '500 HTTP', '502 HTTP',
+#                       '503 HTTP', '504 HTTP', 'CertificateError', 'ConnectionRefusedError', 'Errno 113', 'Error 503',
+#                       'ProtocolError', 'ServerError', 'socket.gaierror', 'socket.timeout', 'ssl.SSLError']
+CONNECTION_KEYWORDS = []
 
 # Testing subreddits for the bot. (mostly to test Ziwen Streamer's crossposting function)
 TESTING_SUBREDDITS = ["testingground4bots", "test", "andom"]
 
 # Footers for the comments that the bots make.
-BOT_DISCLAIMER = ("\n\n---\n^Ziwen: ^a ^bot ^for ^r/translator ^| "
+BOT_DISCLAIMER = ("\n\n---\n^(Ziwen: a bot for r / translator) ^| "
                   "^[Documentation](https://www.reddit.com/r/translatorBOT/wiki/ziwen) ^| "
                   "^[FAQ](https://www.reddit.com/r/translatorBOT/wiki/faq) ^| "
                   "^[Feedback](https://www.reddit.com/r/translatorBOT)")
@@ -177,7 +179,7 @@ def action_counter(messages_number, action_type):
     if new_messages_number == 0:  # There's nothing to add. Don't do anything.
         return
 
-    # Convert !id: into its full synonym for consistenc.
+    # Convert !id: into its full synonym for consistency.
     if action_type == "!id:":
         action_type = "!identify:"
 
@@ -224,3 +226,16 @@ def load_statistics_data(language_code):
         specific_data = None
 
     return specific_data
+
+
+def time_convert_to_string(unix_integer):
+    """Converts a UNIX integer into a time formatted according to
+    ISO 8601 for UTC time.
+
+    :param unix_integer: Any UNIX time number.
+    """
+    i = int(unix_integer)
+    utc_time = datetime.datetime.fromtimestamp(i, tz=datetime.timezone.utc).isoformat()[:19]
+    utc_time = "{}Z".format(utc_time)
+
+    return utc_time
