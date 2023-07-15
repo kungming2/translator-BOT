@@ -25,8 +25,9 @@ from _languages import (
     FILE_ADDRESS_ISO_ALL,
     app_multiple_definer,
 )
-from _config import logger
+from _config import *
 from _language_consts import DEFINED_MULTIPLE_LEGEND, MAIN_LANGUAGES
+import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 import re
 import csv
 
@@ -290,7 +291,7 @@ class Ajo:
 
     # noinspection PyUnboundLocalVariable
     def __init__(
-        self, reddit_submission, post_templates, reddit
+        self, reddit_submission, post_templates, user_agent
     ):  # This takes a Reddit Submission object and generates info from it.
         if type(reddit_submission) is dict:  # Loaded from a file?
             logger.debug("[ZW] Ajo: Loaded Ajo from local database.")
@@ -307,7 +308,7 @@ class Ajo:
             self.time_delta = {}
             self.author_messaged = False
             self.post_templates = post_templates
-            self.reddit = reddit
+            self.user_agent = user_agent
 
             # try:
             title_data = title_format(reddit_submission.title)
@@ -958,7 +959,14 @@ class Ajo:
         """
 
         # Get the original submission object.
-        original_submission = self.reddit.submission(self.id)
+        reddit = praw.Reddit(
+            client_id=ZIWEN_APP_ID,
+            client_secret=ZIWEN_APP_SECRET,
+            password=PASSWORD,
+            user_agent=self.user_agent,
+            username=USERNAME,
+        )
+        original_submission = reddit.submission(self.id)
         code_tag = "[--]"  # Default, this should be changed by the functions below.
         self.output_oflair_css = None  # Reset this
         self.output_oflair_text = None

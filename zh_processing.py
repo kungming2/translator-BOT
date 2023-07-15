@@ -1104,7 +1104,7 @@ def zh_word(word, zw_useragent):
     lookup_line_1 += readings_line
 
     # Add Hokkien and Hakka data.
-    min_hak_data = zh_character_min_hak(tradify(word))
+    min_hak_data = zh_character_min_hak(tradify(word), zw_useragent)
     lookup_line_1 += min_hak_data
 
     # Format the meaning line.

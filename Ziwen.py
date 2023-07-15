@@ -1523,7 +1523,9 @@ def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify)
         mid = re.search(r"comments/(.*)/\w", opermalink).group(
             1
         )  # Get just the Reddit ID.
-        majo = ajo_loader(mid, cursor_ajo, logger, POST_TEMPLATES, reddit)  # Load the Ajo
+        majo = ajo_loader(
+            mid, cursor_ajo, logger, POST_TEMPLATES, reddit
+        )  # Load the Ajo
 
         # Checking the language history and the user history of the particular submission.
         try:
@@ -3109,11 +3111,13 @@ def ziwen_posts():
             # Finally, create an Ajo object and save it locally.
             if final_css_class not in ["meta", "community"]:
                 pajo = Ajo(
-                    reddit.submission(id=post.id), POST_TEMPLATES, reddit
+                    reddit.submission(id=post.id), POST_TEMPLATES, USER_AGENT
                 )  # Create an Ajo object, reload the post.
                 if len(contacted) != 0:  # We have a list of notified users.
                     pajo.add_notified(contacted)
-                ajo_writer(pajo, cursor_ajo, conn_ajo, logger)  # Save it to the local database
+                ajo_writer(
+                    pajo, cursor_ajo, conn_ajo, logger
+                )  # Save it to the local database
                 logger.debug(
                     "[ZW] Posts: Created Ajo for new post and saved to local database."
                 )
@@ -3205,7 +3209,7 @@ def ziwen_bot():
                 oajo is None
             ):  # We couldn't find a stored dict, so we will generate it from the submission.
                 logger.debug("[ZW] Bot: Couldn't find an AJO in the local database.")
-                oajo = Ajo(osubmission, POST_TEMPLATES, reddit)
+                oajo = Ajo(osubmission, POST_TEMPLATES, USER_AGENT)
 
             if oajo.is_bot_crosspost:
                 komento_data = komento_analyzer(komento_submission_from_comment(pid))
@@ -3703,7 +3707,7 @@ def ziwen_bot():
                     post_content.append(to_post)
                 elif match_length >= 2:  # A word or a phrase
                     find_word = str(match)
-                    post_content.append(zh_word(find_word), ZW_USERAGENT)
+                    post_content.append(zh_word(find_word, ZW_USERAGENT))
 
                 # Create a randomized wait time between requests.
                 wait_sec = random.randint(3, 12)
@@ -4338,7 +4342,9 @@ def ziwen_bot():
             "meta",
         ]:  # There's nothing to change for these
             oajo.update_reddit()  # Push all changes to the server
-            ajo_writer(oajo, cursor_ajo, conn_ajo, logger)  # Write the Ajo to the local database
+            ajo_writer(
+                oajo, cursor_ajo, conn_ajo, logger
+            )  # Write the Ajo to the local database
             logger.info(
                 f"[ZW] Bot: Ajo for {oid} updated and saved to the local database."
             )
@@ -4487,7 +4493,7 @@ def progress_checker():
             logger.debug(
                 "[ZW] progress_checker: Couldn't find an Ajo in the local database. Loading from Reddit."
             )
-            oajo = Ajo(post, POST_TEMPLATES, reddit)
+            oajo = Ajo(post, POST_TEMPLATES, USER_AGENT)
 
         # Process the post and get some data out of it.
         komento_data = komento_analyzer(post)
@@ -4509,7 +4515,9 @@ def progress_checker():
                 # Update the Ajo.
                 oajo.set_status("untranslated")
                 oajo.update_reddit()  # Push all changes to the server
-                ajo_writer(oajo, cursor_ajo, conn_ajo, logger)  # Write the Ajo to the local database
+                ajo_writer(
+                    oajo, cursor_ajo, conn_ajo, logger
+                )  # Write the Ajo to the local database
             else:  # This post is still under the time limit. Do nothing.
                 continue
 
@@ -4567,11 +4575,11 @@ def cc_ref():
             for match in tokenized_list:
                 match_length = len(str(match))
                 if match_length == 1:
-                    to_post = zh_character(match, zh_word)
+                    to_post = zh_character(match, ZW_USERAGENT)
                     post_content.append(to_post)
                 elif match_length >= 2:
                     find_word = str(match)
-                    post_content.append(zh_word(find_word), zh_word)
+                    post_content.append(zh_word(find_word), ZW_USERAGENT)
 
             post_content = "\n\n".join(post_content)
             if len(post_content) > 10000:  # Truncate only if absolutely necessary.
@@ -4686,7 +4694,7 @@ if __name__ == "__main__":
                 cc_ref()  # Finally the bot runs lookup searches on Chinese subreddits.
 
         except Exception as e:  # The bot encountered an error/exception.
-            logger.error(f"[ZW] Main: Encounted error {e}.")
+            logger.error(f"[ZW] Main: Encounted error {e}. {traceback.print_tb(e.__traceback__)}")
             # Format the error text.
             error_entry = traceback.format_exc()
             record_error_log(error_entry)  # Save the error to a log.
