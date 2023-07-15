@@ -295,8 +295,6 @@ def maintenance_database_processed_cleaner():
     cursor_main.execute(pruning_command, [MAXPOSTS * 10])
     conn_main.commit()
 
-    return
-
 
 """
 AJO CLASS/FUNCTIONS
@@ -1364,8 +1362,6 @@ def ajo_writer(new_ajo):
 
     logger.debug("[ZW] ajo_writer: Wrote Ajo to local database.")
 
-    return
-
 
 def ajo_loader(ajo_id):
     """
@@ -1828,8 +1824,6 @@ def points_worth_cacher():
             # Write the data to the cache.
             conn_cache.commit()
 
-    return
-
 
 def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
     """
@@ -2136,8 +2130,6 @@ def record_activity_csv(data_tuple):
         )
         data_writer.writerow(data_tuple)
 
-    return
-
 
 def record_filter_log(filtered_title, ocreated, filter_type):
     """
@@ -2164,8 +2156,6 @@ def record_filter_log(filtered_title, ocreated, filter_type):
     # Write the new line.
     f.write(filter_line)
     f.close()
-
-    return
 
 
 def record_last_post_comment():
@@ -2251,8 +2241,6 @@ def record_error_log(error_save_entry):
             logger.error("[ZW] Error_Log: Encountered a Unicode writing error.")
         f.close()
 
-    return
-
 
 def record_retrieve_error_log():
     """
@@ -2336,8 +2324,6 @@ def record_to_wiki(odate, otitle, oid, oflair_text, s_or_i, oflair_new, user=Non
             logger.warning(f"[ZW] Save_Wiki: The '{page_name}' wiki page is full.")
             reddit.subreddit("translatorBOT").message(message_subject, message_template)
         logger.info("[ZW] Save_Wiki: Updated the 'identified' wiki page.")
-
-    return
 
 
 """
@@ -2440,8 +2426,6 @@ def messaging_user_statistics_writer(body_text, username):
     else:
         logger.debug("[ZW] messaging_user_statistics_writer: No commands to write.")
         pass
-
-    return
 
 
 def messaging_user_statistics_loader(username):
@@ -2726,8 +2710,6 @@ def messaging_translated_message(oauthor, opermalink):
         "about their translated post.".format(oauthor)
     )
 
-    return
-
 
 """
 NOTIFICATIONS SYSTEM
@@ -2987,8 +2969,6 @@ def notifier_limit_writer(username, language_code, num_notifications=1):
 
     # Commit changes.
     conn_main.commit()
-
-    return
 
 
 def notifier_limit_over_checker(username, language_code, hard_limit):
@@ -3268,8 +3248,6 @@ def notifier_language_list_editer(language_list, username, mode="insert"):
                 conn_main.commit()
             else:
                 continue
-
-    return
 
 
 def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify):
@@ -3750,8 +3728,6 @@ def ziwen_messages():
 
             message.reply(user_points_output + commands_component + BOT_DISCLAIMER)
             action_counter(1, "Points checks")
-
-    return
 
 
 """
@@ -5916,8 +5892,6 @@ def reference_search(lookup_term):
             )
             return reference_cached_info
 
-    return
-
 
 def reference_reformatter(original_entry):
     """
@@ -6136,8 +6110,6 @@ def edit_finder():
         # Delete all but the last comment_limit comments.
         conn_cache.commit()
         logger.debug("[ZW] Edit Finder: Cleaned up the edited comments cache.")
-
-    return
 
 
 """
@@ -6524,8 +6496,6 @@ def ziwen_posts():
                 logger.debug(
                     "[ZW] Posts: Created Ajo for new post and saved to local database."
                 )
-
-    return
 
 
 """
@@ -7833,8 +7803,6 @@ def verification_parser():
             "[ZW] Updated the verification log with a new request from u/" + c_author
         )
 
-    return
-
 
 def progress_checker():
     """
@@ -7901,8 +7869,6 @@ def progress_checker():
                 ajo_writer(oajo)  # Write the Ajo to the local database
             else:  # This post is still under the time limit. Do nothing.
                 continue
-
-    return
 
 
 """LESSER RUNTIMES"""
@@ -7979,8 +7945,6 @@ def cc_ref():
                     "exceeds the amount Reddit allows for a comment."
                 )
 
-    return
-
 
 def ziwen_maintenance():
     """
@@ -8030,8 +7994,6 @@ def ziwen_maintenance():
     logger.debug("[ZW] # Points cache updated.")
 
     maintenance_database_processed_cleaner()  # Clean the comments that have been processed.
-
-    return
 
 
 """INITIAL VARIABLE SET-UP"""

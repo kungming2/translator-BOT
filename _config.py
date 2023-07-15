@@ -101,8 +101,6 @@ def credentials_loader():
     # Declare the variables.
     globals().update(login_data)
 
-    return
-
 
 # Load the credentials from the JSON file.
 credentials_loader()
@@ -178,8 +176,6 @@ def error_log_basic(entry, bot_version):
         )
         f.close()
 
-    return
-
 
 def action_counter(messages_number, action_type):
     """
@@ -220,8 +216,6 @@ def action_counter(messages_number, action_type):
 
     with open(os.path.join(FILE_ADDRESS_COUNTER), "w", encoding="utf-8") as fp:
         json.dump(current_actions_dict, fp, sort_keys=True, indent=4)
-
-    return
 
 
 def load_statistics_data(language_code):

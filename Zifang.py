@@ -83,8 +83,6 @@ def record_error_log(error_save_entry):
             logger.error("[ZF] Error_Log: Encountered a Unicode writing error.")
         f.close()
 
-    return
-
 
 def is_mod(username):
     """Checks if the user is a moderator of the subreddit."""
