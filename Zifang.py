@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
 """
 Zifang is a new addition to help Ziwen with some ancillary tasks.
 """
@@ -392,7 +391,7 @@ def wikipedia_lookup(terms, language="English"):
     entries = []
 
     # Code for searching non-English Wikipedia, currently not needed.
-    if language is not "English":
+    if language != "English":
         lang_code = converter(language)[0]
         wikipedia.set_lang(lang_code)
 
@@ -433,7 +432,7 @@ def wikipedia_lookup(terms, language="English"):
             term_summary = term_summary.split("==")[0].strip()
         if not term_entry:
             term_entry = f"https://en.wikipedia.org/wiki/{term_format}"
-        term_entry = term_entry.replace(")", "\)")
+        term_entry = term_entry.replace(")", r"\)")
 
         # Form the entry text.
         entries.append(f"\n**[{term}]({term_entry})**\n\n> {term_summary}\n\n")

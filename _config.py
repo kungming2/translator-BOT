@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
 
 """Universal functions and variables for r/translator bots to use."""
 
@@ -92,7 +91,7 @@ def credentials_loader():
     """
 
     # Access the JSON file with the credentials.
-    f = open(FILE_ADDRESS_CREDENTIALS, "r", encoding="utf-8")
+    f = open(FILE_ADDRESS_CREDENTIALS, encoding="utf-8")
     login_data = f.read()
     f.close()
 
@@ -138,7 +137,7 @@ def get_random_useragent():
     """
 
     # Load the JSON file
-    f = open(FILE_ADDRESS_UA, "r", encoding="utf-8")
+    f = open(FILE_ADDRESS_UA, encoding="utf-8")
     ua_data = f.read()
     f.close()
 
@@ -234,7 +233,7 @@ def load_statistics_data(language_code):
     """
 
     # Open the file
-    f = open(FILE_ADDRESS_ALL_STATISTICS, "r", encoding="utf-8")
+    f = open(FILE_ADDRESS_ALL_STATISTICS, encoding="utf-8")
     stats_data = f.read()
     f.close()
 

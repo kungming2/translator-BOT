@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
 
 """A Python file containing most of the long-form comments and messages that all r/translator bots use."""
 

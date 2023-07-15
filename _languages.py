@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
 
 """A collection of database sets and language functions that all r/translator bots use."""
 
@@ -3641,9 +3640,7 @@ def lang_code_search(search_term, script_search):
     if len(search_term) == 4:
         is_script = True
 
-    csv_file = csv.reader(
-        open(FILE_ADDRESS_ISO_ALL, "rt", encoding="utf-8"), delimiter=","
-    )
+    csv_file = csv.reader(open(FILE_ADDRESS_ISO_ALL, encoding="utf-8"), delimiter=",")
     for row in csv_file:
         # We have a master dictionary. Index by code. Tuple has: (language name, language name (lower), alt names lower)
         master_dict[row[0]] = (row[2:][0], row[2:][0].lower(), row[3:][0].lower())

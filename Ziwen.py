@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
 """
 Ziwen [ZW] is the main active component of u/translator-BOT, servicing r/translator and other communities.
 
@@ -146,9 +145,7 @@ if len(sys.argv) > 1:  # This is a new startup with additional parameters for mo
         TESTING_MODE = True
         SUBREDDIT = "trntest"
         MESSAGES_OKAY = False
-        logger.info(
-            f"[ZW] Startup: Starting up in TESTING MODE for r/{SUBREDDIT}..."
-        )
+        logger.info(f"[ZW] Startup: Starting up in TESTING MODE for r/{SUBREDDIT}...")
 
 # Connecting to the Reddit API via OAuth.
 logger.info(f"[ZW] Startup: Logging in as u/{USERNAME}...")
@@ -443,9 +440,7 @@ def ajo_retrieve_script_code(script_name):
     codes_list = []
     names_list = []
 
-    csv_file = csv.reader(
-        open(FILE_ADDRESS_ISO_ALL, "rt", encoding="utf-8"), delimiter=","
-    )
+    csv_file = csv.reader(open(FILE_ADDRESS_ISO_ALL, encoding="utf-8"), delimiter=",")
     for row in csv_file:
         if len(row[0]) == 4:  # This is a script code. (the others are 3 characters. )
             codes_list.append(row[0])
@@ -1086,9 +1081,7 @@ class Ajo:
                 self.recorded_translators.append(
                     translator_name
                 )  # Add the username of the translator to the Ajo.
-                logger.debug(
-                    f"[ZW] Ajo: Added translator name u/{translator_name}."
-                )
+                logger.debug(f"[ZW] Ajo: Added translator name u/{translator_name}.")
         except (
             AttributeError
         ):  # There were no translators defined in the Ajo... Let's create it.
@@ -2269,7 +2262,7 @@ def record_retrieve_error_log():
     """
 
     # Error stuff. Open the file.
-    with open(FILE_ADDRESS_ERROR, "r", encoding="utf-8") as f:
+    with open(FILE_ADDRESS_ERROR, encoding="utf-8") as f:
         error_logs = f.read()
 
     # Obtain the last two errors that were recorded.
@@ -2340,9 +2333,7 @@ def record_to_wiki(odate, otitle, oid, oflair_text, s_or_i, oflair_new, user=Non
             page_name = "identified"
             message_subject = f"[Notification] '{page_name}' Wiki Page Full"
             message_template = MSG_WIKIPAGE_FULL.format(page_name)
-            logger.warning(
-                f"[ZW] Save_Wiki: The '{page_name}' wiki page is full."
-            )
+            logger.warning(f"[ZW] Save_Wiki: The '{page_name}' wiki page is full.")
             reddit.subreddit("translatorBOT").message(message_subject, message_template)
         logger.info("[ZW] Save_Wiki: Updated the 'identified' wiki page.")
 
@@ -2422,9 +2413,9 @@ def messaging_user_statistics_writer(body_text, username):
     for keyword in recorded_keywords:
         if keyword in body_text:
             if (
-                keyword is "`"
+                keyword == "`"
             ):  # Since these come in pairs, we have to divide this in half.
-                keyword_count = int((body_text.count(keyword) / 2))
+                keyword_count = int(body_text.count(keyword) / 2)
             else:  # Regular command
                 keyword_count = body_text.count(keyword)
 
@@ -3255,7 +3246,7 @@ def notifier_language_list_editer(language_list, username, mode="insert"):
         for code in language_list:
             if len(code) == 4 and code != "meta":  # This is a script
                 code = "unknown-" + code  # Format it for insertion.
-            elif code is "en":  # Skip inserting English.
+            elif code == "en":  # Skip inserting English.
                 continue
 
             # Check to see if user is already in our database.
@@ -3489,9 +3480,7 @@ def ziwen_messages():
         if (
             "subscribe" in msubject and "un" not in msubject
         ):  # User wants to subscribe to language notifications.
-            logger.info(
-                f"[ZW] Messages: New subscription request from u/{mauthor}."
-            )
+            logger.info(f"[ZW] Messages: New subscription request from u/{mauthor}.")
 
             # This gets a list of language codes from the message body.
             language_matches = language_list_splitter(mbody)
@@ -3535,9 +3524,7 @@ def ziwen_messages():
                 action_counter(len(language_matches), "Subscriptions")
 
         elif "unsubscribe" in msubject:  # User wants to unsubscribe from notifications.
-            logger.info(
-                f"[ZW] Messages: New unsubscription request from u/{mauthor}."
-            )
+            logger.info(f"[ZW] Messages: New unsubscription request from u/{mauthor}.")
 
             # This gets a list of language codes from the message body.
             language_matches = language_list_splitter(mbody)
@@ -3745,9 +3732,7 @@ def ziwen_messages():
             )
 
         elif "points" in msubject:
-            logger.info(
-                f"[ZW] Messages: New points status request from u/{mauthor}."
-            )
+            logger.info(f"[ZW] Messages: New points status request from u/{mauthor}.")
 
             # Get the user's points
             user_points_output = "### Points on r/translator\n\n" + points_retreiver(
@@ -3798,7 +3783,7 @@ def zh_character_oc_search(character):
 
     # Iterate over the CSV
     csv_file = csv.reader(
-        open(FILE_ADDRESS_OLD_CHINESE, "rt", encoding="utf-8"), delimiter=","
+        open(FILE_ADDRESS_OLD_CHINESE, encoding="utf-8"), delimiter=","
     )
     for row in csv_file:
         my_character = row[0]
@@ -3818,7 +3803,7 @@ def zh_character_oc_search(character):
         return None
     else:  # Character exists!
         character_data = mc_oc_readings[character]  # Get the tuple
-        to_post = "\n**Middle Chinese** | \**{}*" "\n**Old Chinese** | \*{}*".format(
+        to_post = "\n**Middle Chinese** | \\**{}*" "\n**Old Chinese** | \\*{}*".format(
             character_data[0], character_data[1]
         )
         return to_post
@@ -4385,7 +4370,7 @@ def zh_word_buddhist_dictionary_search(chinese_word):
     general_dictionary = {}
 
     # We open the file.
-    f = open(FILE_ADDRESS_ZH_BUDDHIST, "r", encoding="utf-8")
+    f = open(FILE_ADDRESS_ZH_BUDDHIST, encoding="utf-8")
     existing_data = f.read()
     existing_data = existing_data.split("\n")
     f.close()
@@ -4448,7 +4433,7 @@ def zh_word_cccanto_search(cantonese_word):
     general_dictionary = {}
 
     # We open the file.
-    f = open(FILE_ADDRESS_ZH_CCCANTO, "r", encoding="utf-8")
+    f = open(FILE_ADDRESS_ZH_CCCANTO, encoding="utf-8")
     existing_data = f.read()
     existing_data = existing_data.split("\n")
     f.close()
@@ -4572,7 +4557,7 @@ def zh_word_alt_romanization(pinyin_string):
     # Get the corresponding pronunciations into a dictonary.
     corresponding_dict = {}
     csv_file = csv.reader(
-        open(FILE_ADDRESS_ZH_ROMANIZATION, "rt", encoding="utf-8"), delimiter=","
+        open(FILE_ADDRESS_ZH_ROMANIZATION, encoding="utf-8"), delimiter=","
     )
     for row in csv_file:
         pinyin_p, yale_p, wadegiles_p = row
@@ -4587,7 +4572,7 @@ def zh_word_alt_romanization(pinyin_string):
         syllable = syllable[:-1].lower()
 
         # Make exception for null tones.
-        if tone is not "5":  # Add tone as superscript
+        if tone != "5":  # Add tone as superscript
             yale_equiv = f"{corresponding_dict[syllable][0]}^({tone})"
             wadegiles_equiv = f"{corresponding_dict[syllable][1]}^({tone})"
         else:  # Null tone, no need to add a number.
@@ -5250,7 +5235,7 @@ def ja_word_surname(name):
         lookup_line_1 += (
             "**Readings:** " + furigana_chunk[2:]
         )  # We return the formatted readings of this name
-        lookup_line_2 = str("\n\n**Meanings**: A Japanese surname.")
+        lookup_line_2 = "\n\n**Meanings**: A Japanese surname."
         lookup_line_3 = "\n\n\n^Information ^from [^Myoji](https://myoji-yurai.net/searchResult.htm?myojiKanji={0}) "
         lookup_line_3 += "^| [^Weblio ^EJJE](https://ejje.weblio.jp/content/{0})"
         lookup_line_3 = lookup_line_3.format(name)
@@ -5553,9 +5538,9 @@ def lookup_matcher(content_text, language_name):
         tokenized_list = []
         for item in zhja_temp_list:
             if len(item) >= 2:  # Longer than bisyllabic?
-                if language_name is "Chinese" and not kana_true:
+                if language_name == "Chinese" and not kana_true:
                     new_matches = lookup_zhja_tokenizer(simplify(item), "zh")
-                elif language_name is "Japanese" or kana_true:
+                elif language_name == "Japanese" or kana_true:
                     new_matches = lookup_zhja_tokenizer(item, "ja")
                 else:
                     new_matches = [item]
@@ -5625,7 +5610,7 @@ def lookup_ko_word(word):
     if (
         "없습니다" in word_exists
     ):  # Check to not return anything if the entry is invalid (means "there is not")
-        to_post = str("> Sorry, but that Korean word doesn't look like anything to me.")
+        to_post = "> Sorry, but that Korean word doesn't look like anything to me."
         return to_post
     else:
         hangul_romanization = Romanizer(word).romanize()
@@ -5763,9 +5748,7 @@ def lookup_wiktionary_search(search_term, language_name):
     test_wikt_link = f"https://en.wiktionary.org/wiki/{search_term}#{language_name}"
     test_page = requests.get(test_wikt_link, headers=ZW_USERAGENT)
     test_tree = html.fromstring(test_page.content)  # now contains the whole HTML page
-    test_language = test_tree.xpath(
-        f'string(//span[contains(@id,"{language_name}")])'
-    )
+    test_language = test_tree.xpath(f'string(//span[contains(@id,"{language_name}")])')
     if language_name == test_language:
         logger.info("[ZW] This word exists in its proper language on Wiktionary.")
     else:
@@ -6494,7 +6477,7 @@ def ziwen_posts():
                             multiple_language_text, otitle, opermalink, oauthor, False
                         )
                     if (
-                        final_css_class is "multiple"
+                        final_css_class == "multiple"
                     ):  # We wanna leave an advisory comment if it's a defined multiple
                         post.reply(COMMENT_DEFINED_MULTIPLE + BOT_DISCLAIMER)
                 elif (
@@ -6754,9 +6737,7 @@ def ziwen_bot():
                 except praw.exceptions.APIException:
                     pass
                 else:
-                    logger.info(
-                        f"[ZW] Bot: Replied to u/{pauthor} with restored text."
-                    )
+                    logger.info(f"[ZW] Bot: Replied to u/{pauthor} with restored text.")
 
         # We move the exit point if there is no author here. Since !restore relies on there being no author.
         if oauthor is None:
@@ -6879,9 +6860,7 @@ def ziwen_bot():
                         else:  # There was no country listed, so let's reset the code to none.
                             oajo.set_country(None)
                         oajo.set_language(language_code, True)  # Set the language.
-                        logger.info(
-                            f"[ZW] Bot: Changed flair to {language_name}."
-                        )
+                        logger.info(f"[ZW] Bot: Changed flair to {language_name}.")
                 elif match_script:  # This is a script.
                     oajo.set_script(language_code)
                     logger.info(
@@ -7117,9 +7096,7 @@ def ziwen_bot():
                 continue
 
             limit_num_matches = 5
-            logger.info(
-                f"[ZW] Bot: >> Determined Lookup Dictionary: {total_matches}"
-            )
+            logger.info(f"[ZW] Bot: >> Determined Lookup Dictionary: {total_matches}")
             for key, value in total_matches.items():
                 if key in CJK_LANGUAGES["Chinese"]:
                     logger.info("[ZW] Bot: >> Conducting lookup search in Chinese.")
@@ -7312,7 +7289,7 @@ def ziwen_bot():
 
             logger.info(f"[ZW] Bot: COMMAND: !doublecheck, from u/{pauthor}.")
 
-            if oajo.type is "multiple":
+            if oajo.type == "multiple":
                 if isinstance(
                     oajo.language_name, list
                 ):  # It is a defined multiple post.
@@ -7411,7 +7388,7 @@ def ziwen_bot():
                 continue  # If not, continue, we don't care about this.
 
             # This should only be marked if it's untranslated. So it shouldn't affect
-            if oajo.status is not "untranslated":
+            if oajo.status != "untranslated":
                 continue
 
             # This should only be marked if it's not in an identified state, in case people respond to that command.
@@ -7523,7 +7500,7 @@ def ziwen_bot():
             if oflair_css is None:  # If there is no CSS flair...
                 oflair_css = "generic"  # Give it a generic flair.
 
-            if oajo.type is "multiple":
+            if oajo.type == "multiple":
                 if isinstance(
                     oajo.language_name, list
                 ):  # It is a defined multiple post.
@@ -7642,9 +7619,7 @@ def ziwen_bot():
             if (
                 is_mod(pauthor) or pauthor == oauthor
             ):  # Check if user is a mod or the OP.
-                logger.info(
-                    f"[ZW] Bot: COMMAND: !reset, from user u/{pauthor}."
-                )
+                logger.info(f"[ZW] Bot: COMMAND: !reset, from user u/{pauthor}.")
                 oajo.reset(otitle)
                 logger.info("[ZW] Bot: > Reset everything for the designated post.")
             else:
@@ -7684,9 +7659,7 @@ def ziwen_bot():
                 continue
             match = comment_info_parser(pbody, "!note:")[0]
             language_name = converter(match)[1]
-            logger.info(
-                f"[ZW] Bot: COMMAND: !note, from moderator u/{pauthor}."
-            )
+            logger.info(f"[ZW] Bot: COMMAND: !note, from moderator u/{pauthor}.")
             record_to_wiki(
                 odate=int(ocreated),
                 otitle=otitle,
@@ -7855,9 +7828,7 @@ def verification_parser():
             COMMENT_VERIFICATION_RESPONSE.format(thanks_phrase, c_author)
             + BOT_DISCLAIMER
         )
-        comment.report(
-            f"Ziwen: Please check verification request from u/{c_author}."
-        )
+        comment.report(f"Ziwen: Please check verification request from u/{c_author}.")
         logger.info(
             "[ZW] Updated the verification log with a new request from u/" + c_author
         )
@@ -8100,9 +8071,7 @@ if __name__ == "__main__":
             # Record memory usage at the end of an isochronism.
             mem_num = psutil.Process(os.getpid()).memory_info().rss
             mem_usage = f"Memory usage: {mem_num / (1024 * 1024):.2f} MB."
-            logger.info(
-                f"[ZW] Run complete. Calls used: {used_calls}. {mem_usage}"
-            )
+            logger.info(f"[ZW] Run complete. Calls used: {used_calls}. {mem_usage}")
 
             if (
                 not TESTING_MODE
@@ -8129,9 +8098,7 @@ if __name__ == "__main__":
                 elapsed_time,
             )
             record_activity_csv(run_information)
-            logger.info(
-                f"[ZW] Main: Run complete. {elapsed_time:.2f} minutes.\n"
-            )
+            logger.info(f"[ZW] Main: Run complete. {elapsed_time:.2f} minutes.\n")
     except KeyboardInterrupt:  # Manual termination of the script with Ctrl-C.
         logger.info("Manual user shutdown.")
         sys.exit()
