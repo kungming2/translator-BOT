@@ -10,7 +10,7 @@ import itertools
 
 from rapidfuzz import fuzz  # Switched to rapidfuzz
 
-VERSION_NUMBER_LANGUAGES = "1.7.17"
+VERSION_NUMBER_LANGUAGES = "1.7.22"
 
 # Access the CSV with ISO 639-3 and ISO 15924 data.
 lang_script_directory = os.path.dirname(__file__)  # <-- absolute dir the script is in
@@ -560,7 +560,7 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Galician',
         'language_code_3': 'glg',
-        'alternate_names': ['Gallego'],
+        'alternate_names': ['Gallego', 'Galego'],
         'thanks': "Grazas"
     },
     "gn": {
@@ -919,7 +919,7 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Ganda',
         'language_code_3': 'lug',
-        'alternate_names': ['Kiganda'],
+        'alternate_names': ['Kiganda', 'Luganda'],
         'thanks': "Weebale"
     },
     "li": {
@@ -933,7 +933,7 @@ MAIN_LANGUAGES = {
         'supported': True,
         'name': 'Lingala',
         'language_code_3': 'lin',
-        'alternate_names': None,
+        'alternate_names': ['Lingála', 'Ngala'],
         'thanks': "Botondi"
     },
     "lo": {
@@ -955,7 +955,7 @@ MAIN_LANGUAGES = {
         'supported': False,
         'name': 'Luba-Kasai',
         'language_code_3': 'lub',
-        'alternate_names': ['Luba-Katanga']
+        'alternate_names': ['Luba-Katanga', 'Cilubà', 'Tshilubà']
     },
     "lv": {
         'supported': True,
@@ -1434,7 +1434,7 @@ MAIN_LANGUAGES = {
         'supported': True,
         'name': 'Swahili',
         'language_code_3': 'swh',
-        'alternate_names': ['Kiswahili'],
+        'alternate_names': ['Kiswahili', 'Suaheli'],
         'countries_associated': ['CD', 'TZ', 'KE', 'UG'],
         'subreddits': ["r/swahili"],
         'thanks': "Asante"
@@ -1774,11 +1774,12 @@ ENGLISH_3_WORDS = ['Abs', 'Abu',
 FUZZ_IGNORE_WORDS = ['Ancient Mayan', 'Archaic', 'Base', 'Canada', 'Cheese', 'Chopstick', 'Classical Japanese', 
                      'Creek', 'Dish', 'Green', 'Guarani', 'Here', 'Horse', 'Japanese', 'Javanese', 'Japanese -',
                      'Kanada', 'Karen', 'Latina', 'Ladin',
-                     'Ladino', 'Latino', 'Lmao', 'Logo', 'Maay', 'Major', 'Mardi', 'Maria', 'Mario', 'Morse', 'Nosey', 'Nurse',
+                     'Ladino', 'Latino', 'Lmao', 'Logo', 'Maay', 'Major', 'Malaysia',
+                     'Mardi', 'Maria', 'Mario', 'Morse', 'Nosey', 'Nurse',
                      'Orkish', 'Past', 'Person', 'Peruvian', 'Prussian', 'Roman', 'Romani',
                      'Romanization', 'Romanized', 'Romanji',
                      'Romanjin', 'Romany', 'Sake', 'Scandinavian', 'Serial', 'Sorbian', 'Sumerian', 'Syrian Arabic', 'Titan',
-                     'Trail', 'Trench', 'Turks',]
+                     'Trail', 'Trench', 'Turks', ]
 
 # Title formatting words.
 ENGLISH_DASHES = ['English -', 'English-', '-English', '- English', '-Eng', 'Eng-', '- Eng', 'Eng -', 'ENGLISH-',
@@ -1793,7 +1794,7 @@ APP_WORDS = [' app ', ' bot ', 'add-on', 'addon', 'an app', 'android', 'chatbot'
 # A manually populated dictionary that matches ISO macrolanguages with their most prominent consituent language.
 ISO_MACROLANGUAGES = {
     "aka": ("twi", ["fat", "twi"]),
-    "ara": ("arb", ["aao", "abh", "abv", "acm", "acq", "acw", "acx", "acy", "adf", "aeb", "aec", "afb", "ajp", "apc",
+    "ara": ("arb", ["aao", "abh", "abv", "acm", "acq", "acw", "acx", "acy", "adf", "aeb", "aec", "afb", "apc",
                     "apd", "arb", "arq", "ars", "ary", "arz", "auz", "avl", "ayh", "ayl", "ayn", "ayp", "bbz", "pga",
                     "shu", "ssh"]),
     "aym": ("ayr", ["ayr", "ayc"]),
@@ -2105,9 +2106,9 @@ ISO_LANGUAGE_COUNTRY_ASSOCIATED = {
     "ar-LY": "ayl",
     "ar-SA": "acw",
     "ar-OM": "acx",
-    "ar-IL": "ajp",
-    "ar-PS": "ajp",
-    "ar-JO": "ajp",
+    "ar-IL": "apc",
+    "ar-PS": "apc",
+    "ar-JO": "apc",
     "ar-SD": "apd",
     "ar-TN": "aeb",
     "ay-PE": "ayc",
@@ -2787,7 +2788,11 @@ def bad_title_reformat(title_text):
     :return new_title: A reformatted title that adheres to the community's guidelines.
     """
 
-    listed_languages = language_mention_search(title_text.title())
+    # Process the title first - and remove punctuation.
+    search_text = re.sub(r'[^\w\s]', ' ', title_text)
+    search_text = search_text.title()
+
+    listed_languages = language_mention_search(search_text.title())
     if listed_languages is not None:  # We have some results.
         listed_languages = [x for x in listed_languages if x != 'English']
         listed_languages = [x for x in listed_languages if x != 'Multiple Languages']
