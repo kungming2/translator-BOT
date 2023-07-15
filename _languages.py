@@ -26,14 +26,6 @@ lang_script_directory += "/Data/"  # Where the main files are kept.
 FILE_ADDRESS_ISO_ALL = os.path.join(lang_script_directory, "_database_iso_codes.csv")
 
 """LANGUAGE CODE LISTS"""
-# These are symbols used to indicate states in defined multiple posts. The last two are currently used.
-DEFINED_MULTIPLE_LEGEND = {
-    "⍉": "missing",
-    "¦": "inprogress",
-    "✓": "doublecheck",
-    "✔": "translated",
-}
-
 
 # These are two-letter and three-letter English words that can be confused for ISO language codes.
 # We exclude them when processing the title. When adding new ones, add them in title case.
