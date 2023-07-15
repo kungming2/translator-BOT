@@ -96,7 +96,7 @@ MSG_RESTORE_NOT_ELIGIBLE = ("Sorry, but your username does not appear on the lis
                             "individuals for this post. If you had previously made a translation, please mark it as "
                             "translated with the `!translated` command, and then try again.")
 MSG_RESTORE_TEXT_FAIL = "Sorry, but I couldn't find any data on [Pushshift](https://pushshift.io/) for [this post]({})."
-MSG_RESTORE_TEXT_TEMPLATE= '''
+MSG_RESTORE_TEXT_TEMPLATE = '''
 *The following text was retrieved for [this post]({}) using data from [Pushshift](https://pushshift.io/)*:
 
 ---
@@ -172,7 +172,8 @@ This post has already been claimed by u/{claimer_name}. Their in-progress claim 
 COMMENT_UNKNOWN = '''
 **It looks like you have submitted a translation request tagged as 'Unknown.'** 
 
-* Other community members may help you recategorize your post with the `!identify:` or the `!page:` commands.
+* Other community members may help you recategorize your post with the `!identify:` or the `!page:` \
+[commands](https://www.reddit.com/r/translatorBOT/wiki/ziwen#wiki_post_state_commands).
 * Please refrain from posting short 'thank you' comments until your request has been fully translated.
 * Do *not* delete your post if it is identified as another language. We will automatically find people who can help you!
 
@@ -349,3 +350,27 @@ ZWS_COMMENT_ENGLISH_ONLY = ('It appears that this is an English-only "translatio
                             'posts are better suited for r/EnglishLearning.')
 ZWS_COMMENT_WRONG_XPOST_COMMENT = ("It appears that you're trying to crosspost a comment for translation, but your "
                                    "command is in reply to a submission.")
+ZF_DUPLICATE_COMMENT = """
+Hey u/{author}! 
+
+It appears that this post may be a duplicate of another that you've recently \
+submitted and I have removed it as a result.
+
+If this is in error, please resubmit this post with a *unique* title giving
+more context for translators, or message the r/translator moderators \
+[here](https://www.reddit.com/message/compose?to=r/translator&subject=Non-duplicate+Post&message=\
+https://www.reddit.com{permalink}). Thank you.
+"""
+ZF_CLOSING_OUT_SUBJECT = "[Notification] Was your {language} request translated?"
+ZF_CLOSING_OUT_MESSAGE = """
+Hey there, u/{author}!
+
+Thanks for submitting [your post](https://reddit.com{permalink}) to r/translator! It's been over {days} days since \
+you posted your request, and there's been {num_comments} comments on it since then.
+
+If any of those comments fulfilled your {language} translation request, **please reply to that comment with \
+`!translated` to give credit to your translator and close out [your request](https://reddit.com{permalink}).** \
+If your request remains unfulfilled, you do not have to do anything and you are welcome to resubmit it.
+
+Thank you for helping keep our community organized! We hope you found it a useful place.
+"""
