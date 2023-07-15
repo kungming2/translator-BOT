@@ -258,6 +258,6 @@ def time_convert_to_string(unix_integer):
     utc_time = datetime.datetime.fromtimestamp(i, tz=datetime.timezone.utc).isoformat()[
         :19
     ]
-    utc_time = "{}Z".format(utc_time)
+    utc_time = f"{utc_time}Z"
 
     return utc_time

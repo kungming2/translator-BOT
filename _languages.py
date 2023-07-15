@@ -3537,7 +3537,7 @@ def language_lists_generator():
 
         if "countries_default" in language_module:
             ISO_DEFAULT_ASSOCIATED.append(
-                "{}-{}".format(language_code, language_module["countries_default"])
+                f"{language_code}-{language_module['countries_default']}"
             )
 
         if "countries_associated" in language_module:
@@ -3621,7 +3621,7 @@ def transbrackets_new(title):
         title_remainder = title_remainder[:-1]
         bracketed_tag = "[" + bracketed_tag + "]"  # enclose it
 
-    reformed_title = "{} {}".format(bracketed_tag, title_remainder)
+    reformed_title = f"{bracketed_tag} {title_remainder}"
 
     return reformed_title
 
@@ -3816,7 +3816,7 @@ def converter(input_text):
             country_name = country_converter(country_code, True)[1]
             input_text = broader_code
             if (
-                "{}-{}".format(input_text, country_code) in ISO_DEFAULT_ASSOCIATED
+                f"{input_text}-{country_code}" in ISO_DEFAULT_ASSOCIATED
                 or country_code.lower() == input_text.lower()
             ):  # Something like de-DE or zh-CN
                 regional_case = False
@@ -4011,7 +4011,7 @@ def country_validator(word_list, language_list):
                 for country in check_countries:
                     # print(country)
                     if country in all_detected_countries:  # country is listed.
-                        lang_country_combined = "{}-{}".format(language_code, country)
+                        lang_country_combined = f"{language_code}-{country}"
                         # print("Found a language country pair. {}".format(lang_country_combined))
                         if lang_country_combined in ISO_LANGUAGE_COUNTRY_ASSOCIATED:
                             # This means there is an ISO 639-3 code for this that we wanna use
@@ -4063,9 +4063,9 @@ def comment_info_parser(pbody, command):
             0:4
         ]  # This is a bit of a hack but w/e
         if len(script_code) == 4:  # Truly script code
-            pbody = pbody.replace(":unknown-", ":{}! ".format(script_code))
+            pbody = pbody.replace(":unknown-", f":{script_code}! ")
         else:  # Let's not put it into advanced mode otherwise.
-            pbody = pbody.replace(":unknown-", ":{} ".format(script_code))
+            pbody = pbody.replace(":unknown-", f":{script_code} ")
 
     if command in pbody:  # Check to see the command and test the remainder.
         pbody_test = pbody.split(command)[1]
@@ -4250,9 +4250,9 @@ def bad_title_reformat(title_text):
         or str("in " + new_language) in title_text
         or "from English" in title_text
     ):
-        new_tag = "[English > {}] ".format(new_language)
+        new_tag = f"[English > {new_language}] "
     else:
-        new_tag = "[{} > English] ".format(new_language)
+        new_tag = f"[{new_language} > English] "
     new_title = new_tag + title_text.strip()
 
     if len(new_title) >= 300:  # There is a hard limit on Reddit title lengths
@@ -4609,7 +4609,7 @@ def title_format(title, display_process=False):
 
     for character in ["&", "+", "/", "\\", "|"]:
         if character in title:  # Straighten out punctuation.
-            title = title.replace(character, " {} ".format(character))
+            title = title.replace(character, f" {character} ")
 
     for compound in [">>>", ">>", "> >"]:
         if compound in title:
@@ -5042,7 +5042,7 @@ def title_format(title, display_process=False):
     else:  # There was already a country listed above.
         # print("Region already noted...")
         if len(country_suffix_code) != 0 and len(final_css) == 2 or len(final_css) == 3:
-            language_country = "{}-{}".format(final_css, country_suffix_code)
+            language_country = f"{final_css}-{country_suffix_code}"
 
     if len(final_css) != 4:  # This is not a script
         final_css_text = converter(final_css)[1]  # Get the flair text for inclusion.
@@ -5057,7 +5057,7 @@ def title_format(title, display_process=False):
                 language_country[-2:]
             )  # Add the country code to the output flair
     else:  # This is a script
-        final_css_text = "{} (Script)".format(lang_code_search(final_css, True)[0])
+        final_css_text = f"{lang_code_search(final_css, True)[0]} (Script)"
         language_country = "unknown-{}".format(
             final_css
         )  # Returns a category like unknown-cyrl for notifications
@@ -5218,7 +5218,7 @@ def language_list_splitter(list_string):
         if converted_data[3] is None:  # This has no country data attached to it.
             code = converted_data[0]
         else:
-            code = "{}-{}".format(converted_data[0], converted_data[3])
+            code = f"{converted_data[0]}-{converted_data[3]}"
 
         if len(code) != 0 and item != "all":
             final_codes.append(code)
@@ -5258,13 +5258,13 @@ def main_posts_filter_required_keywords():
     for word in words_for_english:
         for connector in words_connection:
             temporary_list = [
-                " {} {}".format(connector, word),
-                "{} {} ".format(word, connector),
+                f" {connector} {word}",
+                f"{word} {connector} ",
             ]
 
             if connector != "to":
-                temporary_list.append("{}{}".format(connector, word))
-                temporary_list.append("{}{}".format(word, connector))
+                temporary_list.append(f"{connector}{word}")
+                temporary_list.append(f"{word}{connector}")
             else:
                 possible_strings["to_phrases"] += temporary_list
             possible_strings["total"] += temporary_list
@@ -5274,13 +5274,13 @@ def main_posts_filter_required_keywords():
         language_lower = language.lower()
         for connector in words_connection:
             temporary_list = [
-                " {} {}".format(connector, language_lower),
-                "{} {} ".format(language_lower, connector),
+                f" {connector} {language_lower}",
+                f"{language_lower} {connector} ",
             ]
 
             if connector != "to":
-                temporary_list.append("{}{}".format(connector, language_lower))
-                temporary_list.append("{}{}".format(language_lower, connector))
+                temporary_list.append(f"{connector}{language_lower}")
+                temporary_list.append(f"{language_lower}{connector}")
             else:
                 possible_strings["to_phrases"] += temporary_list
             possible_strings["total"] += temporary_list
