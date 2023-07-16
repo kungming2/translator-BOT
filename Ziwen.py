@@ -39,16 +39,12 @@ from _config import *
 from _responses import *
 from ja_processing import ja_character, ja_word
 from notifier import (
-    notifier_equalizer,
-    notifier_history_checker,
-    notifier_language_list_editer,
-    notifier_limit_writer,
-    notifier_list_pruner,
     notifier_over_frequency_checker,
     notifier_page_multiple_detector,
     notifier_page_translators,
-    notifier_regional_language_fetcher,
-    notifier_title_cleaner,
+    record_activity_csv,
+    ziwen_messages,
+    ziwen_notifier,
 )
 from zh_processing import zh_character, zh_word
 
@@ -65,7 +61,6 @@ USER_AGENT = (
     "{} {}, a notifications messenger, general commands monitor, and moderator for r/translator. "
     "Written and maintained by u/kungming2.".format(BOT_NAME, VERSION_NUMBER)
 )
-SUBREDDIT = "translator"
 TESTING_MODE = False
 
 # This is how many posts Ziwen will retrieve all at once. PRAW can download 100 at a time.
@@ -78,8 +73,6 @@ CLEANCYCLES = 90
 CLAIM_PERIOD = 28800
 # A boolean that enables the bot to send messages. Used for testing.
 MESSAGES_OKAY = True
-# A number that defines the soft number of notifications an individual will get in a month *per language*.
-NOTIFICATIONS_LIMIT = 100
 
 """KEYWORDS LISTS"""
 # These are the commands on r/translator.
@@ -516,77 +509,6 @@ Points-related functions are all prefixed with `points` in their name.
 """
 
 
-def points_retreiver(username):
-    """
-    Fetches the total number of points earned by a user in the current month.
-    This is used with the messages routine to tell people how many points they have earned.
-
-    :param username: The username of a Reddit user as a string.
-    :return to_post: A string containing information on how many points the user has received on r/translator.
-    """
-
-    recorded_months = []
-    recorded_posts = []
-    to_post = ""
-
-    current_time = time.time()
-    month_string = datetime.datetime.fromtimestamp(current_time).strftime("%Y-%m")
-
-    sql_s = "SELECT * FROM total_points WHERE username = ? AND month_year = ?"
-    cursor_main.execute(sql_s, (username, month_string))
-    username_month_points_data = cursor_main.fetchall()  # Returns a list of lists.
-
-    sql_un = "SELECT * FROM total_points WHERE username = ?"
-    cursor_main.execute(sql_un, (username,))
-    username_all_points_data = cursor_main.fetchall()
-
-    # Compile the monthly number of points the user has earned.
-    month_points = sum(data[3] for data in username_month_points_data)
-    # Compile the total number of points the user has earned.
-    all_points = sum(data[3] for data in username_all_points_data)
-
-    for data in username_all_points_data:
-        # Compile the total number of posts participated.
-        post_id = data[4]
-        recorded_posts.append(post_id)
-    recorded_posts = list(set(recorded_posts))
-    # This is the number of posts the user has participated in.
-    recorded_posts_count = len(recorded_posts)
-
-    for data in username_all_points_data:
-        # Compile the total number of months that have been recorded. .
-        recorded_months.append(data[0])
-        recorded_months = sorted(list(set(recorded_months)))
-
-    if all_points != 0:  # The user has points listed.
-        to_post += (
-            f"You've earned **{month_points} points** on r/translator this month.\n\n"
-            f"You've earned **{all_points} points** in total and participated in **{recorded_posts_count} posts**.\n\n"
-        )
-        to_post += "Year/Month | Points | Number of Posts Participated\n-----------|--------|------------------"
-    else:  # User has no points listed.
-        return MSG_NO_POINTS
-
-    for month in recorded_months:  # Generate rows of data from the points data.
-        recorded_month_points = 0
-        scratchpad_posts = []
-
-        command = "SELECT * FROM total_points WHERE username = ? AND month_year = ?"
-        cursor_main.execute(command, (username, month))
-        month_data = cursor_main.fetchall()
-        for data in month_data:
-            recorded_month_points += data[3]
-            scratchpad_posts.append(data[4])
-
-        recorded_posts = len(set(scratchpad_posts))
-
-        to_post += f"\n{month} | {recorded_month_points} | {recorded_posts}"
-    # Add a summary row for the totals.
-    to_post += f"\n*Total* | {all_points} | {recorded_posts_count}"
-
-    return to_post
-
-
 def points_worth_determiner(language_name):
     """
     This function takes a language name and determines the points worth for a translation for it. (the cap is 20)
@@ -997,21 +919,6 @@ Recording functions are all prefixed with `record` in their name.
 """
 
 
-def record_activity_csv(data_tuple):
-    """
-    Function that writes tuples of data to a CSV. It can be used for
-    various things, but the first part should be activity type, then
-    the date and time. This is written to FILE_ADDRESS_ACTIVITY.
-    :param data_tuple: Package of data we want to insert.
-    :return:
-    """
-    with open(FILE_ADDRESS_ACTIVITY, mode="a", newline="") as csv_file:
-        data_writer = csv.writer(
-            csv_file, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
-        )
-        data_writer.writerow(data_tuple)
-
-
 def record_filter_log(filtered_title, ocreated, filter_type):
     """
     Simple function to write the titles of removed posts to an external text file as an entry in a Markdown table.
@@ -1110,34 +1017,6 @@ def record_error_log(error_save_entry):
         f.close()
 
 
-def record_retrieve_error_log():
-    """
-    A simple routine to GET the last two errors and counters and include them in a ping reply.
-
-    :return logging_output: A formatted string using Markdown's indenting syntax for code (four spaces per line).
-    """
-
-    # Error stuff. Open the file.
-    with open(FILE_ADDRESS_ERROR, encoding="utf-8") as f:
-        error_logs = f.read()
-
-    # Obtain the last two errors that were recorded.
-    penultimate_error = error_logs.split("------------------------------")[-2]
-    penultimate_error = penultimate_error.replace(
-        "\n", "\n    "
-    )  # Add indenting of four spaces
-    last_error = error_logs.split("------------------------------")[-1]
-    last_error = last_error.replace("\n", "\n    ")  # Add indenting
-
-    # Return the last two errors only.
-    ping_error_output = penultimate_error + "\n\n" + last_error
-
-    # Return what has been recorded for today_counter
-    logging_output = f"\n\n{ping_error_output}"
-
-    return logging_output
-
-
 def record_to_wiki(odate, otitle, oid, oflair_text, s_or_i, oflair_new, user=None):
     """
     A function that saves information to one of two wiki pages on the r/translator subreddit.
@@ -1158,11 +1037,8 @@ def record_to_wiki(odate, otitle, oid, oflair_text, s_or_i, oflair_new, user=Non
 
     if s_or_i:  # Means we should write to the 'saved' page:
         page_content = reddit.subreddit(SUBREDDIT).wiki["saved"]
-        new_content = "| {} | [{}](https://redd.it/{}) | {} |".format(
-            oformat_date,
-            otitle,
-            oid,
-            oflair_text,
+        new_content = (
+            f"| {oformat_date} | [{otitle}](https://redd.it/{oid}) | {oflair_text} |"
         )
         page_content_new = str(page_content.content_md) + "\n" + new_content
         # Adds this language entry to the 'saved page'
@@ -1268,125 +1144,6 @@ def messaging_user_statistics_writer(body_text, username):
         logger.debug("[ZW] messaging_user_statistics_writer: No commands to write.")
 
 
-def messaging_user_statistics_loader(username):
-    """
-    Function that pairs with messaging_user_statistics_writer. Takes a username and looks up what commands they have
-    been recorded as using.
-    If they have data, it will return a nicely formatted table. Since the notifications data is also recorded in the
-    same database, this function will also format the data in that dictionary and integrate it into the table.
-
-    :param username: The username of a Reddit user.
-    :return: None if the user has no data (no commands that they called), a sorted table otherwise.
-    """
-
-    commands_lines_to_post = []
-    notifications_lines_to_post = []
-    header = "| Command | Times |\n|---------|-------|\n"
-
-    # Get commands data.
-    sql_us = "SELECT * FROM total_commands WHERE username = ?"
-    cursor_main.execute(sql_us, (username,))
-    username_commands_data = cursor_main.fetchone()
-
-    # Get notifications data.
-    sql_us = "SELECT * FROM notify_monthly_limit WHERE username = ?"
-    cursor_main.execute(sql_us, (username,))
-    notifications_commands_data = cursor_main.fetchone()
-
-    # Iterate over commands data.
-    if username_commands_data is None:  # There is no data for this user.
-        commands_lines_to_post = None
-    else:  # There's data. Get the data and format it line-by-line.
-        commands_dictionary = eval(
-            username_commands_data[1]
-        )  # We only want the stored dict here.
-        for key, value in sorted(commands_dictionary.items()):
-            command_type = key
-            if command_type != "Notifications":  # This is a regular command.
-                if command_type == "`":
-                    command_type = "`lookup`"
-                formatted_line = f"| {command_type} | {value} |"
-                commands_lines_to_post.append(formatted_line)
-
-    # Iterate over notifications data. Get the dictionary of notifications that were sent.
-    if notifications_commands_data is None:
-        notifications_lines_to_post = None
-    else:  # There's data
-        notification_dict = eval(notifications_commands_data[1])
-        for language_code, notification_num in sorted(notification_dict.items()):
-            formatted_line = "| Notifications (`{}`) | {} |".format(
-                language_code, notification_num
-            )
-            notifications_lines_to_post.append(
-                formatted_line
-            )  # Reform it as a string from a list.
-
-    if (
-        username_commands_data is None and notifications_commands_data is None
-    ):  # Absolutely no information.
-        return None
-    else:
-        # Format everything together. Convert None to blank list.
-        if commands_lines_to_post is None:
-            commands_lines_to_post = []
-        if notifications_lines_to_post is None:
-            notifications_lines_to_post = []
-        to_post = header + "\n".join(
-            commands_lines_to_post + notifications_lines_to_post
-        )
-        return to_post
-
-
-def messaging_language_frequency_table(language_list):
-    """
-    This is a function that supercedes `messaging_language_frequency` and can generate a table given a list of language
-    codes about the relative frequency for language notifications.
-    """
-
-    formatted_lines = []
-    header = "| Language Name | Average Number of Posts | Per |\n|-----------|-----:|:----|\n"
-
-    # Iterate over the language codes.
-    for code in language_list:
-        language_name = converter(code)[1]
-
-        # Retrieve stored data.
-        language_data = load_statistics_data(code)
-        if (
-            language_data is not None
-        ):  # There is historical statistics for this language.
-            daily_rate = language_data["rate_daily"]
-            monthly_rate = language_data["rate_monthly"]
-            yearly_rate = language_data["rate_yearly"]
-            link = language_data["permalink"]
-
-            # Here we try to determine which comment we should return as a line.
-            if (
-                daily_rate >= 2
-            ):  # This is a pretty popular one, with a few requests a day.
-                frequency = "day"
-                rate = daily_rate
-            elif (
-                2 > daily_rate > 0.05
-            ):  # This is a frequent one, a few requests a month. But not the most.
-                frequency = "month"
-                rate = monthly_rate
-            else:  # These are pretty infrequent languages. Maybe a few times a year at most.
-                frequency = "year"
-                rate = yearly_rate
-
-            # Combine the lines together as a message.
-            new_line = f"| [{language_name}]({link}) | {rate} posts / | {frequency} |"
-        else:  # We have not received data for this language.
-            new_line = f"| {language_name} | No recorded statistics | --- |"
-
-        # Add the line to our list.
-        formatted_lines.append(new_line)
-
-    # Format everything.
-    return header + "\n".join(formatted_lines)
-
-
 def messaging_translated_message(oauthor, opermalink):
     """
     Function to message requesters (OPs) that their post has been translated.
@@ -1415,483 +1172,6 @@ def messaging_translated_message(oauthor, opermalink):
     )
 
 
-"""
-NOTIFICATIONS SYSTEM
-
-These functions all relate to Ziwen's notifications - that is, the database of individuals who are on Ziwen's list for 
-languages. 
-
-The two main functions are: `ziwen_notifier`, the actual function that sends messages to people.
-                            `ziwen_messages`, the function that proccesses incoming messages to the bot.
-"""
-
-
-def ziwen_notifier(suggested_css_text, otitle, opermalink, oauthor, is_identify):
-    """
-    This function notifies people about posts they're subscribed to. Unlike ziwen_messages, this is not a top-level
-    function and is called by either ziwen_posts or ziwen_bot.
-
-    :param suggested_css_text: Typically this is the language name that we need to send notifications for.
-    :param otitle: The title of the post that is the subject of the notification.
-    :param opermalink: The link to the post.
-    :param oauthor: The author (OP) of the post.
-    :param is_identify: A boolean for whether it's a notification from an !identify command.
-    :return: The list of users who were notified, for the calling fucntion to save into an Ajo.
-    """
-    notify_users_list = []
-    contacted = []
-    post_type = "translation request"
-
-    # We don't want to send testing messages.
-    if "trntest" in opermalink:
-        return []
-
-    # Load the language_history from the Ajo for this.
-    # Exception for dashed stuff for now and meta and community and multiple ones. (defined multiples will just go thru)
-    if (
-        suggested_css_text not in ["Community", "Meta", "Multiple Languages", "App"]
-        and "-" not in suggested_css_text
-    ):
-        # Load the Ajo to check against its history.
-        mid = re.search(r"comments/(.*)/\w", opermalink).group(
-            1
-        )  # Get just the Reddit ID.
-        majo = ajo_loader(
-            mid, cursor_ajo, logger, POST_TEMPLATES, reddit
-        )  # Load the Ajo
-
-        # Checking the language history and the user history of the particular submission.
-        try:
-            language_history = (
-                majo.language_history
-            )  # Load the history of languages this post has been in
-            contacted = majo.notified  # Load the people who have been contacted before.
-            logger.debug(f"Ziwen Notifier: Already contacted {contacted}")
-            permission_to_proceed = notifier_history_checker(
-                suggested_css_text, language_history
-            )
-        except AttributeError:
-            permission_to_proceed = True
-
-        # If it's detected that we may have sent notifications for this already, just end it with no new notifications.
-        if not permission_to_proceed:
-            return []
-
-    # First we need to do a test to see if it's a specific code or not.
-    if "-" not in suggested_css_text:  # This is a regular notification.
-        language_code = converter(suggested_css_text)[0]
-        language_name = converter(suggested_css_text)[1]
-        if (
-            suggested_css_text == "Multiple Languages"
-        ):  # Debug fix for the multiple ones.
-            language_code = "multiple"
-            language_name = "Multiple Languages"
-        elif suggested_css_text in [
-            "meta",
-            "community",
-        ]:  # Debug fix for the meta & community ones.
-            language_code = suggested_css_text
-            language_name = suggested_css_text.title()
-            post_type = "post"  # Since these are technically not language requests
-
-            # Here we have code to make sure that only mods and the bot send notifications for meta/community posts.
-            if not is_mod(oauthor):  # This OP is not a mod. Don't send notifications.
-                return []  # Exit.
-    else:  # This is a specific code, we want to add the people only signed up for them.
-        # Note, this only gets people who are specifically signed up for them, not
-        language_code = suggested_css_text.split("-", 1)[
-            0
-        ]  # We get the broader category here. (ar, unknown)
-        language_name = converter(suggested_css_text)[1]
-        if language_code == "unknown":  # Add a new script phrase
-            language_name += " (Script)"  # This is to distinguish script notifications
-        regional_data = notifier_regional_language_fetcher(
-            suggested_css_text, cursor_main
-        )
-        if len(regional_data) != 0:
-            notify_users_list += (
-                regional_data  # add the additional people to the notifications list.
-            )
-
-    sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
-    cursor_main.execute(sql_lc, (language_code,))
-    notify_targets = cursor_main.fetchall()
-
-    if (
-        len(notify_targets) == 0 and len(notify_users_list) == 0
-    ):  # If there's no one on the list, just continue
-        return []
-
-    for target in notify_targets:  # This is a list of tuples.
-        username = target[
-            1
-        ]  # Get the user name, as the language is [0] (ar, kungming2)
-        notify_users_list.append(username)
-
-    notify_users_list = list(set(notify_users_list))  # Eliminate duplicates
-    # Remove the usernames of users already contacted about this post.
-    notify_users_list = [x for x in notify_users_list if x not in contacted]
-
-    # Code here to equalize data (see function above)
-    notify_users_list = notifier_equalizer(
-        notify_users_list, language_name, NOTIFICATIONS_LIMIT, reddit, SUBREDDIT
-    )
-
-    # Write to the counter log how many we send
-    action_counter(len(notify_users_list), "Notifications")
-    # Clean up the title, prevent Markdown errors with square brackets
-    otitle = notifier_title_cleaner(otitle)
-
-    # Exit if there is nothing to send.
-    if len(notify_users_list) == 0:
-        return []
-
-    messaging_start = time.time()
-    for username in notify_users_list:
-        if not is_identify:  # This is just the regular notification
-            message = MSG_NOTIFY.format(
-                username=username,
-                language_name=language_name,
-                post_type=post_type,
-                otitle=otitle,
-                opermalink=opermalink,
-                oauthor=oauthor,
-            )
-        else:  # This is from an !identify command.
-            message = MSG_NOTIFY_IDENTIFY.format(
-                username=username,
-                language_name=language_name,
-                post_type=post_type,
-                otitle=otitle,
-                opermalink=opermalink,
-                oauthor=oauthor,
-            )
-        try:
-            message_subject = f"[Notification] New {language_name} post on r/translator"
-            reddit.redditor(username).message(
-                message_subject, message + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON
-            )
-            notifier_limit_writer(
-                username, language_code, cursor_main, conn_main
-            )  # Record that they have been messaged
-        except praw.exceptions.APIException:  # If the user deleted their account...
-            logger.info(
-                f"[ZW] Notifier: An error occured while sending a message to u/{username}. Removing..."
-            )
-            notifier_list_pruner(username)  # Remove the username from our database.
-
-    # Record to a log how long it took.
-    messaging_mins = (time.time() - messaging_start) / 60
-    seconds_per_message = (time.time() - messaging_start) / len(notify_users_list)
-    payload = (
-        time_convert_to_string(messaging_start),
-        "Messaging run",
-        len(notify_users_list),
-        language_name,
-        messaging_mins,
-        round(seconds_per_message, 2),
-    )
-    record_activity_csv(payload)
-    logger.info(
-        f"[ZW] Notifier: Sent notifications to {len(notify_users_list)} users signed up for {language_name}."
-    )
-
-    return notify_users_list
-
-
-def ziwen_messages():
-    """
-    A top-level system to process commands via the messaging system of Reddit. This system acts upon keywords included
-    in the message's subject field, including the following.
-
-    * `subscribe`
-    * `unsubscribe`
-    * `ping`
-    * `status`
-    * `points`
-    * `add`
-    * `remove`
-
-    The function will mark any incoming messages/mentions as read, even if they aren't actable. That's going to depend
-    on the operator of this script to check the account itself.
-
-    :param: Nothing.
-    :return: Nothing.
-    """
-
-    # Fetch just the last five unread messages. Ziwen cycles every 30 seconds so this should be sufficient.
-    messages = []
-    messages += list(reddit.inbox.unread(limit=5))
-
-    for message in messages:
-        mauthor = str(message.author)
-        msubject = message.subject.lower()  # Convert to lowercase
-        mbody = message.body
-        message.mark_read()  # Mark the message as read.
-
-        if (
-            "subscribe" in msubject and "un" not in msubject
-        ):  # User wants to subscribe to language notifications.
-            logger.info(f"[ZW] Messages: New subscription request from u/{mauthor}.")
-
-            # This gets a list of language codes from the message body.
-            language_matches = language_list_splitter(mbody)
-
-            if language_matches is None:  # There are no valid codes to subscribe.
-                message.reply(
-                    MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER
-                )  # Reply to user.
-                logger.info(
-                    "[ZW] Messages: Subscription languages listed are not valid."
-                )
-            else:  # There are valid codes. Let's insert them into our database and reply with a confirmation message.
-                final_match_names = []
-
-                # Insert the relevant codes.
-                notifier_language_list_editer(
-                    language_matches, mauthor, cursor_main, conn_main, "insert"
-                )
-
-                # Get the language names of those codes.
-                for code in language_matches:
-                    final_match_names.append(converter(code)[1])
-
-                # Add the various components of the reply.
-                thanks_phrase = MAIN_LANGUAGES.get(language_matches[0], {}).get(
-                    "thanks", "Thank you"
-                )
-                bullet_list = "\n* ".join(final_match_names)
-                frequency_table = messaging_language_frequency_table(language_matches)
-
-                # Pull it all together with the template.
-                main_body = MSG_SUBSCRIBE.format(
-                    thanks_phrase, bullet_list, frequency_table
-                )
-
-                # Reply to the subscribing user.
-                message.reply(main_body + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
-                logger.info(
-                    f"[ZW] Messages: Added notification subscriptions for u/{mauthor}."
-                )
-                action_counter(len(language_matches), "Subscriptions")
-
-        elif "unsubscribe" in msubject:  # User wants to unsubscribe from notifications.
-            logger.info(f"[ZW] Messages: New unsubscription request from u/{mauthor}.")
-
-            # This gets a list of language codes from the message body.
-            language_matches = language_list_splitter(mbody)
-
-            # Iterate over the results.
-            if language_matches is None:
-                # There are no valid codes to unsubscribe them from.
-                # Format the error reply message.
-                message.reply(
-                    MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER
-                )
-
-                # Forward the message to my creator.
-                reddit.redditor("kungming2").message(
-                    subject=f"Unsubscribe Attempt: u/{mauthor}",
-                    message=f"Forwarded message:\n\n---\n\n{mbody}",
-                )
-                logger.info(
-                    "[ZW] Messages: Unsubscription languages listed are invalid. Replied w/ more info."
-                )
-            elif (
-                "all" in language_matches
-            ):  # User wants to unsubscribe from everything.
-                # Delete the user from the database.
-                notifier_language_list_editer(
-                    language_matches, mauthor, cursor_main, conn_main, "purge"
-                )
-
-                # Send the reply.
-                message.reply(
-                    MSG_UNSUBSCRIBE_ALL.format("all", MSG_SUBSCRIBE_LINK)
-                    + BOT_DISCLAIMER
-                )
-                action_counter(1, "Unsubscriptions")
-            else:  # Should return a list of specific languages the person doesn't want.
-                # Delete the relevant codes.
-                notifier_language_list_editer(
-                    language_matches, mauthor, cursor_main, conn_main, "delete"
-                )
-                # Get the language names of those codes.
-                final_match_names = [converter(code)[1] for code in language_matches]
-
-                # Join the list into a string that is bulleted.
-                bullet_list = "\n* ".join(final_match_names)
-
-                # Format the reply message.
-                message.reply(
-                    MSG_UNSUBSCRIBE_ALL.format(bullet_list, MSG_SUBSCRIBE_LINK)
-                    + BOT_DISCLAIMER
-                    + MSG_UNSUBSCRIBE_BUTTON
-                )
-                logger.info(
-                    f"[ZW] Messages: Removed notification subscriptions for u/{mauthor}."
-                )
-                action_counter(len(language_matches), "Unsubscriptions")
-
-        elif "ping" in msubject:
-            logger.info(f"[ZW] Messages: New status check from u/{mauthor}.")
-            to_post = "Ziwen is running nominally.\n\n"
-
-            # Determine if user is a moderator.
-            if is_mod(mauthor):  # New status check from moderators.
-                to_post += (
-                    record_retrieve_error_log()
-                )  # Get the last two recorded error entries for debugging.
-                if len(to_post) > 10000:  # If the PM is too long, shorten it.
-                    to_post = to_post[0:9750]
-
-            # Reply to user.
-            message.reply(to_post + BOT_DISCLAIMER)
-            logger.info("[ZW] Messages: Replied with ping call.")
-
-        elif "status" in msubject:
-            logger.info("[ZW] Messages: New status request from u/" + mauthor + ".")
-            final_match_codes = []
-            final_match_names = []
-
-            # We try to retrieve the languages the user is subscribed to.
-            sql_stat = "SELECT * FROM notify_users WHERE username = ?"
-            cursor_main.execute(sql_stat, (mauthor,))
-            # Returns a list of lists w/ the language code & the username
-            all_subscriptions = cursor_main.fetchall()
-            for subscription in all_subscriptions:
-                final_match_codes.append(
-                    subscription[0]
-                )  # We only want the language codes (don't need the username).
-
-            # User is not subscribed to anything.
-            if len(final_match_codes) == 0:
-                status_component = MSG_NO_SUBSCRIPTIONS.format(MSG_SUBSCRIBE_LINK)
-            else:
-                for code in final_match_codes:  # Convert the codes into names
-                    converted_result = converter(code)  # This will return a tuple.
-                    match_name = converted_result[1]  # Should get the name from each
-                    if code == "meta":
-                        match_name = "Meta"
-                    elif code == "community":
-                        match_name = "Community"
-                    elif "unknown-" in code:  # For scripts
-                        match_name += " (Script)"
-                    final_match_names.append(match_name)
-
-                # De-dupe and sort the returned languages.
-                final_match_names = list(set(final_match_names))  # Remove duplicates
-                # Alphabetize
-                final_match_names = sorted(final_match_names, key=str.lower)
-
-                # Format the message to send to the requester.
-                status_message = (
-                    "You're subscribed to notifications on r/translator for:\n\n* {}"
-                )
-                status_component = status_message.format("\n* ".join(final_match_names))
-
-            # Get the commands the user may have used before.
-            user_commands_statistics_data = messaging_user_statistics_loader(mauthor)
-            if user_commands_statistics_data is not None:
-                commands_component = (
-                    "\n\n### User Commands Statistics\n\n"
-                    + user_commands_statistics_data
-                )
-            else:
-                commands_component = ""
-
-            # Compile the components together
-            compilation = (
-                "### Notifications\n\n" + status_component + commands_component
-            )
-
-            action_counter(1, "Status checks")
-            message.reply(compilation + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
-
-        elif "add" in msubject and is_mod(
-            mauthor
-        ):  # Mod manually adding people to the notifications database.
-            logger.info(
-                f"[ZW] Messages: New username addition message from moderator u/{mauthor}."
-            )
-
-            # Get the username of the user we want to add to the database.
-            add_username = mbody.split("USERNAME:", 1)[1]
-            # Get the username (no u/)
-            add_username = add_username.split("LANGUAGES", 1)[0].strip()
-
-            # Split off the languages part.
-            language_component = mbody.rpartition("LANGUAGES:")[-1].strip()
-
-            # This gets a list of language codes from the message body.
-            language_matches = language_list_splitter(language_component)
-
-            if (
-                language_matches is not None
-            ):  # In case the moderators' addition string is incomprehensible.
-                # Insert the relevant codes.
-                notifier_language_list_editer(
-                    language_matches, add_username, cursor_main, conn_main, "insert"
-                )
-
-                # Reply to moderator.
-                match_codes_print = ", ".join(language_matches)
-                addition_message = f"Added the language codes **{match_codes_print}** for u/{add_username} into the notifications database."
-                message.reply(addition_message)
-
-        elif "remove" in msubject and is_mod(mauthor):
-            # Mod manually removing people from the notifications database.
-            logger.info(
-                f"[ZW] Messages: New username removal message from moderator u/{mauthor}."
-            )
-
-            subscribed_codes = []
-
-            # Get the username of the user we want to add to the database.
-            remove_username = mbody.split("USERNAME:", 1)[1].strip()
-
-            # We try to retrieve the languages the user is subscribed to.
-            cursor_main.execute(
-                "SELECT * FROM notify_users WHERE username = ?", (remove_username,)
-            )
-            all_subscriptions = (
-                cursor_main.fetchall()
-            )  # Returns a list of lists with both the code and the username.
-            for subscription in all_subscriptions:
-                subscribed_codes.append(
-                    subscription[0]
-                )  # We only want the language codes (no need the username).
-
-            # Actually delete the username from database.
-            notifier_language_list_editer(
-                [], remove_username, cursor_main, conn_main, "purge"
-            )
-
-            # Send a message back to the moderator confirming this.
-            final_match_codes_print = ", ".join(subscribed_codes)
-            removal_message = f"Removed the subscriptions for u/{remove_username} from the notifications database. (**{final_match_codes_print}**)"
-            message.reply(removal_message)
-
-        elif "points" in msubject:
-            logger.info(f"[ZW] Messages: New points status request from u/{mauthor}.")
-
-            # Get the user's points
-            user_points_output = "### Points on r/translator\n\n" + points_retreiver(
-                mauthor
-            )
-
-            # Get the commands the user may have used before.
-            user_commands_statistics_data = messaging_user_statistics_loader(mauthor)
-            commands_component = (
-                ""
-                if user_commands_statistics_data is None
-                else ("\n\n### Commands Statistics\n\n" + user_commands_statistics_data)
-            )
-
-            message.reply(user_points_output + commands_component + BOT_DISCLAIMER)
-            action_counter(1, "Points checks")
-
-
 # General Lookup Functions
 def lookup_cjk_matcher(content_text):
     """
@@ -1912,26 +1192,14 @@ def lookup_cjk_matcher(content_text):
     except IndexError:  # Split improperly
         return []
 
-    content_text = content_text.replace(
-        " ", "``"
-    )  # Delete spaces, we don't need this for CJK.
-    content_text = content_text.replace(
-        "\\", ""
-    )  # Delete slashes, since the redesign may introduce them.
+    # Delete spaces, we don't need this for CJK.
+    content_text = content_text.replace(" ", "``")
+    # Delete slashes, since the redesign may introduce them.
+    content_text = content_text.replace("\\", "")
 
-    # Regular CJK Unified Ideographs range with CJK Unified Ideographs Extension A
-    matches = re.findall("`([\u2E80-\u9FFF]+)`", content_text, re.DOTALL)
-
-    # CJK Unified Ideographs Extension B-F (obscure characters that do not have online sources)
-    b_matches = re.findall("`([\U00020000-\U0002EBEF]+)`", content_text, re.DOTALL)
-
-    if len(b_matches) != 0:  # We found something in the B sets
-        for match in b_matches:
-            if not any(
-                match in s for s in matches
-            ):  # Make sure the a match is not already in the regular set.
-                matches.append(match)
-
+    # Regular expression to match both CJK Unified Ideographs and Extension B-F
+    regex = "`([\u2E80-\u9FFF\U00020000-\U0002EBEF]+)`"
+    matches = re.findall(regex, content_text, re.DOTALL)
     return matches if len(matches) != 0 else []
 
 
@@ -2707,6 +1975,12 @@ def ziwen_posts():
                     opermalink,
                     oauthor,
                     False,
+                    POST_TEMPLATES,
+                    reddit,
+                    cursor_ajo,
+                    cursor_main,
+                    conn_main,
+                    is_mod,
                 )
 
             continue  # Then exit.
@@ -2904,6 +2178,12 @@ def ziwen_posts():
                             opermalink,
                             oauthor,
                             False,
+                            POST_TEMPLATES,
+                            reddit,
+                            cursor_ajo,
+                            cursor_main,
+                            conn_main,
+                            is_mod,
                         )
                     if (
                         final_css_class == "multiple"
@@ -2922,6 +2202,12 @@ def ziwen_posts():
                         opermalink,
                         oauthor,
                         False,
+                        POST_TEMPLATES,
+                        reddit,
+                        cursor_ajo,
+                        cursor_main,
+                        conn_main,
+                        is_mod,
                     )
 
             # If it's an unknown post, add an informative comment.
@@ -3321,24 +2607,21 @@ def ziwen_bot():
                 # Just a check that we're not sending notifications AGAIN if the identified language is the same as orig
                 # This makes sure that they're different languages. So !identify:Chinese on Chinese won't send messages.
                 if o_language_name != language_name and MESSAGES_OKAY:
-                    if not match_script:  # This is not a script.
-                        contacted = ziwen_notifier(
-                            language_name,
-                            otitle,
-                            opermalink,
-                            oauthor,
-                            True,
-                        )
-                        # Notify people on the list if the post hasn't already been marked as translated
-                        # no use asking people to see something that's translated
-                    else:  # This is a script... Adapt the proper format. (unknown-cyrl for example)
-                        contacted = ziwen_notifier(
-                            f"unknown-{language_code}",
-                            otitle,
-                            opermalink,
-                            oauthor,
-                            True,
-                        )
+                    contacted = ziwen_notifier(
+                        f"unknown-{language_code}" if match_script else language_name,
+                        otitle,
+                        opermalink,
+                        oauthor,
+                        True,
+                        POST_TEMPLATES,
+                        reddit,
+                        cursor_ajo,
+                        cursor_main,
+                        conn_main,
+                        is_mod,
+                    )
+                    # Notify people on the list if the post hasn't already been marked as translated
+                    # no use asking people to see something that's translated
                     # Add those who have been contacted to the notified list.
                     oajo.add_notified(contacted)
 
@@ -4423,7 +3706,7 @@ if __name__ == "__main__":
             # Next the bot runs all sub-functions on its main subreddit, r/translator.
             ziwen_bot()
             # Then it checks its messages (generally for new subscription lookups).
-            ziwen_messages()
+            ziwen_messages(reddit, cursor_main, conn_main, is_mod)
             # Finally checks for posts that are still claimed and 'in progress.'
             progress_checker()
 

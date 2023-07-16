@@ -16,6 +16,10 @@ script_directory = os.path.dirname(
 script_directory += "/Data/"  # Where the main files are kept.
 SOURCE_FOLDER = script_directory
 
+# A number that defines the soft number of notifications an individual will get in a month *per language*.
+NOTIFICATIONS_LIMIT = 100
+SUBREDDIT = "translator"
+
 # Ziwen main database files (either static files or files that will be written to).
 FILE_ADDRESS_CREDENTIALS = os.path.join(script_directory, "_login.json")
 FILE_ADDRESS_UA = os.path.join(script_directory, "_ua.json")
