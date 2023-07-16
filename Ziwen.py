@@ -4694,7 +4694,9 @@ if __name__ == "__main__":
                 cc_ref()  # Finally the bot runs lookup searches on Chinese subreddits.
 
         except Exception as e:  # The bot encountered an error/exception.
-            logger.error(f"[ZW] Main: Encounted error {e}. {traceback.print_tb(e.__traceback__)}")
+            logger.error(
+                f"[ZW] Main: Encounted error {e}. {traceback.print_tb(e.__traceback__)}"
+            )
             # Format the error text.
             error_entry = traceback.format_exc()
             record_error_log(error_entry)  # Save the error to a log.

@@ -20,6 +20,7 @@ import romkan  # Needed for automatic Japanese romaji conversion.
 from _config import logger
 from zh_processing import zh_character_calligraphy_search
 
+
 def ja_character(character, zw_useragent):
     """
     This function looks up a Japanese kanji's pronunciations and meanings
@@ -419,7 +420,9 @@ def ja_word(japanese_word, zw_useragent):
         katakana_test = re.search(
             "[\u30a0-\u30ff]", japanese_word
         )  # Check if katakana. Will return none if kanji.
-        surname_data = ja_word_surname(japanese_word, zw_useragent)  # Check to see if it's a surname.
+        surname_data = ja_word_surname(
+            japanese_word, zw_useragent
+        )  # Check to see if it's a surname.
         sfx_data = ja_word_sfx(japanese_word, zw_useragent)
         given_name_data = ja_word_given_name_search(japanese_word, zw_useragent)
 
@@ -497,9 +500,7 @@ def ja_word_yojijukugo(yojijukugo, zw_useragent):
     """
 
     # Fetch the page and its data.
-    url_search = (
-        f"https://yoji.jitenon.jp/cat/search.php?getdata={yojijukugo}&search=part&page=1"
-    )
+    url_search = f"https://yoji.jitenon.jp/cat/search.php?getdata={yojijukugo}&search=part&page=1"
     eth_page = requests.get(url_search, headers=zw_useragent)
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
     url = tree.xpath('//th[contains(@scope,"row")]/a/@href')
