@@ -31,7 +31,6 @@ import requests
 from lxml import html
 from mafan import simplify, tradify
 from korean_romanizer.romanizer import Romanizer
-from _responses import COMMENT_INVALID_ZH_CHARACTER
 
 
 def zh_character_oc_search(character):
@@ -383,7 +382,11 @@ def zh_character(character, zw_useragent):
     cmn_pronunciation, yue_pronunciation = pronunciation[::2], pronunciation[1::2]
 
     if len(pronunciation) == 0:  # Check to not return anything if the entry is invalid
-        to_post = COMMENT_INVALID_ZH_CHARACTER.format(character)
+        to_post = (
+            f"**There were no results for {character}**. Please check to make sure it is a valid Chinese "
+            "character. Alternatively, it may be an uncommon variant that is not in "
+            "online dictionaries."
+        )
         logger.info(f"[ZW] ZH-Character: No results for {character}")
         return to_post
 
