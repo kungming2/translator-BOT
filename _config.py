@@ -60,6 +60,28 @@ FILE_ADDRESS_PORT = os.path.join(script_directory, "wy_port.json")
 FILE_ADDRESS_NOTIFY_EXCHANGE = os.path.join(script_directory, "hb_exchangelist.db")
 FILE_ADDRESS_HUIBAN_OLDPOSTS = os.path.join(script_directory, "hb_processed.db")
 
+# These are the commands on r/translator.
+KEYWORDS = [
+    "!page:",
+    "`",
+    "!missing",
+    "!translated",
+    "!id:",
+    "!set:",
+    "!note:",
+    "!reference:",
+    "!search:",
+    "!doublecheck",
+    "!identify:",
+    "!translate",
+    "!translator",
+    "!delete",
+    "!claim",
+    "!reset",
+    "!long",
+    "!restore",
+]
+
 # These are keywords in errors thrown from Internet connection problems. We don't need to log those.
 # CONNECTION_KEYWORDS = ['200 HTTP', '400 HTTP', '401 HTTP', '403 HTTP', '404 HTTP', '404 HTTP', '500 HTTP', '502 HTTP',
 #                       '503 HTTP', '504 HTTP', 'CertificateError', 'ConnectionRefusedError', 'Errno 113', 'Error 503',

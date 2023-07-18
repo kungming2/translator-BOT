@@ -3458,3 +3458,5 @@ DEFINED_MULTIPLE_LEGEND = {
     "✓": "doublecheck",
     "✔": "translated",
 }
+
+INVERSE_MULTIPLE_LEGEND = {value: key for key, value in DEFINED_MULTIPLE_LEGEND.items()}

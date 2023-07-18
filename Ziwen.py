@@ -75,27 +75,6 @@ CLAIM_PERIOD = 28800
 MESSAGES_OKAY = True
 
 """KEYWORDS LISTS"""
-# These are the commands on r/translator.
-KEYWORDS = [
-    "!page:",
-    "`",
-    "!missing",
-    "!translated",
-    "!id:",
-    "!set:",
-    "!note:",
-    "!reference:",
-    "!search:",
-    "!doublecheck",
-    "!identify:",
-    "!translate",
-    "!translator",
-    "!delete",
-    "!claim",
-    "!reset",
-    "!long",
-    "!restore",
-]
 # These are the words that count as a 'short thanks' from the OP.
 # If a message includes them, the bot won't message them asking them to thank the translator.
 THANKS_KEYWORDS = [
@@ -3200,7 +3179,7 @@ def ziwen_bot():
                             checked_text = f"{parent_comment.body} {pbody_original}"
 
                     comment_check = ajo_defined_multiple_comment_parser(
-                        checked_text, oajo.language_name, KEYWORDS
+                        checked_text, oajo.language_name
                     )
 
                     # We have data, we can set the status as different in the flair.
@@ -3604,9 +3583,7 @@ def cc_ref():
                 continue
             for match in matches:  # We are going to break this up
                 if len(match) >= 2:  # Longer than bisyllabic?
-                    new_matches = lookup_zhja_tokenizer(simplify(match), "zh")
-                    for new_word in new_matches:
-                        tokenized_list.append(new_word)
+                    tokenized_list.extend(lookup_zhja_tokenizer(simplify(match), "zh"))
                 else:
                     tokenized_list.append(match)
             for match in tokenized_list:
