@@ -3450,13 +3450,3 @@ ENGLISH_3_WORDS = [
     "Zoa",
     "Zoo",
 ]
-
-# These are symbols used to indicate states in defined multiple posts. The last two are currently used.
-DEFINED_MULTIPLE_LEGEND = {
-    "⍉": "missing",
-    "¦": "inprogress",
-    "✓": "doublecheck",
-    "✔": "translated",
-}
-
-INVERSE_MULTIPLE_LEGEND = {value: key for key, value in DEFINED_MULTIPLE_LEGEND.items()}

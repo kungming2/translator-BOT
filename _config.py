@@ -8,6 +8,7 @@ import logging
 import os
 import random
 from time import strftime
+from enum import StrEnum
 
 # Set up the directories based on the current location of the bots.
 # Fetch the absolute directory the script is in.
@@ -59,46 +60,57 @@ FILE_ADDRESS_NOTIFY_EXCHANGE = os.path.join(script_directory, "hb_exchangelist.d
 FILE_ADDRESS_HUIBAN_OLDPOSTS = os.path.join(script_directory, "hb_processed.db")
 
 # These are the commands on r/translator.
-KEYWORDS = [
-    "!page:",
-    "`",
-    "!missing",
-    "!translated",
-    "!id:",
-    "!set:",
-    "!note:",
-    "!reference:",
-    "!search:",
-    "!doublecheck",
-    "!identify:",
-    "!translate",
-    "!translator",
-    "!delete",
-    "!claim",
-    "!reset",
-    "!long",
-    "!restore",
-]
+keywords_dict = {
+    "page": "!page:",
+    "back_quote": "`",
+    "missing": "!missing",
+    "translated": "!translated",
+    "id": "!id:",
+    "set": "!set:",
+    "note": "!note:",
+    "reference": "!reference:",
+    "search": "!search:",
+    "doublecheck": "!doublecheck",
+    "identify": "!identify:",
+    "translate": "!translate",
+    "translator": "!translator",
+    "delete": "!delete",
+    "claim": "!claim",
+    "reset": "!reset",
+    "long": "!long",
+    "restore": "!restore",
+}
+KEYWORDS = StrEnum("StrEnum", {key: value for key, value in keywords_dict.items()})
 
-# These are keywords in errors thrown from Internet connection problems. We don't need to log those.
-# CONNECTION_KEYWORDS = ['200 HTTP', '400 HTTP', '401 HTTP', '403 HTTP', '404 HTTP', '404 HTTP', '500 HTTP', '502 HTTP',
-#                       '503 HTTP', '504 HTTP', 'CertificateError', 'ConnectionRefusedError', 'Errno 113', 'Error 503',
-#                       'ProtocolError', 'ServerError', 'socket.gaierror', 'socket.timeout', 'ssl.SSLError']
-CONNECTION_KEYWORDS = []
+STATUS_KEYWORDS = {
+    KEYWORDS.missing: KEYWORDS.missing.name,
+    KEYWORDS.claim: "inprogress",
+    KEYWORDS.doublecheck: KEYWORDS.doublecheck.name,
+    KEYWORDS.translated: KEYWORDS.translated.name,
+}
+
+# These are symbols used to indicate states in defined multiple posts. The last two are currently used.
+DEFINED_MULTIPLE_LEGEND = {
+    "⍉": KEYWORDS.missing.name,
+    "¦": "inprogress",
+    "✓": KEYWORDS.doublecheck.name,
+    "✔": KEYWORDS.translated.name,
+}
+INVERSE_MULTIPLE_LEGEND = {value: key for key, value in DEFINED_MULTIPLE_LEGEND.items()}
 
 # Testing subreddits for the bot. (mostly to test Ziwen Streamer's crossposting function)
-TESTING_SUBREDDITS = ["testingground4bots", "test", "andom"]
+# TESTING_SUBREDDITS = ["testingground4bots", "test", "andom"]
 
 # Footers for the comments that the bots make.
+# BOT_DISCLAIMER_EXCHANGE = (
+#     "\n\n---\n^Huiban: ^a ^bot ^for ^r/LanguageSwap ^| "
+#     "^[Contact](https://www.reddit.com/message/compose/?to=kungming2&subject=About+Huiban+Bot)"
+# )
 BOT_DISCLAIMER = (
     "\n\n---\n^(Ziwen: a bot for r / translator) ^| "
     "^[Documentation](https://www.reddit.com/r/translatorBOT/wiki/ziwen) ^| "
     "^[FAQ](https://www.reddit.com/r/translatorBOT/wiki/faq) ^| "
     "^[Feedback](https://www.reddit.com/r/translatorBOT)"
-)
-BOT_DISCLAIMER_EXCHANGE = (
-    "\n\n---\n^Huiban: ^a ^bot ^for ^r/LanguageSwap ^| "
-    "^[Contact](https://www.reddit.com/message/compose/?to=kungming2&subject=About+Huiban+Bot)"
 )
 
 
@@ -159,29 +171,7 @@ def get_random_useragent():
         # Select a random one from the list.
         random_ua = random.choice(ua_stored)
         accept_string = "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
-        return {"User-Agent": random_ua, "Accept": accept_string} # headers
-
-
-def error_log_basic(entry, bot_version):
-    """
-    A function to save errors to a log for later examination.
-    This one is more basic and does not include the last comments or submission text.
-    The advantage is that it can be shared between different routines, as it does not depend on PRAW.
-
-    :param entry: The text we wish to include in the error log entry. Typically this is the traceback.
-    :param bot_version: The version of the script that's writing this error entry (e.g. Ziwen, Wenyuan).
-    :return: Nothing.
-    """
-
-    # Open the file for the error log in appending mode.
-    with open(FILE_ADDRESS_ERROR, "a+", encoding="utf-8") as f:
-        current_entries = f.read()
-        # If this hasn't already been recorded, add it.
-        if entry not in current_entries:
-            error_date_format = strftime("%Y-%m-%d [%I:%M:%S %p]")
-            f.write(
-                f"\n-----------------------------------\n{error_date_format} ({bot_version})\n{entry}"
-            )
+        return {"User-Agent": random_ua, "Accept": accept_string}  # headers
 
 
 def action_counter(messages_number, action_type):

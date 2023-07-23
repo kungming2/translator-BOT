@@ -447,7 +447,7 @@ def komento_analyzer(reddit_submission):
                 time_difference = int(current_c_time - utc_timestamp)
                 # How long the thing has been claimed for.
                 results["claim_time_diff"] = time_difference
-        elif KEYWORDS[3] in cbody or KEYWORDS[9] in cbody:
+        elif KEYWORDS.translated in cbody or KEYWORDS.doublecheck in cbody:
             # Processing comments by non-bot
             # Get a list of people who have contributed to helping. Unused at present.
             list_of_translators.append(cauthor)
@@ -1038,12 +1038,8 @@ def messaging_user_statistics_writer(body_text, username):
     """
 
     # Properly format things.
-    recorded_keywords = list(KEYWORDS)
-    for nonwanted in ["!translate", "!translator"]:
-        # These commands are never used on our subreddit.
-        recorded_keywords.remove(nonwanted)
-    if recorded_keywords[4] in body_text:
-        body_text = body_text.replace(recorded_keywords[4], recorded_keywords[10])
+    if KEYWORDS.id in body_text:
+        body_text = body_text.replace(KEYWORDS.id, KEYWORDS.identify)
 
     # Let's try and load any saved record of this
     sql_us = "SELECT * FROM total_commands WHERE username = ?"
@@ -1059,7 +1055,9 @@ def messaging_user_statistics_writer(body_text, username):
         commands_dictionary = eval(username_commands_data[0][1])
 
     # Process through the text and record the commands used.
-    for keyword in recorded_keywords:
+    for keyword in [
+        key for key in KEYWORDS if key not in [KEYWORDS.translate, KEYWORDS.translator]
+    ]:
         if keyword in body_text:
             if keyword == "`":
                 # Since these come in pairs, we have to divide this in half.
@@ -1735,12 +1733,8 @@ def edit_finder():
                 conn_cache.commit()
 
                 # Here we edit the cache file too IF there's a edited-in command that's new, omitting the crosspost ones
-                first_part = KEYWORDS[0:11]
-                second_part = KEYWORDS[13:]
-                main_keywords = first_part + second_part
-
                 # Iterate through the command keywords to see what's new.
-                for keyword in main_keywords:
+                for keyword in [key for key in KEYWORDS if key != KEYWORDS.translator]:
                     if keyword in cbody and keyword not in old_cbody:
                         # This means the keyword is a NEW addition to the edited comment.
                         logger.debug(
@@ -2261,7 +2255,7 @@ def ziwen_bot():
             )
             continue
 
-        if not any(key.lower() in pbody for key in KEYWORDS) and not any(
+        if not any(key in pbody for key in KEYWORDS) and not any(
             phrase in pbody for phrase in THANKS_KEYWORDS
         ):
             # Does not contain our keyword
@@ -2283,16 +2277,18 @@ def ziwen_bot():
         """RESTORE COMMAND"""
 
         # This is the `!restore` command, which can try and check Pushshift data. It can be triggered if user deleted it
-        if KEYWORDS[17] in pbody and oauthor is None:
+        if KEYWORDS.restore in pbody and oauthor is None:
             # This command is allowed to be used by people who have either translated the piece or who were notified
             # about it. This is to help resolve the big issue of people deleting their posts.
-            logger.info(f"[ZW] Bot: COMMAND: !restore, from u/{pauthor}.")
+            logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.restore}, from u/{pauthor}.")
 
             # This is a link post, we can't retrieve that.
             if not osubmission.is_self:
                 # Reply and let them know this only works on text-only posts.
                 post.reply(MSG_RESTORE_LINK_FAIL + BOT_DISCLAIMER)
-                logger.info("[ZW] Bot: !restore request is for a link post. Skipped.")
+                logger.info(
+                    f"[ZW] Bot: {KEYWORDS.restore} request is for a link post. Skipped."
+                )
                 continue
 
             try:  # Get the people who are eligible to check for this.
@@ -2371,7 +2367,7 @@ def ziwen_bot():
             oauthor = "deleted"
 
         """REFERENCE COMMANDS (!identify, !page, !reference, !search, `lookup`)"""
-        if KEYWORDS[4] in pbody or KEYWORDS[10] in pbody:
+        if KEYWORDS.id in pbody or KEYWORDS.identify in pbody:
             # This is the general !identify command (synonym: !id)
             determined_data = comment_info_parser(pbody, "!identify:")
             # This should return what was actually identified. Normally will be a tuple or None.
@@ -2393,8 +2389,8 @@ def ziwen_bot():
             o_language_name = str(oajo.language_name)
             # This should return a boolean whether it's in advanced mode.
 
-            logger.info(f"[ZW] Bot: COMMAND: !identify, from u/{pauthor}.")
-            logger.info(f"[ZW] Bot: !identify data is: {determined_data}")
+            logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.id}, from u/{pauthor}.")
+            logger.info(f"[ZW] Bot: {KEYWORDS.id} data is: {determined_data}")
 
             if "+" not in match:  # This is just a regular single !identify command.
                 if not advanced_mode:  # This is the regular results conversion
@@ -2501,8 +2497,8 @@ def ziwen_bot():
                 logger.info("[ZW] Bot: Changed flair to a defined multiple one.")
 
             if (
-                KEYWORDS[3] not in pbody
-                and KEYWORDS[9] not in pbody
+                KEYWORDS.translated not in pbody
+                and KEYWORDS.doublecheck not in pbody
                 and oajo.status == "untranslated"
             ):
                 # Just a check that we're not sending notifications AGAIN if the identified language is the same as orig
@@ -2555,8 +2551,8 @@ def ziwen_bot():
                         logger.debug(
                             ">> Deleted my previous language reference comment..."
                         )
-        if KEYWORDS[0] in pbody:  # This is the basic paging !page function.
-            logger.info(f"[ZW] Bot: COMMAND: !page, from u/{pauthor}.")
+        if KEYWORDS.page in pbody:  # This is the basic paging !page function.
+            logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.page}, from u/{pauthor}.")
 
             determined_data = comment_info_parser(pbody, "!page:")
             # This should return what was actually identified. Normally will be a Tuple or None
@@ -2571,7 +2567,7 @@ def ziwen_bot():
             if current_time - int(poster.created_utc) > 1209600:
                 # checks to see if the user account is older than 14 days
                 logger.debug(
-                    "[ZW] Bot: > u/" + pauthor + "'s account is older than 14 days."
+                    f"[ZW] Bot: > u/{pauthor}'s account is older than 14 days."
                 )
             else:
                 post.reply(
@@ -2624,7 +2620,7 @@ def ziwen_bot():
                         # Add the notified users to the list.
                         oajo.add_notified(paged_users)
 
-        if KEYWORDS[1] in pbody:
+        if KEYWORDS.back_quote in pbody:
             # This function returns data for character lookups with `character`.
             post_content = []
             logger.info(f"[ZW] Bot: COMMAND: `lookup`, from u/{pauthor}.")
@@ -2753,7 +2749,7 @@ def ziwen_bot():
             except praw.exceptions.APIException:  # This means the comment is deleted.
                 logger.debug("[ZW] Bot: >> Previous comment was deleted.")
 
-        if KEYWORDS[7] in pbody:
+        if KEYWORDS.reference in pbody:
             # the !reference command gets information from Ethnologue, Wikipedia, and other sources
             # to post as a reference
             determined_data = comment_info_parser(pbody, "!reference:")
@@ -2764,7 +2760,7 @@ def ziwen_bot():
                 continue
 
             language_match = determined_data[0]
-            logger.info(f"[ZW] Bot: COMMAND: !reference, from u/{pauthor}.")
+            logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.reference}, from u/{pauthor}.")
             post_content = reference_search(language_match)
             if post_content is None:
                 # There was no good data. We return the invalid comment.
@@ -2774,16 +2770,16 @@ def ziwen_bot():
                 f"[ZW] Bot: Posted the reference results for '{language_match}'."
             )
 
-        if KEYWORDS[8] in pbody:
-            # The !search function looks for strings in other posts on r/translator
-            determined_data = comment_info_parser(pbody, "!search:")
+        # The !search function looks for strings in other posts on r/translator
+        if KEYWORDS.search in pbody:
+            determined_data = comment_info_parser(pbody, f"{KEYWORDS.search}:")
             # This should return what was actually identified. Normally will be a Tuple or None
             if determined_data is None:
                 # The command is problematic. Wrong punctuation, not enough arguments
-                logger.debug("[ZW] Bot: >> !search data is invalid.")
+                logger.debug(f"[ZW] Bot: >> {KEYWORDS.search} data is invalid.")
                 continue
 
-            logger.info("[ZW] Bot: COMMAND: !search, from u/" + pauthor + ".")
+            logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.search}, from u/{pauthor}.")
             search_term = determined_data[0]
 
             google_url = []
@@ -2827,9 +2823,8 @@ def ziwen_bot():
 
                     if c_author == USERNAME:  # I posted this comment.
                         continue
-
-                    if KEYWORDS[8] in comment.body.lower():
-                        # This contains the !search string.
+                    # This contains the !search string.
+                    if KEYWORDS.search in comment.body.lower():
                         continue  # We don't want this.
 
                     # Format a comment body nicely.
@@ -2858,10 +2853,9 @@ def ziwen_bot():
 
         """STATE COMMANDS (!doublecheck, !translated, !claim, !missing, short thanks)"""
 
-        if KEYWORDS[9] in pbody:
-            # !doublecheck function, used for asking for reviews of one's work.
-
-            logger.info(f"[ZW] Bot: COMMAND: !doublecheck, from u/{pauthor}.")
+        # asking for reviews of one's work.
+        if KEYWORDS.doublecheck in pbody:
+            logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.doublecheck}, from u/{pauthor}.")
 
             if oajo.type == "multiple":
                 if isinstance(oajo.language_name, list):
@@ -2911,14 +2905,13 @@ def ziwen_bot():
                 claim_comment = komento_data["bot_claim_comment"]
                 claim_comment = reddit.comment(claim_comment)
                 claim_comment.delete()
-
-        if KEYWORDS[2] in pbody:
-            # This function picks up a !missing command and messages the OP about it.
+        # Picks up a !missing command and messages the OP about it.
+        if KEYWORDS.missing in pbody:
             if not css_check(oflair_css):
                 # Basic check to see if this is something that can be acted on.
                 continue
 
-            logger.info("[ZW] Bot: COMMAND: !missing, from u/" + pauthor + ".")
+            logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.missing}, from u/{pauthor}.")
 
             total_message = MSG_MISSING_ASSETS.format(
                 oauthor=oauthor, opermalink=opermalink
@@ -2940,7 +2933,7 @@ def ziwen_bot():
 
         if (
             any(keyword in pbody for keyword in THANKS_KEYWORDS)
-            and KEYWORDS[3] not in pbody
+            and KEYWORDS.translated not in pbody
             and len(pbody) <= 20
         ):
             # This processes simple thanks into translated, but leaves alone if it's an exception.
@@ -2981,7 +2974,7 @@ def ziwen_bot():
                 except praw.exceptions.APIException:  # Likely shadowbanned.
                     pass
 
-        if KEYWORDS[14] in pbody:  # Claiming posts with the !claim command
+        if KEYWORDS.claim in pbody:  # Claiming posts with the !claim command
             if oflair_css in [
                 "translated",
                 "doublecheck",
@@ -2992,13 +2985,11 @@ def ziwen_bot():
             ]:
                 # We don't want to process these posts.
                 continue
-
-            if KEYWORDS[3] in pbody or KEYWORDS[9] in pbody:
-                # This is for the scenario where someone edits their original claim comment with the translation
-                # Then marks it as !translated or !doublecheck. We just want to ignore it then
+            # ignore when someone edits their claim with translated or doublecheck
+            if KEYWORDS.translated in pbody or KEYWORDS.doublecheck in pbody:
                 continue
 
-            logger.info(f"[ZW] Bot: COMMAND: !claim, from u/{pauthor}.")
+            logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.claim}, from u/{pauthor}.")
             current_time = int(time.time())
             utc_timestamp = datetime.datetime.utcfromtimestamp(current_time).strftime(
                 "%Y-%m-%d %H:%M:%S"
@@ -3049,12 +3040,12 @@ def ziwen_bot():
                     f"[ZW] Bot: > Marked a post by u/{oauthor} as claimed and in progress."
                 )
 
-        if KEYWORDS[3] in pbody:
+        if KEYWORDS.translated in pbody:
             # This is a !translated function that messages people when their post has been translated.
             thanks_already = False
             translated_found = True
 
-            logger.info(f"[ZW] Bot: COMMAND: !translated, from u/{pauthor}.")
+            logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.translated}, from u/{pauthor}.")
 
             if oflair_css is None:  # If there is no CSS flair...
                 oflair_css = "generic"  # Give it a generic flair.
@@ -3149,28 +3140,32 @@ def ziwen_bot():
 
         """MODERATOR-ONLY COMMANDS (!delete, !reset, !note, !set)"""
 
-        if KEYWORDS[13] in pbody:  # This is to allow OP or mods to !delete crossposts
+        if (
+            KEYWORDS.delete in pbody
+        ):  # This is to allow OP or mods to !delete crossposts
             if not oajo.is_bot_crosspost:  # If this isn't actually a crosspost..
                 continue
             else:  # This really is a crosspost.
-                logger.info(f"[ZW] Bot: COMMAND: !delete from u/{pauthor}")
+                logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.delete} from u/{pauthor}")
                 if pauthor == oauthor or pauthor == requester or is_mod(pauthor):
                     osubmission.mod.remove()  # We'll use remove for now -- can switch to delete() later.
                     logger.info("[ZW] Bot: >> Removed crosspost.")
 
-        if KEYWORDS[15] in pbody:
+        if KEYWORDS.reset in pbody:
             # !reset command, to revert a post back to as if it were freshly processed
             if is_mod(pauthor) or pauthor == oauthor:
                 # Check if user is a mod or the OP.
-                logger.info(f"[ZW] Bot: COMMAND: !reset, from user u/{pauthor}.")
+                logger.info(
+                    f"[ZW] Bot: COMMAND: {KEYWORDS.reset}, from user u/{pauthor}."
+                )
                 oajo.reset(otitle)
                 logger.info("[ZW] Bot: > Reset everything for the designated post.")
             else:
                 continue
 
-        if KEYWORDS[16] in pbody and is_mod(pauthor):
+        if KEYWORDS.long in pbody and is_mod(pauthor):
             # !long command, for mods to mark a post as long for translators.
-            logger.info(f"[ZW] Bot: COMMAND: !long, from mod u/{pauthor}.")
+            logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.long}, from mod u/{pauthor}.")
 
             # This command works as a flip switch. It changes the state to the opposite.
             current_status = oajo.is_long
@@ -3189,7 +3184,7 @@ def ziwen_bot():
                 f"[ZW] Bot: Changed the designated post's long state to '{new_status}.'"
             )
 
-        if KEYWORDS[6] in pbody:
+        if KEYWORDS.note in pbody:
             # the !note command saves posts which are not CSS/template supported so they can be used as reference.
             # This is now rarely used.
             if not is_mod(pauthor):
@@ -3197,7 +3192,9 @@ def ziwen_bot():
                 continue
             match = comment_info_parser(pbody, "!note:")[0]
             language_name = converter(match)[1]
-            logger.info(f"[ZW] Bot: COMMAND: !note, from moderator u/{pauthor}.")
+            logger.info(
+                f"[ZW] Bot: COMMAND: {KEYWORDS.note}, from moderator u/{pauthor}."
+            )
             record_to_wiki(
                 odate=int(ocreated),
                 otitle=otitle,
@@ -3207,7 +3204,7 @@ def ziwen_bot():
                 oflair_new="",
             )  # Write to the saved page
 
-        if KEYWORDS[5] in pbody:
+        if KEYWORDS.set in pbody:
             # !set is a mod-accessible means of setting the post flair.
             # It removes the comment (through AM) so it looks like nothing happened.
             if not is_mod(pauthor):
@@ -3222,7 +3219,9 @@ def ziwen_bot():
             else:  # Invalid command (likely did not include a language)
                 continue
 
-            logger.info(f"[ZW] Bot: COMMAND: !set, from moderator u/{pauthor}.")
+            logger.info(
+                f"[ZW] Bot: COMMAND: {KEYWORDS.set}, from moderator u/{pauthor}."
+            )
 
             language_code = converter(match)[0]
             language_name = converter(match)[1]
@@ -3444,14 +3443,14 @@ def cc_ref():
         pbody = post.body
         pbody = pbody.lower()
 
-        if not any(key.lower() in pbody for key in KEYWORDS):
+        if not any(key in pbody for key in KEYWORDS):
             # Does not contain our keyword
             continue
 
         cursor_main.execute("INSERT INTO oldcomments VALUES(?)", [pid])
         conn_main.commit()
 
-        if KEYWORDS[1] in pbody:
+        if KEYWORDS.back_quote in pbody:
             post_content = []
             # This basically checks to make sure it's actually a Chinese/Japanese character.
             # It will return nothing if it is something else.

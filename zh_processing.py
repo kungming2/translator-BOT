@@ -326,11 +326,10 @@ def zh_character(character, zw_useragent):
     :param character: Any Chinese character.
     :return: A formatted string containing the character's information.
     """
-
-    # Whether or not multiple characters are passed to this function
-    multi_mode = len(multi_character_list) > 1
     multi_character_dict = {}
     multi_character_list = list(character)
+    # Whether or not multiple characters are passed to this function
+    multi_mode = len(multi_character_list) > 1
 
     eth_page = requests.get(
         f"https://www.mdbg.net/chinese/dictionary?page=chardict&cdcanoce=0&cdqchi={character}",

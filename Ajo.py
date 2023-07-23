@@ -26,11 +26,7 @@ from _languages import (
     app_multiple_definer,
 )
 from _config import *
-from _language_consts import (
-    DEFINED_MULTIPLE_LEGEND,
-    MAIN_LANGUAGES,
-    INVERSE_MULTIPLE_LEGEND,
-)
+from _language_consts import MAIN_LANGUAGES
 import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 import re
 import csv
@@ -168,13 +164,6 @@ def ajo_defined_multiple_comment_parser(pbody, language_names_list):
 
     detected_status = None
 
-    status_keywords = {
-        KEYWORDS[2]: "missing",
-        KEYWORDS[3]: "translated",
-        KEYWORDS[9]: "doublecheck",
-        KEYWORDS[14]: "inprogress",
-    }
-
     # Look for language names.
     detected_languages = language_mention_search(pbody)
 
@@ -194,9 +183,8 @@ def ajo_defined_multiple_comment_parser(pbody, language_names_list):
     if len(detected_languages) == 0:
         return None
 
-    for keyword in status_keywords.keys():
+    for keyword, detected_status in STATUS_KEYWORDS.items():
         if keyword in pbody:
-            detected_status = status_keywords[keyword]
             return detected_languages, detected_status
 
 

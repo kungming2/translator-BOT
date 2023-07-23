@@ -37,8 +37,6 @@ DUPLICATES_AGE = 4  # Age of posts (in hours) that we check for duplicates.
 DUPLICATE_CONFIDENCE = 85  # Similarity level of posts to mark as duplicates.
 NUMERICAL_SIMILARITY = 20  # How close we want the numbers to be together.
 
-"""KEYWORDS LISTS"""
-KEYWORDS = []  # for future use with !bot
 ZF_DISCLAIMER = BOT_DISCLAIMER.replace("Ziwen", "Zifang")
 
 # Connecting to the Reddit API via OAuth.
