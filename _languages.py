@@ -78,10 +78,12 @@ def language_lists_generator():
         ISO_639_1.append(language_code)
         ISO_639_3.append(language_module["language_code_3"])
         ISO_NAMES.append(language_module["name"])
-        if "alternate_names" in language_module:
-            if language_module["alternate_names"] is not None:
-                for item in language_module["alternate_names"]:
-                    ISO_NAMES.append(item)
+        if (
+            "alternate_names" in language_module
+            and language_module["alternate_names"] is not None
+        ):
+            for item in language_module["alternate_names"]:
+                ISO_NAMES.append(item)
 
         if language_module["supported"]:
             SUPPORTED_CODES.append(language_code)
@@ -126,8 +128,6 @@ def fuzzy_text(word):
         if closeness > 75 and language != "Javanese":
             return str(language)
 
-    return None
-
 
 def language_name_search(search_term):
     """
@@ -146,8 +146,6 @@ def language_name_search(search_term):
             for alternate_name in MAIN_LANGUAGES[key]["alternate_names"]:
                 if search_term == alternate_name:
                     return key
-        else:
-            continue
 
     return ""
 
@@ -167,13 +165,11 @@ def transbrackets_new(title):
         title_remainder = title.replace(bracketed_tag, "")
     else:  # No closing tag...
         bracketed_tag = title.split("[", 1)[1]
-        title_remainder = title.replace(bracketed_tag, "")
-        title_remainder = title_remainder[:-1]
+        title_remainder = title.replace(bracketed_tag, "")[:-1]
         bracketed_tag = "[" + bracketed_tag + "]"  # enclose it
 
-    reformed_title = f"{bracketed_tag} {title_remainder}"
-
-    return reformed_title
+    # reformatted title
+    return f"{bracketed_tag} {title_remainder}"
 
 
 def lang_code_search(search_term, script_search):
@@ -186,10 +182,7 @@ def lang_code_search(search_term, script_search):
     """
 
     master_dict = {}
-    is_script = False
-
-    if len(search_term) == 4:
-        is_script = True
+    is_script = len(search_term) == 4
 
     csv_file = csv.reader(open(FILE_ADDRESS_ISO_ALL, encoding="utf-8"), delimiter=",")
     for row in csv_file:
@@ -222,10 +215,8 @@ def lang_code_search(search_term, script_search):
 
         # No name was found, let's check alternates.
         for key, value in master_dict.items():
-            if ";" in value[2]:  # There are multiple alternate names here
-                sorted_alternate = value[2].split("; ")
-            else:
-                sorted_alternate = [value[2]]  # Convert into an iterable list.
+            # There may be multiple alternate names here
+            sorted_alternate = value[2].split("; ") if ";" in value[2] else [value[2]]
 
             if search_term.lower() in sorted_alternate:
                 if len(key) == 3:  # This is a language code
@@ -269,15 +260,14 @@ def country_converter(text_input, abbreviations_okay=True):
 
     if len(text_input) <= 1:  # Too short, can't return anything for this.
         pass
-    elif (
-        len(text_input) == 2 and abbreviations_okay is True
-    ):  # This is only two letters long
+    # This is only two letters long
+    elif len(text_input) == 2 and abbreviations_okay:
         text_input = text_input.upper()  # Convert to upper case
         for country in COUNTRY_LIST:
             if text_input == country[1]:  # Matches exactly
                 country_code = text_input
                 country_name = country[0]
-    elif len(text_input) == 3 and abbreviations_okay is True:  # three letters long code
+    elif len(text_input) == 3 and abbreviations_okay:  # three letters long code
         text_input = text_input.upper()  # Convert to upper case
         for country in COUNTRY_LIST:
             if text_input == country[2]:  # Matches exactly
@@ -298,9 +288,8 @@ def country_converter(text_input, abbreviations_okay=True):
             # Now we check against a list of associated words per country.
             for country in COUNTRY_LIST:
                 try:
-                    country_keywords = country[
-                        4
-                    ]  # These are keywords associated with it.
+                    # These are keywords associated with it.
+                    country_keywords = country[4]
                     for keyword in country_keywords:
                         if text_input.title() == keyword:  # A Match!
                             country_code = country[1]
@@ -337,10 +326,9 @@ def converter(input_text):
 
     # There's a hyphen... probably a special code.
     if "-" in input_text and "Anglo" not in input_text:
-        broader_code = targeted_language.split("-")[
-            0
-        ]  # Take only the language part (ar).
-        specific_code = targeted_language.split("-")[1]  # Get the specific code.
+        # Take only the language part (ar).
+        # Get the specific code.
+        broader_code, specific_code = targeted_language.split("-", 1)
         if len(specific_code) <= 1:  # If it's just a letter it cannot be valid.
             input_text = broader_code
             specific_code = None
@@ -352,9 +340,8 @@ def converter(input_text):
         # This takes a code and returns a name ar-LB becomes Arabic <Lebanon> and unknown-CYRL becomes Cyrillic (Script)
         if broader_code == "unknown":  # This is going to be a script.
             try:
-                input_text = lang_code_search(specific_code, script_search=True)[
-                    0
-                ]  # Get the script name.
+                # Get the script name.
+                input_text = lang_code_search(specific_code, script_search=True)[0]
                 is_script = True
             except TypeError:  # Not a valid code.
                 pass
@@ -376,28 +363,24 @@ def converter(input_text):
                 input_text = targeted_language  # Redefine the language as the original (pre-split)
                 regional_case = False
                 country_code = None
-    elif (
-        "{" in input_text and len(input_text) > 3
-    ):  # This may have a country tag. Let's be sure to remove it.
+    elif "{" in input_text and len(input_text) > 3:
+        # This may have a country tag. Let's be sure to remove it.
         regional_case = True
-        country_name = input_text.split("{")[1]
+        input_text, country_name = input_text.split("{", 1)
         country_name = country_name[:-1]
         country_code = country_converter(country_name)[0]
-        input_text = input_text.split("{")[0]  # Get just the language.
 
     # Make a special exemption for COUNTRY CODES because people keep messing that up.
     for key, value in MISTAKE_ABBREVIATIONS.items():
         if len(input_text) == 2 and input_text.lower() == key:
             # If it's the same, let's replace it with the proper one.
             input_text = value
-            continue
 
     # We also want to help convert ISO 639-2B codes (there are twenty of them)
     for key, value in ISO_639_2B.items():
         if len(input_text) == 3 and input_text.lower() == key:
             # If it's the same, let's replace it with the proper one.
             input_text = value
-            continue
 
     # Convert and reassign special-reserved ISO 639-3 codes to their r/translator equivalents.
     if input_text in [
@@ -419,51 +402,44 @@ def converter(input_text):
     elif is_script:  # This is a script.
         language_code = specific_code
         language_name = input_text
-    elif (
-        input_text.lower() in ISO_639_1
-    ):  # Everything below is accessing languages. This is a ISO 639-1 code.
+    elif input_text.lower() in ISO_639_1:
+        # Everything below is accessing languages. This is a ISO 639-1 code.
         language_code = input_text.lower()
         language_name = MAIN_LANGUAGES[language_code]["name"]
         supported = MAIN_LANGUAGES[language_code]["supported"]
-    elif (
-        len(input_text) == 3 and input_text.lower() in ISO_639_3
-    ):  # This is equivalent to a supported one, eg 'cmn'.
+    elif len(input_text) == 3 and input_text.lower() in ISO_639_3:
+        # This is equivalent to a supported one, eg 'cmn'.
         for key, value in MAIN_LANGUAGES.items():
             if input_text.lower() == value["language_code_3"]:
                 language_code = key
                 language_name = MAIN_LANGUAGES[language_code]["name"]
                 supported = MAIN_LANGUAGES[language_code]["supported"]
-    elif (
-        len(input_text) == 3 and len(language_name_search(input_text.title())) != 0
-    ):  # This is three letters and name.
-        language_code = language_name_search(
-            input_text.title()
-        )  # An example of this is 'Any'.
+    elif len(input_text) == 3 and len(language_name_search(input_text.title())) != 0:
+        # This is three letters and name.
+        # An example of this is 'Any'.
+        language_code = language_name_search(input_text.title())
         language_name = MAIN_LANGUAGES[language_code]["name"]
-    elif (
-        len(input_text) == 3 and input_text.lower() not in ISO_639_3
-    ):  # This may be a non-supported ISO 639-3 code.
+    elif len(input_text) == 3 and input_text.lower() not in ISO_639_3:
+        # This may be a non-supported ISO 639-3 code.
         results = lang_code_search(input_text, False)[0]  # Consult the CSV file.
         if len(results) != 0:  # We found a matching language name.
             language_code = input_text.lower()
             language_name = results
     elif len(input_text) > 3:  # Not a code, let's look for names.
         if input_text.title() in ISO_NAMES:  # This is a defined language with a name.
-            language_code = language_name_search(
-                input_text.title()
-            )  # This searches both regular and alternate names.
+            # This searches both regular and alternate names.
+            language_code = language_name_search(input_text.title())
             language_name = MAIN_LANGUAGES[language_code]["name"]
             supported = MAIN_LANGUAGES[language_code]["supported"]
         elif input_text.title() not in ISO_NAMES:
-            if input_text.title() not in FUZZ_IGNORE_WORDS:
-                # No name found. Apply fuzzy matching.
-                fuzzy_result = fuzzy_text(input_text.title().strip())
-            else:
-                fuzzy_result = None
+            fuzzy_result = (
+                fuzzy_text(input_text.title().strip())
+                if input_text.title() not in FUZZ_IGNORE_WORDS
+                else None
+            )
 
-            if (
-                fuzzy_result is not None
-            ):  # We found a language that this is close to in spelling.
+            if fuzzy_result is not None:
+                # We found a language that this is close to in spelling.
                 language_code = language_name_search(fuzzy_result.title())
                 language_name = str(fuzzy_result)
                 supported = MAIN_LANGUAGES[language_code]["supported"]
@@ -475,9 +451,8 @@ def converter(input_text):
                     language_name = lang_code_search(language_code, total_results[1])[0]
                     if language_code in MAIN_LANGUAGES:
                         supported = MAIN_LANGUAGES[language_code]["supported"]
-                elif (
-                    len(specific_results) == 0 and len(input_text) == 4
-                ):  # This is a script code.
+                elif len(specific_results) == 0 and len(input_text) == 4:
+                    # This is a script code.
                     script_results = lang_code_search(input_text, True)[0]
                     if len(script_results) != 0:
                         language_name = script_results
@@ -487,13 +462,11 @@ def converter(input_text):
     # if "<" in language_name:  # Strip the brackets from ISO 639-3 languages.
     #    language_name = language_name.split("<")[0].strip()  # Remove the country name in brackets
 
-    if (
-        len(language_code) == 0
-    ):  # There's no valid language so let's reset the country values.
+    if len(language_code) == 0:
+        # There's no valid language so let's reset the country values.
         country_code = None
-    elif (
-        regional_case and len(country_name) != 0 and len(language_code) != 0
-    ):  # This was for a specific language area.
+    elif regional_case and len(country_name) != 0 and len(language_code) != 0:
+        # This was for a specific language area.
         language_name += " {" + country_name + "}"
 
     return language_code, language_name, supported, country_code
@@ -516,12 +489,10 @@ def country_validator(word_list, language_list):
     final_word_list = []
 
     if len(word_list) > 0:  # There are actually words to process.
-        if (
-            " " in word_list[-1]
-        ):  # There's a space in the last word list from additive function in the title routine
-            word_list = word_list[
-                :-1
-            ]  # Take the last one out. It'll be processed again later anyway.
+        if " " in word_list[-1]:
+            # There's a space in the last word list from additive function in the title routine
+            # Take the last one out. It'll be processed again later anyway.
+            word_list = word_list[:-1]
     else:
         return None  # There's nothing we can process.
 
@@ -530,9 +501,8 @@ def country_validator(word_list, language_list):
             for subset in itertools.combinations(word_list, L):
                 if len(subset) > 1:  # What we want are varying word combinations.
                     # This is useful for getting countries that have more than one word (Costa Rica)
-                    final_word_list.append(
-                        " ".join(subset)
-                    )  # Join the words together as a string for searching.
+                    # Join the words together as a string for searching.
+                    final_word_list.append(" ".join(subset))
 
     final_word_list += word_list
 
@@ -546,34 +516,22 @@ def country_validator(word_list, language_list):
         for language in language_list:
             language_code = converter(language)[0]
 
-            if (
-                language_code in LANGUAGE_COUNTRY_ASSOCIATED
-            ):  # There's a language assoc.
+            if language_code in LANGUAGE_COUNTRY_ASSOCIATED:
+                # There's a language assoc.
                 check_countries = LANGUAGE_COUNTRY_ASSOCIATED.get(language_code)
                 # Fetch the list of countries associated with that language.
-                # print("Checked countries: " + str(check_countries))
 
                 lang_country_combined = None
                 relevant_iso_code = None
 
                 for country in check_countries:
-                    # print(country)
                     if country in all_detected_countries:  # country is listed.
                         lang_country_combined = f"{language_code}-{country}"
-                        # print("Found a language country pair. {}".format(lang_country_combined))
-                        if lang_country_combined in ISO_LANGUAGE_COUNTRY_ASSOCIATED:
-                            # This means there is an ISO 639-3 code for this that we wanna use
-                            relevant_iso_code = ISO_LANGUAGE_COUNTRY_ASSOCIATED.get(
-                                lang_country_combined
-                            )
-                            # print(relevant_iso_code)
-                        else:
-                            relevant_iso_code = None
-                return lang_country_combined, relevant_iso_code
-            else:
-                return None  # We did not find anything in our database match xx-XX.
-    else:
-        return None
+                        relevant_iso_code = ISO_LANGUAGE_COUNTRY_ASSOCIATED.get(
+                            lang_country_combined
+                        )
+                        if relevant_iso_code:
+                            return lang_country_combined, relevant_iso_code
 
 
 def comment_info_parser(pbody, command):
@@ -607,9 +565,8 @@ def comment_info_parser(pbody, command):
             pbody = pbody.replace(character, '"')  # Change them to quotes.
 
     if ":unknown-" in pbody:  # Special syntax in case someone tries to use this way...
-        script_code = pbody.split(":unknown-", 1)[1][
-            0:4
-        ]  # This is a bit of a hack but w/e
+        # This is a bit of a hack but w/e
+        script_code = pbody.split(":unknown-", 1)[1][0:4]
         if len(script_code) == 4:  # Truly script code
             pbody = pbody.replace(":unknown-", f":{script_code}! ")
         else:  # Let's not put it into advanced mode otherwise.
@@ -620,12 +577,8 @@ def comment_info_parser(pbody, command):
         if "!" in pbody_test[:5]:
             match = re.search(command + "(.*?)!", pbody)
             match = str(match.group(1)).lower()  # Convert it to a string.
-            if (
-                " " not in match and "\n" not in match
-            ):  # This is actually an advanced one.
-                advanced_mode = True
-            else:  # Maybe stacked two commands
-                advanced_mode = False
+            # might be two stacked comments
+            advanced_mode = " " not in match and "\n" not in match
         elif '"' in pbody_test[:2]:  # There's a quotation mark close by. Longer search?
             try:
                 match = re.search(':"(.*?)"', pbody)
@@ -635,37 +588,28 @@ def comment_info_parser(pbody, command):
             except AttributeError:  # Error for some reason.
                 pass
 
-    if not longer_search:  # There are no quotes, so this is for just one word.
-        if advanced_mode is not True:
-            if command in pbody:  # there is a language specified
-                match = re.search("(?<=" + command + r")[\w\-<^\'+]+", pbody)
-                try:
-                    match = str(match.group(0)).lower().strip()
-                except (
-                    AttributeError
-                ):  # There's no match... probably because of punctuation. Invalid match.
-                    return None  # Exit, we can't do anything.
-                # If there's a < in the string, check to make sure it's a cross post command.
-                if command not in [
-                    "!translate:",
-                    "!translator:",
-                ]:  # If it's not a crosspost...
-                    match = match.replace("<", "")  # Take out the bracket
-                # Code to double check if it's a script... even without the second! if it is, return as such
-                if len(match) == 4:  # This is four characters long
-                    language_name = lang_code_search(
-                        match, True
-                    )  # Run a search for the specific script
+    if longer_search or advanced_mode:
+        return match, advanced_mode
 
-                    # It found a script name, and the name is not the name of a language
-                    if language_name is not None and match.title() not in ISO_NAMES:
-                        advanced_mode = True  # Return it as an advanced mode.
-                return match, advanced_mode
-            else:
-                return None
-        elif advanced_mode is True:
-            return match, advanced_mode
-    elif longer_search:
+    if command in pbody:  # there is a language specified
+        match = re.search("(?<=" + command + r")[\w\-<^\'+]+", pbody)
+        try:
+            match = str(match.group(0)).lower().strip()
+        except AttributeError:
+            # There's no match... probably because of punctuation. Invalid match.
+            return None  # Exit, we can't do anything.
+        # If there's a < in the string, check to make sure it's a cross post command.
+        if command not in ["!translate:", "!translator:"]:
+            # If it's not a crosspost...
+            match = match.replace("<", "")  # Take out the bracket
+        # Code to double check if it's a script... even without the second! if it is, return as such
+        if len(match) == 4:  # This is four characters long
+            # Run a search for the specific script
+            language_name = lang_code_search(match, True)
+
+            # It found a script name, and the name is not the name of a language
+            if language_name is not None and match.title() not in ISO_NAMES:
+                advanced_mode = True  # Return it as an advanced mode.
         return match, advanced_mode
 
 
@@ -679,10 +623,7 @@ def english_fuzz(word):
 
     word = word.title()
     closeness = fuzz.ratio("English", word)
-    if closeness > 70:  # Very likely
-        return True
-    else:  # Unlikely
-        return False
+    return closeness > 70  # Very likely
 
 
 def replace_bad_english_typing(title):
@@ -706,11 +647,9 @@ def replace_bad_english_typing(title):
     title_words = [str(word) for word in title_words]
 
     for word in title_words:
-        e_result = english_fuzz(word)
-        if e_result is True:  # This word is a misspelling of "English"
-            title = title.replace(
-                word, "English"
-            )  # Replace the offending word with the proper spelling.
+        if english_fuzz(word):  # This word is a misspelling of "English"
+            # Replace the offending word with the proper spelling.
+            title = title.replace(word, "English")
 
     return title  # Return the title, now cleaned up.
 
@@ -735,26 +674,15 @@ def language_mention_search(search_paragraph):
             language_name = converter_result[1]
 
             # We do a quick check to make sure it's not some obscure ISO 639-3 language.
-            if len(language_code) == 3 and language_code not in SUPPORTED_CODES:
-                proceed = False
-            else:
-                proceed = True
+            proceed = len(language_code) != 3 or language_code in SUPPORTED_CODES
 
-            if len(language_name) != 0 and proceed is True:  # The result is not blank.
+            if len(language_name) != 0 and proceed:  # The result is not blank.
                 language_name_matches.append(language_name)
-        else:
-            continue
 
-    language_name_matches = [
-        x for x in language_name_matches if x != ""
-    ]  # remove blanks
-    language_name_matches = list(set(language_name_matches))  # remove duplicates
-    to_post = language_name_matches
-
-    if len(to_post) == 0:  # If it matches nothing... UPDATE
-        return None
-    else:
-        return to_post
+    # remove blanks and duplicates
+    language_name_matches = list({x for x in language_name_matches if x != ""})
+    # If it matches nothing... UPDATE
+    return language_name_matches or None
 
 
 def bad_title_reformat(title_text):
@@ -775,9 +703,11 @@ def bad_title_reformat(title_text):
 
     listed_languages = language_mention_search(search_text.title())
     if listed_languages is not None:  # We have some results.
-        listed_languages = [x for x in listed_languages if x != "English"]
-        listed_languages = [x for x in listed_languages if x != "Multiple Languages"]
-        listed_languages = [x for x in listed_languages if x != "Nonlanguage"]
+        listed_languages = [
+            x
+            for x in listed_languages
+            if x not in ["English", "Multiple Languages", "Nonlanguage"]
+        ]
 
     if (
         listed_languages is None
@@ -835,9 +765,8 @@ def detect_languages_reformat(title_text):
             title_words_selected[word] = language_check[0]
 
     for word in title_words_reversed[-7:]:
-        language_check = language_mention_search(
-            word.title()
-        )  # Check to see if there are languages in the title
+        # Check to see if there are languages in the title
+        language_check = language_mention_search(word.title())
         if language_check is not None:  # There are languages mentioned
             last_language = language_check[0]  # this is the last language mentioned
             break
@@ -851,19 +780,17 @@ def detect_languages_reformat(title_text):
 
     for key in sorted(title_words_selected.keys()):
         if title_words_selected[key] == last_language:
+            # add a bracket to the last found language
             new_title_text = new_title_text.replace(
                 key, title_words_selected[key] + "] "
-            )  # add a bracket to the last found language
+            )
 
     if " to " in new_title_text:
         new_title_text = new_title_text.replace(" to ", " > ")
     elif " into " in new_title_text:
         new_title_text = new_title_text.replace(" into ", " > ")
 
-    if new_title_text != "":
-        return new_title_text
-    else:
-        return None
+    return new_title_text or None
 
 
 def app_multiple_definer(title_text):
@@ -876,10 +803,7 @@ def app_multiple_definer(title_text):
     """
 
     title_text = title_text.lower()
-    if any(keyword in title_text for keyword in APP_WORDS):
-        return True  # Yes, this should be an app post.
-    else:
-        return False  # No it's not.
+    return any(keyword in title_text for keyword in APP_WORDS)
 
 
 def multiple_language_script_assessor(language_list):
@@ -900,10 +824,7 @@ def multiple_language_script_assessor(language_list):
         else:  # This is just a language.
             multiple_status = True
 
-    if multiple_status is True:  # Everything is a language
-        return multiple_status
-    else:  # There were scripts.
-        return language_list
+    return multiple_status or language_list
 
 
 def both_non_english_detector(source_language, target_language):
@@ -921,15 +842,11 @@ def both_non_english_detector(source_language, target_language):
 
     all_languages = list(set(source_language + target_language))
 
-    if (
-        "English" in all_languages
-    ):  # English is in here, so it CAN'T be what we're looking for.
+    if "English" in all_languages:
+        # English is in here, so it CAN'T be what we're looking for.
         return None
 
-    if len(all_languages) <= 1:
-        return None
-    else:
-        return all_languages
+    return None if len(all_languages) <= 1 else all_languages
 
 
 def determine_title_direction(source_languages_list, target_languages_list):
@@ -992,9 +909,8 @@ def final_title_salvager(d_source_languages, d_target_languages):
     """
 
     all_languages = d_source_languages + d_target_languages  # Combine the two
-    all_languages = [
-        x for x in all_languages if x not in ["Generic", "English"]
-    ]  # Remove the generic ones.
+    # Remove the generic ones.
+    all_languages = [x for x in all_languages if x not in ["Generic", "English"]]
 
     if len(all_languages) is None:  # No way of saving this.
         return None
@@ -1083,16 +999,14 @@ def title_format(title, display_process=False):
     if "]" not in title and "[" not in title and re.match(r"\((.+(>| to ).+)\)", title):
         # This is for cases where we have no square brackets but we have a > or " to " between parantheses instead.
         # print("Replacing parantheses...")
-        title = title.replace(
-            "(", "[", 1
-        )  # We only want to replace the first occurence.
+        # We only want to replace the first occurence.
+        title = title.replace("(", "[", 1)
         title = title.replace(")", "]", 1)
     elif "]" not in title and "[" not in title and re.match(r"{(.+(>| to ).+)}", title):
         # This is for cases where we have no square brackets but we have a > or " to " between curly braces instead.
         # print("Replacing braces...")
-        title = title.replace(
-            "{", "[", 1
-        )  # We only want to replace the first occurence.
+        # We only want to replace the first occurence.
+        title = title.replace("{", "[", 1)
         title = title.replace("}", "]", 1)
 
     if (
@@ -1123,9 +1037,10 @@ def title_format(title, display_process=False):
         title = title.replace("}", "]")
 
     # Adapting for "English -" type situations
-    if "-" in title[0:20]:
-        if any(keyword in title.title() for keyword in ENGLISH_DASHES):
-            title = title.replace("-", " > ")
+    if "-" in title[0:20] and any(
+        keyword in title.title() for keyword in ENGLISH_DASHES
+    ):
+        title = title.replace("-", " > ")
 
     if "[" in title and "[" not in title[0:10]:
         # There's a bracketed part, but it's not at the beginning, so it's probably at the end.
@@ -1139,20 +1054,16 @@ def title_format(title, display_process=False):
     if "_" in title:  # Let's replace underscores with proper spaces.
         title = title.replace("_", " ")
 
-    if (
-        "-" in title[0:25]
-    ):  # Let's replace dashes with proper spaces. Those that still remain after conversion
-        hyphen_match = re.search(
-            r"((?:\w+-)+\w+)", title
-        )  # Try to match a hyphenated word (Puyo-Paekche)
+    if "-" in title[0:25]:
+        # Let's replace dashes with proper spaces. Those that still remain after conversion
+        # Try to match a hyphenated word (Puyo-Paekche)
+        hyphen_match = re.search(r"((?:\w+-)+\w+)", title)
         if hyphen_match is not None:
             hyphen_match = hyphen_match.group(0)
-            hyphen_match_name = converter(hyphen_match)[
-                1
-            ]  # Check to see if it's a valid language name
-            if (
-                len(hyphen_match_name) == 0
-            ):  # No language match found, let's replace the dash with a space.
+            # Check to see if it's a valid language name
+            hyphen_match_name = converter(hyphen_match)[1]
+            if len(hyphen_match_name) == 0:
+                # No language match found, let's replace the dash with a space.
                 title = title.replace("-", " ")
 
     for character in ["&", "+", "/", "\\", "|"]:
@@ -1175,9 +1086,8 @@ def title_format(title, display_process=False):
         if " into " in title[0:30]:
             title = title.replace("into", ">")
 
-    if (
-        "KR " in title.upper()[0:10]
-    ):  # KR is technically Kanuri but no one actually means it to be Kanuri.
+    if "KR " in title.upper()[0:10]:
+        # KR is technically Kanuri but no one actually means it to be Kanuri.
         title = title.replace("KR ", "Korean ")
 
     # If all people write is [Unknown], account for that, and just send it back right away.
@@ -1196,33 +1106,19 @@ def title_format(title, display_process=False):
         )
     elif "???" in title[0:5] or "??" in title[0:4] or "?" in title[0:3]:
         # This is if the first few characters are just question marks...
-        if "]" in title:
-            actual_title = title.split("]")[1]
-            return (
-                ["Unknown"],
-                ["English"],
-                "unknown",
-                "Unknown",
-                actual_title,
-                title,
-                None,
-                None,
-                "english_to",
-            )
-        else:
-            return (
-                ["Unknown"],
-                ["English"],
-                "unknown",
-                "Unknown",
-                "",
-                title,
-                None,
-                None,
-                "english_to",
-            )
+        return (
+            ["Unknown"],
+            ["English"],
+            "unknown",
+            "Unknown",
+            title.split("]")[1] if "]" in title else "",
+            title,
+            None,
+            None,
+            "english_to",
+        )
 
-    if display_process is True:
+    if display_process:
         print("\n## Title as Processed:")
         print(title)
 
@@ -1251,16 +1147,15 @@ def title_format(title, display_process=False):
 
     # If there are two or three words only in source language, concatenate them to see if there's another that exists...
     # (e.g. American Sign Language)
-    if len(source_language) >= 2:
-        if source_language[1].strip() != "-":
-            source_language.append(" ".join(source_language))
+    if len(source_language) >= 2 and source_language[1].strip() != "-":
+        source_language.append(" ".join(source_language))
 
+    # Remove two/three letter words that can be misconstrued as ISO codes
     source_language = [
-        x for x in source_language if x not in ENGLISH_2_WORDS
-    ]  # Remove two letter words that can be misconstrued as ISO codes
-    source_language = [
-        x for x in source_language if x not in ENGLISH_3_WORDS
-    ]  # Remove three letter words that can be misconstrued as ISO codes
+        x
+        for x in source_language
+        if x not in ENGLISH_2_WORDS and x not in ENGLISH_3_WORDS
+    ]
 
     if display_process is True:
         print("\n## Source Language Strings:")
@@ -1268,19 +1163,16 @@ def title_format(title, display_process=False):
 
     d_source_languages = []  # Account for misspellings
     for language in source_language:
-        if (
-            "Eng" in language.title() and len(language) <= 8
-        ):  # If it's just English, we can assign it already.
+        if "Eng" in language.title() and len(language) <= 8:
+            # If it's just English, we can assign it already.
             language = "English"
         converter_search = converter(language)[1]
-        if (
-            converter_search != ""
-        ):  # Try to get only the valid languages. Delete anything that isn't a language.
+        if converter_search != "":
+            # Try to get only the valid languages. Delete anything that isn't a language.
             d_source_languages.append(converter_search)
     d_source_languages = list(set(d_source_languages))  # Remove duplicates
-    if (
-        len(d_source_languages) == 0
-    ):  # If we are unable to find a source language, leave it blank
+    if len(d_source_languages) == 0:
+        # If we are unable to find a source language, leave it blank
         d_source_languages = ["Generic"]
 
     processed_title = title
@@ -1290,72 +1182,17 @@ def title_format(title, display_process=False):
         print(d_source_languages)
 
     # Start processing TARGET languages
-    if ">" in title:
-        title = title[title.find(">") + 1 :]
-        target_language = title.split("]", 1)[
-            0
-        ]  # Split it at the tag boundary and take the first part.
-        for character in target_language:
-            if (
-                character == "/"
-                or character == "+"
-                or character == "]"
-                or character == ")"
-                or character == "."
-                or character == ":"
-            ):
-                target_language = target_language.replace(character, " ")
-            elif (
-                character == ","
-            ):  # Comma, we want to be conservative and only do this for proper titles
-                target_language = target_language.replace(character, " , ")
-    elif " to " in title.lower() and ">" not in title:
-        title = title[title.find(" to ") + 1 :]
-        target_language = title.split("]", 1)[
-            0
-        ]  # Split it at the tag boundary and take the first part.
-        for character in target_language:
-            if (
-                character == ","
-                or character == "/"
-                or character == "+"
-                or character == "]"
-                or character == ")"
-                or character == "."
-                or character == ":"
-            ):
-                target_language = target_language.replace(character, " ")
-    elif "-" in title and ">" not in title and " to " not in title:
-        title = title[title.find("-") + 1 :]
-        target_language = title.split("]", 1)[
-            0
-        ]  # Split it at the tag boundary and take the first part.
-        for character in target_language:
-            if (
-                character == ","
-                or character == "/"
-                or character == "+"
-                or character == "]"
-                or character == ")"
-                or character == "."
-                or character == ":"
-            ):
-                target_language = target_language.replace(character, " ")
-    elif "<" in title and ">" not in title and " to " not in title:
-        title = title[title.find("-") + 1 :]
-        target_language = title.split("]", 1)[
-            0
-        ]  # Split it at the tag boundary and take the first part.
-        for character in target_language:
-            if (
-                character == ","
-                or character == "/"
-                or character == "]"
-                or character == ")"
-                or character == "."
-                or character == ":"
-            ):
-                target_language = target_language.replace(character, " ")
+    split_chars = [">", " to ", "-", "<"]
+    replace_chars = ",/+]).:"
+    for split_char in split_chars:
+        if split_char in title.lower():
+            title = title[title.find(split_char) + len(split_char) :]
+            # Split it at the tag boundary and take the first part.
+            target_language = title.split("]", 1)[0]
+            for character in target_language:
+                if character in replace_chars:
+                    target_language = target_language.replace(character, " ")
+            break
 
     # Replace punctuation in the string. Not yet divided.
     target_language = re.sub(
@@ -1373,22 +1210,18 @@ def title_format(title, display_process=False):
     target_language = [x.title() for x in target_language]
     # Check for a hyphenated word.. like Puyo-Paekche
 
-    if (
-        len(target_language) >= 2
-    ):  # If there are more words, we'll also process the whole string.
+    if len(target_language) >= 2:
+        # If there are more words, we'll also process the whole string.
         target_language.append(" ".join(target_language))
-    # target_language = [x for x in target_language if x != "&"]
-    target_language = target_language_original = [
-        x.strip() for x in target_language
-    ]  # Take away white space
-
-    # target_language_nostrip = target_language  # This is used to check later if we can get a more specific result
+    # Take away white space
+    target_language = target_language_original = [x.strip() for x in target_language]
 
     # Account for English words that are also ISO codes, in malformed titles. It'll remove it from the list. Should be okay with full names.
-    target_language = [x for x in target_language if x not in ENGLISH_2_WORDS]
     target_language = [
-        x for x in target_language if x not in ENGLISH_3_WORDS
-    ]  # Remove three letter words that can be misconstrued as ISO codes
+        x
+        for x in target_language
+        if x not in ENGLISH_2_WORDS and x not in ENGLISH_3_WORDS
+    ]
 
     if display_process is True:
         print("\n## Target Language Strings:")
@@ -1398,16 +1231,13 @@ def title_format(title, display_process=False):
 
     for language in target_language:
         converter_target_search = converter(language)[1]
-        if (
-            converter_target_search != ""
-        ):  # Try to get only the valid languages. Delete anything that isn't a language.
+        if converter_target_search != "":
+            # Try to get only the valid languages. Delete anything that isn't a language.
             d_target_languages.append(converter_target_search)
-    d_target_languages = list(
-        set(d_target_languages)
-    )  # Remove duplicates (Like "Mandarin Chinese")
-    if (
-        len(d_target_languages) == 0
-    ):  # If we are unable to find a target language, leave it blank
+    # Remove duplicates (Like "Mandarin Chinese")
+    d_target_languages = list(set(d_target_languages))
+    if len(d_target_languages) == 0:
+        # If we are unable to find a target language, leave it blank
         d_target_languages = ["Generic"]
 
     # If there's more than 1, and english is in both of them, then take out english!
@@ -1425,19 +1255,16 @@ def title_format(title, display_process=False):
     both_test_languages = both_non_english_detector(
         d_source_languages, d_target_languages
     )
-    if (
-        both_test_languages is not None
-    ):  # Check to see if there are two non-English things
+    if both_test_languages is not None:
+        # Check to see if there are two non-English things
         notify_languages = both_test_languages
     # By this point, we have the source and target languages broken up into two separate lists.
     # Now we determine what CSS class to give this post.
 
     if "English" in d_target_languages and "English" not in d_source_languages:
         # If the target language is English, we want to give it a source language CSS.
-        if (
-            len(d_source_languages) >= 2
-        ):  # Prioritize other than Unknown/English, take it out.
-            # print("We reached here")
+        if len(d_source_languages) >= 2:
+            # Prioritize other than Unknown/English, take it out.
             if (
                 "Unknown" in d_source_languages
                 or "English" in d_source_languages
@@ -1458,9 +1285,8 @@ def title_format(title, display_process=False):
             complete_source = ""
 
             # Do we have a language that is a complete match? (e.g. Tunisian Arabic)
-            for (
-                language
-            ) in d_source_languages_m:  # Is the complete match in the languages list?
+            for language in d_source_languages_m:
+                # Is the complete match in the languages list?
                 if language == source_language[-1]:  # It matches!
                     complete_override = True
                     complete_source = language
@@ -1479,9 +1305,8 @@ def title_format(title, display_process=False):
             # We do a test to see if there's a specific target, e.g. Egyptian Arabic
             joined_target = target_language[-1]  # Get the last full string.
             joined_target_data = converter(joined_target)
-            if (
-                len(joined_target_data[0]) != 0
-            ):  # The converter actually found a specific language code for this.
+            if len(joined_target_data[0]) != 0:
+                # The converter actually found a specific language code for this.
                 final_css = joined_target_data[0]
                 d_target_languages = [joined_target_data[1]]
     elif "English" in d_source_languages and "English" in d_target_languages:
@@ -1494,35 +1319,26 @@ def title_format(title, display_process=False):
             final_css = "en"  # Obviously it was just English
 
     # Check to see if there is an "or" in the target languages
-    test_chunk = title.split("]", 1)[
-        0
-    ]  # Split it at the tag boundary and take the first part.
-    if (
-        " or " in test_chunk.lower() and len(d_target_languages) < 6
-    ):  # See if there are languages considered optional
-        type_o = True  # Type O means that in this sort of case we should really be taking the default
-    else:
-        type_o = False
+    # Split it at the tag boundary and take the first part.
+    test_chunk = title.split("]", 1)[0]
+    # See if there are languages considered optional
+    # Type O means that in this sort of case we should really be taking the default
+    type_o = " or " in test_chunk.lower() and len(d_target_languages) < 6
 
     # Check for the direction.
     direction = determine_title_direction(d_source_languages, d_target_languages)
 
     if len(d_target_languages) >= 2:  # Test to see if it has multiple target languages
         is_multiple_test = list(d_target_languages)
-        for name in [
-            "English",
-            "Multiple Languages",
-        ]:  # We want to remove these to see if there really is many targets
+        for name in ["English", "Multiple Languages"]:
+            # We want to remove these to see if there really is many targets
             if name in d_target_languages:
                 is_multiple_test.remove(name)
+        # Check to see if there's a script here
+        script_check = multiple_language_script_assessor(is_multiple_test)
 
-        script_check = multiple_language_script_assessor(
-            is_multiple_test
-        )  # Check to see if there's a script here
-
-        if (
-            script_check is not True
-        ):  # There appears to be a script in our "multiple" selection.
+        if script_check is not True:
+            # There appears to be a script in our "multiple" selection.
             is_multiple_test = script_check
 
         if len(is_multiple_test) >= 2 and "English" not in d_target_languages:
@@ -1541,14 +1357,12 @@ def title_format(title, display_process=False):
             target_language_original, d_target_languages
         )
 
-        if (
-            source_country_data is not None or target_country_data is not None
-        ):  # There's data from the country detector
+        if source_country_data is not None or target_country_data is not None:
+            # There's data from the country detector
             if source_country_data is not None:
                 language_country = source_country_data[0]  # Data like en-US
-                language_country_code = source_country_data[
-                    1
-                ]  # The ISO 639-3 code if exists
+                # The ISO 639-3 code if exists
+                language_country_code = source_country_data[1]
                 if (
                     len(d_source_languages) == 1
                     and language_country_code is not None
@@ -1564,9 +1378,8 @@ def title_format(title, display_process=False):
                     "English" not in d_target_languages and language_country is not None
                 ):
                     # Situations where both are non-English
-                    final_css = language_country.split("-", 1)[
-                        0
-                    ]  # Just take the language code.
+                    # Just take the language code.
+                    final_css = language_country.split("-", 1)[0]
             elif target_country_data is not None:
                 language_country = target_country_data[0]  # Data like en-US
                 language_country_code = target_country_data[
@@ -1587,10 +1400,8 @@ def title_format(title, display_process=False):
                 ):
                     # Situations where both are non-English
                     final_css = language_country.split("-", 1)[0]
-    else:  # There was already a country listed above.
-        # print("Region already noted...")
-        if len(country_suffix_code) != 0 and len(final_css) == 2 or len(final_css) == 3:
-            language_country = f"{final_css}-{country_suffix_code}"
+    elif len(country_suffix_code) != 0 and len(final_css) == 2 or len(final_css) == 3:
+        language_country = f"{final_css}-{country_suffix_code}"
 
     if len(final_css) != 4:  # This is not a script
         final_css_text = converter(final_css)[1]  # Get the flair text for inclusion.
@@ -1601,70 +1412,57 @@ def title_format(title, display_process=False):
             and final_css != "multiple"
         ):
             # There is a country suffix to include, let's add it to the flair. Not if it's its own langauge code though
-            final_css_text += " {{{}}}".format(
-                language_country[-2:]
-            )  # Add the country code to the output flair
+            # Add the country code to the output flair
+            final_css_text += " {{{}}}".format(language_country[-2:])
     else:  # This is a script
         final_css_text = f"{lang_code_search(final_css, True)[0]} (Script)"
-        language_country = "unknown-{}".format(
-            final_css
-        )  # Returns a category like unknown-cyrl for notifications
-
-    if notify_languages is not None:  # This is multiple with defined langauges.
-        # print(notify_languages)
-        # print(final_css)
-        if (
-            len(notify_languages) >= 2 and final_css == "multiple"
-        ):  # Format Multiple Languages with language tags too!
-            multiple_code_tag = []
-            for language in notify_languages:
-                multiple_code_tag.append(
-                    converter(language)[0].upper()
-                )  # Get the code from the name
-                multiple_code_tag = sorted(multiple_code_tag)  # Alphabetize
-                if "MULTIPLE" in multiple_code_tag:
-                    multiple_code_tag.remove("MULTIPLE")
-                if "UNKNOWN" in multiple_code_tag:
-                    multiple_code_tag.remove("UNKNOWN")
-                multiple_code_tag_string = ", ".join(
-                    multiple_code_tag
-                )  # This gives us the string without brackets.
-                # The limit for link flair text is 64 characters. we need to trim.
-                if len(multiple_code_tag_string) > 34:
-                    # print("Too long")
-                    multiple_code_tag_short = []
-                    for tag in multiple_code_tag:
-                        if len(", ".join(multiple_code_tag_short)) <= 30:
-                            multiple_code_tag_short.append(tag)
-                        else:
-                            continue
-                    multiple_code_tag = multiple_code_tag_short
-                final_code_tag = " [" + ", ".join(multiple_code_tag) + "]"
-            final_css_text = final_css_text + final_code_tag
+        # Returns a category like unknown-cyrl for notifications
+        language_country = "unknown-{}".format(final_css)
 
     if (
-        type_o is True and final_css == "multiple"
-    ):  # This is one where the target languages may not be what we want MULTIPLE.
-        if (
-            "English" in d_source_languages
-        ):  # The source is English, so let's choose a target css
+        notify_languages is not None
+        and len(notify_languages) >= 2
+        and final_css == "multiple"
+    ):
+        # Format Multiple Languages with language tags too!
+        multiple_code_tag = []
+        for language in notify_languages:
+            # Get the code from the name
+            multiple_code_tag.append(converter(language)[0].upper())
+            multiple_code_tag = sorted(multiple_code_tag)  # Alphabetize
+            if "MULTIPLE" in multiple_code_tag:
+                multiple_code_tag.remove("MULTIPLE")
+            if "UNKNOWN" in multiple_code_tag:
+                multiple_code_tag.remove("UNKNOWN")
+            # This gives us the string without brackets.
+            multiple_code_tag_string = ", ".join(multiple_code_tag)
+            # The limit for link flair text is 64 characters. we need to trim.
+            if len(multiple_code_tag_string) > 34:
+                multiple_code_tag_short = []
+                for tag in multiple_code_tag:
+                    if len(", ".join(multiple_code_tag_short)) <= 30:
+                        multiple_code_tag_short.append(tag)
+                multiple_code_tag = multiple_code_tag_short
+            final_code_tag = " [" + ", ".join(multiple_code_tag) + "]"
+        final_css_text = final_css_text + final_code_tag
+
+    if type_o and final_css == "multiple":
+        # This is one where the target languages may not be what we want MULTIPLE.
+        if "English" in d_source_languages:
+            # The source is English, so let's choose a target css
             final_css = converter(d_target_languages[0])[0]
-            final_css_text = d_target_languages[
-                0
-            ]  # we will send the multiple notifications, just in case.
+            # we will send the multiple notifications, just in case.
+            final_css_text = d_target_languages[0]
         else:  # English is in the targets, so let's take the source.
             final_css = converter(d_source_languages[0])[0]
             final_css_text = d_source_languages[0]  # Just the name
-            notify_languages = (
-                None  # Clear the notifications, we don't need them for this one.
-            )
+            # Clear the notifications, we don't need them for this one.
+            notify_languages = None
 
-    if (
-        final_css not in SUPPORTED_CODES and len(final_css) != 4
-    ):  # It's not a supported css and also not a language
-        final_css = (
-            "generic"  # If we don't have link flair for it, give it a generic linkflair
-        )
+    if final_css not in SUPPORTED_CODES and len(final_css) != 4:
+        # It's not a supported css and also not a language
+        # If we don't have link flair for it, give it a generic linkflair
+        final_css = "generic"
     elif len(final_css) == 4:  # It's a script code
         final_css = "unknown"
 
@@ -1676,19 +1474,9 @@ def title_format(title, display_process=False):
     elif "English" in title and "]" not in title:
         actual_title = str(title.split("English", 1)[1]).strip()
 
-    if actual_title != "":  # Try to properly format the "real title"
-        if "]" in actual_title[:1]:
-            actual_title = actual_title[1:].strip()
-        elif ")" in actual_title[:1]:
-            actual_title = actual_title[1:].strip()
-        elif ">" in actual_title[:1]:
-            actual_title = actual_title[1:].strip()
-        elif "," in actual_title[:1]:
-            actual_title = actual_title[1:].strip()
-        elif "." in actual_title[:1]:
-            actual_title = actual_title[1:].strip()
-        elif ":" in actual_title[:1]:
-            actual_title = actual_title[1:].strip()
+    if actual_title != "" and actual_title[0] in ["])>,.:"]:
+        # Try to properly format the "real title"
+        actual_title = actual_title[1:].strip()
 
     # We calculate whether or not this is an app. This is only applicable to Multiple posts
     if final_css == "multiple":
@@ -1745,11 +1533,7 @@ def language_list_splitter(list_string):
     if "," not in list_string and " " in list_string:
         # Assess whether the whole thing is a multi-word language itself.
         all_match = converter(list_string)[0]
-        if len(all_match) == 0:  # No match
-            temporary_list = list_string.split(" ")  # Separate by spaces
-        else:  # There is a match.
-            temporary_list = [all_match]
-
+        temporary_list = list_string.split() if len(all_match) == 0 else [all_match]
     else:
         # Get the individual elements with a first pass.
         temporary_list = list_string.split(",")
@@ -1779,10 +1563,7 @@ def language_list_splitter(list_string):
     final_codes = list(set(final_codes))
     final_codes = sorted(final_codes, key=str.lower)
 
-    if len(final_codes) == 0:
-        return None
-    else:
-        return final_codes
+    return None if len(final_codes) == 0 else final_codes
 
 
 def main_posts_filter_required_keywords():
@@ -1892,9 +1673,8 @@ def main_posts_filter(otitle):
     if not any(keyword in otitle.lower() for keyword in mandatory_keywords):
         # This is the same thing as AM's content_rule #1. The title does not contain any of our keywords.
         # But first, we'll try to salvage the title into something we can work with.
-        otitle = replace_bad_english_typing(
-            otitle
-        )  # This replaces any bad words for "English"
+        # This replaces any bad words for "English"
+        otitle = replace_bad_english_typing(otitle)
 
         # The function below would allow for a lot looser rules but is currently unused.
         """
@@ -1904,54 +1684,48 @@ def main_posts_filter(otitle):
             post_okay = False
         """
 
-        if not any(
-            keyword in otitle.lower() for keyword in mandatory_keywords
-        ):  # Try again
+        if not any(keyword in otitle.lower() for keyword in mandatory_keywords):
+            # Try again
             filter_reason = "1"
             print(
-                "[L] Main_Posts_Filter: > Filtered a post with an incorrect title format. Rule: #"
-                + filter_reason
+                f"[L] Main_Posts_Filter: > Filtered a post with an incorrect title format. Rule: #{filter_reason}"
             )
             post_okay = False
-    elif ">" not in otitle:  # Try to take out titles that bury the lede.
-        if any(phrase in otitle.lower() for phrase in to_phrases_keywords):
-            if not any(phrase in otitle.lower()[:25] for phrase in to_phrases_keywords):
-                # This means the "to LANGUAGE" part is probably all the way at the end. Take it out.
-                filter_reason = "1A"
+    elif ">" not in otitle and any(
+        phrase in otitle.lower() for phrase in to_phrases_keywords
+    ):
+        # Try to take out titles that bury the lede.
+        if not any(phrase in otitle.lower()[:25] for phrase in to_phrases_keywords):
+            # This means the "to LANGUAGE" part is probably all the way at the end. Take it out.
+            filter_reason = "1A"
+            print(
+                f"[L] Main_Posts_Filter: > Filtered a post with an incorrect title format. Rule: #{filter_reason}"
+            )
+            post_okay = False  # Since it's a bad post title, we don't need to process it anymore.
+
+        # Added a Rule 1B, basically this checks for super short things like 'Translation to English'
+        # This should only activate if 1A is not triggered.
+        if len(otitle) < 35 and filter_reason is None and "[" not in otitle:
+            # Find a list of languages that are listed
+            listed_languages = language_mention_search(otitle.title())
+
+            # Remove English, we don't need that.
+            if listed_languages is not None:
+                listed_languages = [x for x in listed_languages if x != "English"]
+
+            # If there's no listed language, then we can filter it out.
+            if listed_languages is None or len(listed_languages) == 0:
+                filter_reason = "1B"
+                post_okay = False
                 print(
-                    "[L] Main_Posts_Filter: > Filtered a post with an incorrect title format. Rule: #"
-                    + filter_reason
+                    f"[L] Main_Posts_Filter: > Filtered a post with no valid language. Rule: #{filter_reason}"
                 )
-                post_okay = False  # Since it's a bad post title, we don't need to process it anymore.
-
-            # Added a Rule 1B, basically this checks for super short things like 'Translation to English'
-            # This should only activate if 1A is not triggered.
-            if len(otitle) < 35 and filter_reason is None and "[" not in otitle:
-                # Find a list of languages that are listed
-                listed_languages = language_mention_search(otitle.title())
-
-                # Remove English, we don't need that.
-                if listed_languages is not None:
-                    listed_languages = [x for x in listed_languages if x != "English"]
-
-                # If there's no listed language, then we can filter it out.
-                if listed_languages is None or len(listed_languages) == 0:
-                    filter_reason = "1B"
-                    post_okay = False
-                    print(
-                        "[L] Main_Posts_Filter: > Filtered a post with no valid language. Rule: #"
-                        + filter_reason
-                    )
     if ">" in otitle and "]" not in otitle and ">" not in otitle[0:50]:
         # If people tack on the languages as an afterthought, it can be hard to process.
         filter_reason = "2"
         print(
-            "[L] Main_Posts_Filter: > Filtered a post out due to incorrect title format. Rule: #"
-            + filter_reason
+            f"[L] Main_Posts_Filter: > Filtered a post out due to incorrect title format. Rule: #{filter_reason}"
         )
         post_okay = False
 
-    if post_okay is True:
-        return post_okay, otitle, filter_reason
-    else:  # This title failed the test.
-        return post_okay, None, filter_reason
+    return post_okay, otitle if post_okay else None, filter_reason
