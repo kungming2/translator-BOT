@@ -10,9 +10,8 @@ import random
 from time import strftime
 
 # Set up the directories based on the current location of the bots.
-script_directory = os.path.dirname(
-    os.path.realpath(__file__)
-)  # Fetch the absolute directory the script is in.
+# Fetch the absolute directory the script is in.
+script_directory = os.path.dirname(os.path.realpath(__file__))
 script_directory += "/Data/"  # Where the main files are kept.
 SOURCE_FOLDER = script_directory
 
@@ -39,9 +38,8 @@ FILE_ADDRESS_ZH_BUDDHIST = os.path.join(
     script_directory, "_database_buddhist_chinese.md"
 )
 FILE_ADDRESS_ZH_CCCANTO = os.path.join(script_directory, "_database_cccanto.md")
-FILE_ADDRESS_MECAB = os.path.join(
-    script_directory, "mecab-ipadic-neologd"
-)  # Folder where MeCab dict files are
+# Folder where MeCab dict files are
+FILE_ADDRESS_MECAB = os.path.join(script_directory, "mecab-ipadic-neologd")
 
 # Ziwen output files (text files for saving information).
 FILE_ADDRESS_ERROR = os.path.join(script_directory, "_log_error.md")
@@ -117,15 +115,10 @@ def credentials_loader():
     """
 
     # Access the JSON file with the credentials.
-    f = open(FILE_ADDRESS_CREDENTIALS, encoding="utf-8")
-    login_data = f.read()
-    f.close()
-
-    # Convert the JSON data into a dictionary.
-    login_data = json.loads(login_data)
-
-    # Declare the variables.
-    globals().update(login_data)
+    with open(FILE_ADDRESS_CREDENTIALS, encoding="utf-8") as f:
+        login_data = json.load(f)
+        # Declare the variables.
+        globals().update(login_data)
 
 
 # Load the credentials from the JSON file.
@@ -135,16 +128,14 @@ credentials_loader()
 
 # Logging code, defining the basic logger.
 logformatter = "%(levelname)s: %(asctime)s [%(filename)s:%(lineno)d]- %(message)s"
-logging.basicConfig(
-    format=logformatter, level=logging.INFO
-)  # By default only show INFO or higher levels.
+# By default only show INFO or higher levels.
+logging.basicConfig(format=logformatter, level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Define the logging handler (the file to write to with formatting.)
 handler = logging.FileHandler(FILE_ADDRESS_EVENTS)
-handler.setLevel(
-    logging.INFO
-)  # Change this level for debugging or to display more information.
+# Change this level for debugging or to display more information.
+handler.setLevel(logging.INFO)
 handler_format = logging.Formatter(logformatter, datefmt="%Y-%m-%d [%I:%M:%S %p]")
 handler.setFormatter(handler_format)
 logger.addHandler(handler)
@@ -161,20 +152,14 @@ def get_random_useragent():
     """
 
     # Load the JSON file
-    f = open(FILE_ADDRESS_UA, encoding="utf-8")
-    ua_data = f.read()
-    f.close()
+    with open(FILE_ADDRESS_UA, encoding="utf-8") as f:
+        ua_data = json.load(f)
+        ua_stored = ua_data["ua"]
 
-    # Convert the JSON data into a dictionary.
-    ua_data = json.loads(ua_data)
-    ua_stored = ua_data["ua"]
-
-    # Select a random one from the list.
-    random_ua = random.choice(ua_stored)
-    accept_string = "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
-    headers = {"User-Agent": random_ua, "Accept": accept_string}
-
-    return headers
+        # Select a random one from the list.
+        random_ua = random.choice(ua_stored)
+        accept_string = "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+        return {"User-Agent": random_ua, "Accept": accept_string} # headers
 
 
 def error_log_basic(entry, bot_version):
@@ -189,18 +174,14 @@ def error_log_basic(entry, bot_version):
     """
 
     # Open the file for the error log in appending mode.
-    f = open(FILE_ADDRESS_ERROR, "a+", encoding="utf-8")
-    current_entries = f.read()
-
-    # If this hasn't already been recorded, add it.
-    if entry not in current_entries:
-        error_date_format = strftime("%Y-%m-%d [%I:%M:%S %p]")
-        f.write(
-            "\n-----------------------------------\n{} ({})\n{}".format(
-                error_date_format, bot_version, entry
+    with open(FILE_ADDRESS_ERROR, "a+", encoding="utf-8") as f:
+        current_entries = f.read()
+        # If this hasn't already been recorded, add it.
+        if entry not in current_entries:
+            error_date_format = strftime("%Y-%m-%d [%I:%M:%S %p]")
+            f.write(
+                f"\n-----------------------------------\n{error_date_format} ({bot_version})\n{entry}"
             )
-        )
-        f.close()
 
 
 def action_counter(messages_number, action_type):
@@ -228,20 +209,16 @@ def action_counter(messages_number, action_type):
     current_day = strftime("%Y-%m-%d")
 
     # Open the file for reading and access its content.
-    f = open(FILE_ADDRESS_COUNTER, "r+", encoding="utf-8")
-    current_actions_dict = json.loads(f.read())  # Take the file's current contents
-    f.close()  # Close the file
-
-    if current_day in current_actions_dict:  # This day has been recorded.
-        if action_type in current_actions_dict[current_day]:
-            current_actions_dict[current_day][action_type] += new_messages_number
-        else:
-            current_actions_dict[current_day][action_type] = new_messages_number
-    else:  # This day hasn't been recorded.
-        current_actions_dict[current_day] = {action_type: new_messages_number}
-
-    with open(os.path.join(FILE_ADDRESS_COUNTER), "w", encoding="utf-8") as fp:
-        json.dump(current_actions_dict, fp, sort_keys=True, indent=4)
+    with open(FILE_ADDRESS_COUNTER, "a+", encoding="utf-8") as f:
+        current_actions_dict = json.load(f)
+        if current_day in current_actions_dict:  # This day has been recorded.
+            if action_type in current_actions_dict[current_day]:
+                current_actions_dict[current_day][action_type] += new_messages_number
+            else:
+                current_actions_dict[current_day][action_type] = new_messages_number
+        else:  # This day hasn't been recorded.
+            current_actions_dict[current_day] = {action_type: new_messages_number}
+            json.dump(current_actions_dict, f, sort_keys=True, indent=4)
 
 
 def load_statistics_data(language_code):
@@ -253,18 +230,9 @@ def load_statistics_data(language_code):
     """
 
     # Open the file
-    f = open(FILE_ADDRESS_ALL_STATISTICS, encoding="utf-8")
-    stats_data = f.read()
-    f.close()
-
-    # Convert the JSON data into a dictionary.
-    stats_data = json.loads(stats_data)
-    if language_code in stats_data:
-        specific_data = stats_data[language_code]
-    else:  # This language code does not exist as a key.
-        specific_data = None
-
-    return specific_data
+    with open(FILE_ADDRESS_ALL_STATISTICS, encoding="utf-8") as f:
+        stats_data = json.load(f)
+        return stats_data.get(language_code)
 
 
 def time_convert_to_string(unix_integer):
@@ -277,6 +245,4 @@ def time_convert_to_string(unix_integer):
     utc_time = datetime.datetime.fromtimestamp(i, tz=datetime.timezone.utc).isoformat()[
         :19
     ]
-    utc_time = f"{utc_time}Z"
-
-    return utc_time
+    return f"{utc_time}Z"
