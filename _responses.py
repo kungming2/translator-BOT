@@ -313,12 +313,12 @@ If your request remains unfulfilled, you do not have to do anything and you are 
 Thank you for helping keep our community organized! We hope you found it a useful place.
 """
 
-#                                  _ 
+#                                  _
 #   _   _ _ __  _   _ ___  ___  __| |
 #  | | | | '_ \| | | / __|/ _ \/ _` |
 #  | |_| | | | | |_| \__ \  __/ (_| |
 #   \__,_|_| |_|\__,_|___/\___|\__,_|
-                                   
+
 # BELOW ARE UNUSED -- DO NOT ADD BELOW HERE
 REFERENCE_TEMPLATE_MAIN = """## [{0}](https://www.ethnologue.com/language/{1})
 

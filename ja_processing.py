@@ -109,13 +109,8 @@ def ja_character(character, zw_useragent):
             # Try to get a Chinese calligraphic image
             calligraphy_image = zh_character_calligraphy_search(character)
             if calligraphy_image is not None:
-                lookup_line_1 = lookup_line_1 + calligraphy_image
-            else:  # No character exists
-                lookup_line_1 = lookup_line_1
-
-            lookup_line_2 = str('\n\n**Meanings**: "' + meaning + '."')
-
-            total_data = lookup_line_1 + lookup_line_2
+                lookup_line_1 += calligraphy_image
+            total_data = lookup_line_1 + f'\n\n**Meanings**: "{meaning}."'
 
         elif multi_mode:
             # MULTIPLE Start iterating over the characters we have
@@ -133,9 +128,8 @@ def ja_character(character, zw_useragent):
                     "http://jisho.org/search/" + moji + "%20%23kanji",
                     headers=zw_useragent,
                 )
-                tree = html.fromstring(
-                    eth_page.content
-                )  # now contains the whole HTML page
+                # now contains the whole HTML page
+                tree = html.fromstring(eth_page.content)
 
                 # Get the readings of the characters
                 kun_reading = tree.xpath(
@@ -254,9 +248,8 @@ def ja_word_sfx(katakana_string, zw_useragent):
 
         # Gather data.
         sound_data = new_tree.xpath('//table[contains(@class,"definitions")]//text()')
-        sound_data = [
-            x for x in sound_data if len(x.strip()) > 0
-        ]  # Take away the blanks.
+        # Take away the blanks.
+        sound_data = [x for x in sound_data if len(x.strip()) > 0]
 
         # Double-check the entry to make sure it's right.
         katakana_entry = sound_data[4].strip().replace(",", "")
@@ -269,26 +262,15 @@ def ja_word_sfx(katakana_string, zw_useragent):
         sound_explanation = sound_data[8].strip().replace("*", r"\*")
 
         # Create the formatted comment.
-        formatted_line = (
-            "\n\n**English Equivalent**: {}\n\n**Explanation**: {} ".format(
-                sound_effect, sound_explanation
-            )
-        )
+        formatted_line = f"\n\n**English Equivalent**: {sound_effect}\n\n**Explanation**: {sound_explanation} "
         formatted_line += f"\n\n\n^Information ^from [^SFX ^Dictionary]({actual_link})"
-        header = "# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n##### *Sound effect*\n\n**Reading:** {1}{2}"
-        finished_comment = header.format(
-            katakana_string, katakana_reading, formatted_line
-        )
+        finished_comment = f"# [{katakana_string}](https://en.wiktionary.org/wiki/{katakana_string}#Japanese)\n\n##### *Sound effect*\n\n**Reading:** {katakana_reading}{formatted_line}"
 
         logger.info(
-            "[ZW] JA-Word-SFX: Found a dictionary entry for {} at {}".format(
-                katakana_string, actual_link
-            )
+            f"[ZW] JA-Word-SFX: Found a dictionary entry for {katakana_string} at {actual_link}"
         )
 
         return finished_comment
-    else:  # We do not have any results.
-        return None
 
 
 def ja_word_given_name_search(ja_given_name, zw_useragent):
@@ -323,11 +305,8 @@ def ja_word_given_name_search(ja_given_name, zw_useragent):
 
     # Create the readings list.
     for name in hiragana_content:
-        name_formatted = name.strip()
-        furigana_chunk = "{} (*{}*)".format(
-            name_formatted, name_content[hiragana_content.index(name)].title()
-        )
-        names_w_readings.append(furigana_chunk)
+        name_content_lookup = name_content[hiragana_content.index(name)].title()
+        names_w_readings.append(f"{name.strip()} (*{name_content_lookup}*)")
     name_formatted_readings = ", ".join(names_w_readings)
 
     # Create the comment
@@ -357,9 +336,8 @@ def ja_word_surname(name, zw_useragent):
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
     ja_reading = tree.xpath('//div[contains(@class,"post")]/p/text()')
     ja_reading = str(ja_reading[0])[4:].split(",")
-    if len(str(ja_reading)) <= 4:  # This indicates that it's blank. No results.
-        return None
-    elif len(name) < 2:
+    if len(str(ja_reading)) <= 4 or len(name) < 2:
+        # This indicates that it's blank. No results.
         return None
     else:
         furigana_chunk = ""
@@ -367,13 +345,12 @@ def ja_word_surname(name, zw_useragent):
             furigana_chunk_new = (
                 reading.strip() + " (*" + romkan.to_hepburn(reading).title() + "*)"
             )
-            furigana_chunk = furigana_chunk + ", " + furigana_chunk_new
+            furigana_chunk += f", {furigana_chunk_new}"
         lookup_line_1 = (
             "# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n".format(name)
         )
-        lookup_line_1 += (
-            "**Readings:** " + furigana_chunk[2:]
-        )  # We return the formatted readings of this name
+        # We return the formatted readings of this name
+        lookup_line_1 += f"**Readings:** {furigana_chunk[2:]}"
         lookup_line_2 = "\n\n**Meanings**: A Japanese surname."
         lookup_line_3 = "\n\n\n^Information ^from [^Myoji](https://myoji-yurai.net/searchResult.htm?myojiKanji={0}) "
         lookup_line_3 += "^| [^Weblio ^EJJE](https://ejje.weblio.jp/content/{0})"
@@ -398,8 +375,8 @@ def ja_word(japanese_word, zw_useragent):
     y_data = None
 
     # Fetch data from the API
-    link_json = "https://jisho.org/api/v1/search/words?keyword={}%20%23words".format(
-        japanese_word
+    link_json = (
+        f"https://jisho.org/api/v1/search/words?keyword={japanese_word}%20%23words"
     )
     returned_data = requests.get(link_json)
     word_data = returned_data.json()
@@ -417,17 +394,24 @@ def ja_word(japanese_word, zw_useragent):
             f"[ZW] JA-Word: No results found for a Japanese word '{japanese_word}'."
         )
 
-        katakana_test = re.search(
-            "[\u30a0-\u30ff]", japanese_word
-        )  # Check if katakana. Will return none if kanji.
-        surname_data = ja_word_surname(
-            japanese_word, zw_useragent
-        )  # Check to see if it's a surname.
+        # Check if katakana. Will return none if kanji.
+        katakana_test = re.search("[\u30a0-\u30ff]", japanese_word)
+        # Check to see if it's a surname.
+        surname_data = ja_word_surname(japanese_word, zw_useragent)
         sfx_data = ja_word_sfx(japanese_word, zw_useragent)
         given_name_data = ja_word_given_name_search(japanese_word, zw_useragent)
 
         # Test against the other dictionary modules.
-        if surname_data is None and sfx_data is None and given_name_data is None:
+        if surname_data is not None:
+            logger.info("[ZW] JA-Word: Found a matching Japanese surname.")
+            return surname_data
+        elif given_name_data is not None:
+            logger.info("[ZW] JA-Word: Found a matching Japanese given name.")
+            return given_name_data
+        elif sfx_data is not None:
+            logger.info("[ZW] JA-Word: Found matching Japanese sound effects.")
+            return sfx_data
+        else:
             if katakana_test is None:  # It's a character
                 to_post = ja_character(japanese_word)
                 logger.info(
@@ -437,20 +421,11 @@ def ja_word(japanese_word, zw_useragent):
                 to_post = f"There were no results for `{japanese_word}`."
                 logger.info("[ZW] JA-Word: Unknown katakana word. No results.")
             return to_post
-        elif surname_data is not None:
-            logger.info("[ZW] JA-Word: Found a matching Japanese surname.")
-            return surname_data
-        elif given_name_data is not None:
-            logger.info("[ZW] JA-Word: Found a matching Japanese given name.")
-            return given_name_data
-        elif sfx_data is not None:
-            logger.info("[ZW] JA-Word: Found matching Japanese sound effects.")
-            return sfx_data
 
     # Jisho data is good, format the data from the returned JSON.
     word_reading_chunk = f"{word_reading} (*{romkan.to_hepburn(word_reading)}*)"
     word_meaning = main_data["senses"][0]["english_definitions"]
-    word_meaning = f"\"{', '.join(word_meaning)}.\""
+    word_meaning = f'"{", ".join(word_meaning)}."'
     word_type = main_data["senses"][0]["parts_of_speech"]
     word_type = f"*{', '.join(word_type)}*"
 
@@ -508,32 +483,24 @@ def ja_word_yojijukugo(yojijukugo, zw_useragent):
     if len(url) != 0:  # There's data. Get the url.
         url_entry = url[0]  # Get the actual url of the entry.
         entry_page = requests.get(url_entry, headers=zw_useragent)
-        entry_tree = html.fromstring(
-            entry_page.content
-        )  # now contains the whole HTML page
+        # now contains the whole HTML page
+        entry_tree = html.fromstring(entry_page.content)
 
         # Check to make sure the data is the same.
         entry_title = entry_tree.xpath("//h1/text()")[0]
-        entry_title = entry_title.split("」", 1)[0][
-            1:
-        ]  # Retrieve only the main title of the page.
+        # Retrieve only the main title of the page.
+        entry_title = entry_title.split("」", 1)[0][1:]
         if entry_title != yojijukugo:  # If the data doesn't match
             logger.debug("[ZW] JA-Chengyu: The titles don't match.")
             return None
 
         # Format the data properly.
         row_data = [td.text_content() for td in entry_tree.xpath("//td")]
-        y_meaning = row_data[1].strip()
-        y_meaning = f"\n\n**Japanese Explanation**: {y_meaning}\n\n"
         logger.info(
             f"[ZW] JA-Chengyu: Retrieved information on {yojijukugo} from {url_entry}."
         )
 
-        # Add the literary source.
+        # Add the literary info.
+        y_meaning = row_data[1].strip()
         y_source = row_data[2].strip()
-        y_source = f"**Literary Source**: {y_source}"
-
-        y_meaning += y_source
-        return y_meaning
-    else:
-        return None
+        return f"\n\n**Japanese Explanation**: {y_meaning}\n\n**Literary Source**: {y_source}"
