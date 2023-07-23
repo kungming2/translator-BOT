@@ -51,10 +51,8 @@ def zh_character_oc_search(character):
     )
     for row in csv_file:
         my_character = row[0]
-
-        mc_reading = row[2:][
-            0
-        ]  # It is normally returned as a list, so we need to convert into a string.
+        # It is normally returned as a list, so we need to convert into a string.
+        mc_reading = row[2:][0]
         oc_reading = row[4:][0]
         if "(" in oc_reading:
             oc_reading = oc_reading.split("(", 1)[0]
@@ -67,10 +65,7 @@ def zh_character_oc_search(character):
         return None
     else:  # Character exists!
         character_data = mc_oc_readings[character]  # Get the tuple
-        to_post = "\n**Middle Chinese** | \\**{}*" "\n**Old Chinese** | \\*{}*".format(
-            character_data[0], character_data[1]
-        )
-        return to_post
+        return f"\n**Middle Chinese** | \\**{character_data[0]}*\n**Old Chinese** | \\*{character_data[1]}*"
 
 
 def zh_character_variant_search(searchTerm, retries=3):
@@ -139,7 +134,6 @@ def zh_character_variant_search(searchTerm, retries=3):
         except (ConnectionError, requests.exceptions.ReadTimeout):
             logger.info("Timed out for variant search, trying again.")
             timeout_amount += 2
-            continue
 
     return entry_url
 
@@ -183,9 +177,8 @@ def zh_character_min_hak(character, zw_useragent):
             # Format the tones and words properly with superscript.
             # Wrap in parentheses for consistency
             hak_reading_new = []
-            hak_reading = re.sub(
-                r"(\d{1,4})([a-z])", r"\1 ", hak_reading
-            )  # Add spaces between words.
+            # Add spaces between words.
+            hak_reading = re.sub(r"(\d{1,4})([a-z])", r"\1 ", hak_reading)
             hak_reading = hak_reading.split(" ")
             for word in hak_reading:
                 new_word = re.sub(r"([a-z])(\d)", r"\1^(\2", word)
@@ -198,9 +191,7 @@ def zh_character_min_hak(character, zw_useragent):
         hak_reading = ""
 
     # Combine them together.
-    to_post = min_reading + hak_reading
-
-    return to_post
+    return min_reading + hak_reading
 
 
 def zh_character_calligraphy_search(character):
@@ -215,9 +206,8 @@ def zh_character_calligraphy_search(character):
     character = simplify(character)
 
     # First get data from http://sfds.cn (this will be included as a URL)
-    unicode_assignment = hex(ord(character)).upper()[
-        2:
-    ]  # Get the Unicode assignment (eg 738B)
+    # Get the Unicode assignment (eg 738B)
+    unicode_assignment = hex(ord(character)).upper()[2:]
     gx_url = f"http://www.sfds.cn/{unicode_assignment}/"
 
     # Secondly, get variant data from the MoE dictionary.
@@ -240,9 +230,8 @@ def zh_character_calligraphy_search(character):
         tree = bs4(rdata.content, "lxml")
         tree = str(tree)
         tree = html.fromstring(tree)
-    except (
-        requests.exceptions.ConnectionError
-    ):  # If there's a connection error, return None.
+    except requests.exceptions.ConnectionError:
+        # If there's a connection error, return None.
         return None
 
     images = tree.xpath("//img/@src")
@@ -251,36 +240,24 @@ def zh_character_calligraphy_search(character):
 
     if images is not None:
         for url in images:
-            if len(url) < 20:  # We don't need short links.
-                continue
-            if "gif" in url:  # Or GIFs
+            if len(url) < 20 or "gif" in url:  # We don't need short links or GIFs.
                 continue
 
-            if (
-                "shufa6" in url
-            ):  # We try to get the broader summation image instead of the thumbnail.
+            if "shufa6" in url:
+                # We try to get the broader summation image instead of the thumbnail.
                 complete_image = url.replace("shufa6/1", "shufa6")
 
         if len(complete_image) != 0:
             logger.debug(
-                "[ZW] ZH-Calligraphy: There is a Chinese calligraphic image for "
-                + character
-                + "."
+                f"[ZW] ZH-Calligraphy: There is a Chinese calligraphic image for {character}."
             )
-            image_format = (
-                "\n\n**Chinese Calligraphy Variants**: [{}]({}) (*[SFZD](http://www.shufazidian.com/)*, "
-                "*[SFDS]({})*, *{}*)"
-            )
-            image_string = image_format.format(
-                character, complete_image, gx_url, variant_formatted
+            image_string = (
+                f"\n\n**Chinese Calligraphy Variants**: [{character}]({complete_image}) (*[SFZD](http://www.shufazidian.com/)*, "
+                f"*[SFDS]({gx_url})*, *{variant_formatted}*)"
             )
     else:
         image_string = None
-
-    if image_string is None:
-        return None
-    else:
-        return image_string
+    return image_string
 
 
 def zh_character_other_readings(character, zw_useragent):
@@ -297,8 +274,8 @@ def zh_character_other_readings(character, zw_useragent):
     to_post = []
 
     # Access the API
-    u_url = "http://ccdb.hemiola.com/characters/string/{}?fields=kHangul,kKorean,kJapaneseKun,kJapaneseOn,kVietnamese"
-    unicode_rep = requests.get(u_url.format(character), headers=zw_useragent)
+    u_url = f"http://ccdb.hemiola.com/characters/string/{character}?fields=kHangul,kKorean,kJapaneseKun,kJapaneseOn,kVietnamese"
+    unicode_rep = requests.get(u_url, headers=zw_useragent)
     try:
         unicode_rep_json = unicode_rep.json()
         unicode_rep_jdict = unicode_rep_json[0]
@@ -310,16 +287,9 @@ def zh_character_other_readings(character, zw_useragent):
         ja_on = unicode_rep_jdict["kJapaneseOn"]
         if ja_kun is not None or ja_on is not None:
             # Process the data, allowing for either of these to be None in value.
-            if ja_kun is not None:
-                ja_kun = (
-                    ja_kun.lower() + " "
-                )  # A space is added since the kun appears first
-            else:
-                ja_kun = ""
-            if ja_on is not None:
-                ja_on = ja_on.upper()
-            else:
-                ja_on = ""
+            # A space is added since the kun appears first
+            ja_kun = ja_kun.lower() + " " if ja_kun is not None else ""
+            ja_on = ja_on.upper() if ja_on is not None else ""
 
             # Recombine the readings
             ja_total = ja_kun + ja_on
@@ -345,10 +315,7 @@ def zh_character_other_readings(character, zw_useragent):
             to_post.append(vi_string)
 
     if len(to_post) > 0:
-        to_post = "\n".join(to_post)
-        return to_post
-    else:
-        return None
+        return "\n".join(to_post)
 
 
 def zh_character(character, zw_useragent):
@@ -360,18 +327,13 @@ def zh_character(character, zw_useragent):
     :return: A formatted string containing the character's information.
     """
 
-    multi_mode = False
+    # Whether or not multiple characters are passed to this function
+    multi_mode = len(multi_character_list) > 1
     multi_character_dict = {}
     multi_character_list = list(character)
 
-    if (
-        len(multi_character_list) > 1
-    ):  # Whether or not multiple characters are passed to this function
-        multi_mode = True
-
     eth_page = requests.get(
-        "https://www.mdbg.net/chinese/dictionary?page=chardict&cdcanoce=0&cdqchi="
-        + character,
+        f"https://www.mdbg.net/chinese/dictionary?page=chardict&cdcanoce=0&cdqchi={character}",
         headers=zw_useragent,
     )
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
@@ -382,13 +344,12 @@ def zh_character(character, zw_useragent):
     cmn_pronunciation, yue_pronunciation = pronunciation[::2], pronunciation[1::2]
 
     if len(pronunciation) == 0:  # Check to not return anything if the entry is invalid
-        to_post = (
+        logger.info(f"[ZW] ZH-Character: No results for {character}")
+        return (
             f"**There were no results for {character}**. Please check to make sure it is a valid Chinese "
             "character. Alternatively, it may be an uncommon variant that is not in "
             "online dictionaries."
         )
-        logger.info(f"[ZW] ZH-Character: No results for {character}")
-        return to_post
 
     if not multi_mode:  # Regular old-school character search for just one.
         cmn_pronunciation = " / ".join(cmn_pronunciation)
@@ -400,12 +361,10 @@ def zh_character(character, zw_useragent):
         # it displays the same on both New and Old Reddit.
         for i in range(0, 9):
             yue_pronunciation = yue_pronunciation.replace(str(i), f"^({str(i)} ")
-        for i in range(0, 9):
             yue_pronunciation = yue_pronunciation.replace(str(i), f"{str(i)})")
 
         meaning = tree.xpath('//div[contains(@class,"defs")]/text()')
-        meaning = "/ ".join(meaning)
-        meaning = meaning.strip()
+        meaning = "/ ".join(meaning).strip()
 
         if tradify(character) == simplify(character):
             logger.debug(
@@ -421,9 +380,7 @@ def zh_character(character, zw_useragent):
             )
         else:
             logger.debug(
-                "[ZW] ZH-Character: The two versions of {} are *not* identical.".format(
-                    character
-                )
+                f"[ZW] ZH-Character: The two versions of {character} are *not* identical."
             )
             lookup_line_1 = (
                 "# [{0} ({1})](https://en.wiktionary.org/wiki/{0}#Chinese)".format(
@@ -446,7 +403,7 @@ def zh_character(character, zw_useragent):
             if ocmc_pronunciation is not None:
                 lookup_line_1 += ocmc_pronunciation
         except IndexError:  # There was an error; character has no old chinese entry
-            lookup_line_1 = lookup_line_1
+            pass
 
         # Other Language Readings
         other_readings_data = zh_character_other_readings(
@@ -458,10 +415,8 @@ def zh_character(character, zw_useragent):
         calligraphy_image = zh_character_calligraphy_search(character)
         if calligraphy_image is not None:
             lookup_line_1 += calligraphy_image
-        else:  # No image found
-            lookup_line_1 = lookup_line_1
 
-        lookup_line_1 += str('\n\n**Meanings**: "' + meaning + '."')
+        lookup_line_1 += f'\n\n**Meanings**: "{meaning}."'
     else:  # It's multiple characters, let's make a table.
         # MULTIPLE Start iterating over the characters we have
         if tradify(character) == simplify(character):
@@ -483,9 +438,8 @@ def zh_character(character, zw_useragent):
                 + wenzi
             )
             new_eth_page = requests.get(character_url, headers=zw_useragent)
-            new_tree = html.fromstring(
-                new_eth_page.content
-            )  # now contains the whole HTML page
+            # now contains the whole HTML page
+            new_tree = html.fromstring(new_eth_page.content)
             pronunciation = [
                 div.text_content()
                 for div in new_tree.xpath('//div[contains(@class,"pinyin")]')
@@ -559,13 +513,12 @@ def zh_character(character, zw_useragent):
     )
     lookup_line_2 = lookup_line_2.format(character, tradify(character))
 
-    to_post = lookup_line_1 + lookup_line_2
     logger.info(
-        "[ZW] ZH-Character: Received lookup command for {} in "
-        "Chinese. Returned search results.".format(character)
+        f"[ZW] ZH-Character: Received lookup command for {character} in "
+        "Chinese. Returned search results."
     )
 
-    return to_post
+    return lookup_line_1 + lookup_line_2
 
 
 def zh_word_decode_pinyin(s):
@@ -653,8 +606,6 @@ def zh_word_buddhist_dictionary_search(chinese_word):
         if chinese_word == traditional_headword:
             relevant_line = entry
             break
-        else:
-            continue
 
     if relevant_line is not None:  # We found a matching word.
         # Parse the entry (code courtesy Marcanuy at https://github.com/marcanuy/cedict_utils, MIT license)
@@ -688,8 +639,6 @@ def zh_word_buddhist_dictionary_search(chinese_word):
         general_dictionary["pinyin"] = keywords["pinyin"]
 
         return general_dictionary
-    else:  # Nothing found.
-        return None
 
 
 def zh_word_cccanto_search(cantonese_word):
@@ -716,8 +665,6 @@ def zh_word_cccanto_search(cantonese_word):
         if cantonese_word == traditional_headword:
             relevant_line = entry
             break
-        else:
-            continue
 
     if relevant_line is not None:
         # Parse the entry (based on code from Marcanuy at https://github.com/marcanuy/cedict_utils, MIT license)
@@ -755,8 +702,6 @@ def zh_word_cccanto_search(cantonese_word):
         general_dictionary["jyutping"] = keywords["jyutping"]
 
         return general_dictionary
-    else:
-        return None
 
 
 # noinspection PyBroadException
@@ -786,9 +731,8 @@ def zh_word_tea_dictionary_search(chinese_word, zw_useragent):
     except IndexError:
         return None
 
-    if (
-        chinese_word not in head_word
-    ):  # If the characters don't match: Exit. This includes null searches.
+    if chinese_word not in head_word:
+        # If the characters don't match: Exit. This includes null searches.
         return None
     else:  # It exists.
         try:
@@ -944,9 +888,7 @@ def zh_word_chengyu(chengyu):
         )
 
         logger.info(
-            "[ZW] > ZH-Chengyu: Looked up the chengyu {} in Chinese. Returned search results.".format(
-                chengyu
-            )
+            f"[ZW] > ZH-Chengyu: Looked up the chengyu {chengyu} in Chinese. Returned search results."
         )
 
         return cy_to_post
@@ -972,12 +914,10 @@ def zh_word(word, zw_useragent):
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
     word_exists = str(tree.xpath('//p[contains(@class,"nonprintable")]/strong/text()'))
     cmn_pronunciation = tree.xpath('//div[contains(@class,"pinyin")]/a/span/text()')
-    cmn_pronunciation = cmn_pronunciation[
-        0 : len(word)
-    ]  # We only want the pronunciations to be as long as the input
-    cmn_pronunciation = "".join(
-        cmn_pronunciation
-    )  # We don't need a dividing character per pinyin standards
+    # We only want the pronunciations to be as long as the input
+    cmn_pronunciation = cmn_pronunciation[0 : len(word)]
+    # We don't need a dividing character per pinyin standards
+    cmn_pronunciation = "".join(cmn_pronunciation)
 
     # Check to not return anything if the entry is invalid
     if "No results found" in word_exists:
@@ -1017,9 +957,7 @@ def zh_word(word, zw_useragent):
                 alternate_pinyin = search_results_cccanto["pinyin"]
                 alternate_jyutping = search_results_cccanto["jyutping"]
             logger.info(
-                "[ZW] ZH-Word: No results for word {}, but results are in specialty dictionaries.".format(
-                    word
-                )
+                f"[ZW] ZH-Word: No results for word {word}, but results are in specialty dictionaries."
             )
 
     if len(alternate_meanings) == 0:  # The standard search function for regular words.
@@ -1031,24 +969,19 @@ def zh_word(word, zw_useragent):
             py_split_pronunciation = re.search(
                 r"\|(...+)\'\)", py_split_pronunciation[0]
             ).group(0)
-            py_split_pronunciation = py_split_pronunciation.split("'", 1)[0][
-                1:
-            ].strip()  # Format it nicely.
+            # Format it nicely.
+            py_split_pronunciation = py_split_pronunciation.split("'", 1)[0][1:].strip()
             alt_romanize = zh_word_alt_romanization(py_split_pronunciation)
-        except (
-            IndexError
-        ):  # This likely means that the page does not contain that information.
+        except IndexError:
+            # This likely means that the page does not contain that information.
             alt_romanize = ("---", "---")
 
         meaning = [
             div.text_content() for div in tree.xpath('//div[contains(@class,"defs")]')
         ]
         meaning = [
-            x for x in meaning if x != " "
-        ]  # This removes any empty spaces that are in the list.
-        meaning = [
-            x for x in meaning if x != ", "
-        ]  # This removes any extraneous commas that are in the list
+            x for x in meaning if x != " " and x != ", "
+        ]  # This removes any empty spaces or commas that are in the list.
         meaning = "/ ".join(meaning)
         meaning = meaning.strip()
 
@@ -1060,18 +993,16 @@ def zh_word(word, zw_useragent):
         yue_pronunciation = yue_tree.xpath(
             '//h3[contains(@class,"resulthead")]/small/strong//text()'
         )
-        yue_pronunciation = yue_pronunciation[
-            0 : (len(word) * 2)
-        ]  # This Len needs to be double because of the numbers
+        # This Len needs to be double because of the numbers
+        yue_pronunciation = yue_pronunciation[0 : (len(word) * 2)]
         yue_pronunciation = iter(yue_pronunciation)
         yue_pronunciation = [c + next(yue_pronunciation, "") for c in yue_pronunciation]
 
         # Combines the tones and the syllables together
         yue_pronunciation = " ".join(yue_pronunciation)
         for i in range(0, 9):
-            yue_pronunciation = yue_pronunciation.replace(
-                str(i), f"^({str(i)}) "
-            )  # Adds Markdown syntax
+            # Adds Markdown syntax
+            yue_pronunciation = yue_pronunciation.replace(str(i), f"^({str(i)}) ")
         yue_pronunciation = yue_pronunciation.strip()
 
     else:  # This is for the alternate search with the specialty dictionaries.
@@ -1097,23 +1028,18 @@ def zh_word(word, zw_useragent):
 
     # Format the rest.
     lookup_line_1 += "\n\nLanguage | Pronunciation\n---------|--------------"
-    readings_line = (
-        "\n**Mandarin** (Pinyin) | *{}*\n**Mandarin** (Wade-Giles) | *{}*"
-        "\n**Mandarin** (Yale) | *{}*\n**Cantonese** | *{}*"
+    lookup_line_1 += (
+        f"\n**Mandarin** (Pinyin) | *{cmn_pronunciation}*\n**Mandarin** (Wade-Giles) | *{alt_romanize[1]}*"
+        f"\n**Mandarin** (Yale) | *{alt_romanize[0]}*\n**Cantonese** | *{yue_pronunciation}*"
     )
-    readings_line = readings_line.format(
-        cmn_pronunciation, alt_romanize[1], alt_romanize[0], yue_pronunciation
-    )
-    lookup_line_1 += readings_line
 
     # Add Hokkien and Hakka data.
-    min_hak_data = zh_character_min_hak(tradify(word), zw_useragent)
-    lookup_line_1 += min_hak_data
+    lookup_line_1 += zh_character_min_hak(tradify(word), zw_useragent)
 
     # Format the meaning line.
     if len(alternate_meanings) == 0:
         # Format the regular results we have.
-        lookup_line_2 = str('\n\n**Meanings**: "' + meaning + '."')
+        lookup_line_2 = f'\n\n**Meanings**: "{meaning}."'
 
         # Append chengyu data if the string is four characters.
         if len(word) == 4:
@@ -1145,8 +1071,6 @@ def zh_word(word, zw_useragent):
     # Combine everything together.
     to_post = lookup_line_1 + lookup_line_2 + "\n\n" + lookup_line_3
     logger.info(
-        "[ZW] ZH-Word: Received a lookup command for "
-        + word
-        + " in Chinese. Returned search results."
+        f"[ZW] ZH-Word: Received a lookup command for {word} in Chinese. Returned search results."
     )
     return to_post
