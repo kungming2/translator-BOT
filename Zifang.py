@@ -4,6 +4,7 @@ Zifang is a new addition to help Ziwen with some ancillary tasks.
 """
 from collections import defaultdict
 from itertools import combinations
+import re
 import sys
 import time
 import traceback
@@ -11,10 +12,16 @@ import traceback
 import praw
 import wikipedia
 import yaml
+from rapidfuzz import fuzz
 
-from _languages import *
-from _config import *
-from _responses import *
+from _login import ZIFANG_APP_ID, ZIFANG_APP_SECRET, PASSWORD, USERNAME
+from _config import logger, BOT_DISCLAIMER, FILE_ADDRESS_ERROR, action_counter
+from _languages import VERSION_NUMBER_LANGUAGES, converter
+from _responses import (
+    ZF_CLOSING_OUT_SUBJECT,
+    ZF_CLOSING_OUT_MESSAGE,
+    ZF_DUPLICATE_COMMENT,
+)
 
 """
 UNIVERSAL VARIABLES
@@ -70,7 +77,7 @@ def record_error_log(error_save_entry):
 
     # If this error entry doesn't exist yet, let's save it.
     if error_save_entry not in existing_log:
-        error_date = strftime("%Y-%m-%d [%I:%M:%S %p]")
+        error_date = time.strftime("%Y-%m-%d [%I:%M:%S %p]")
 
         try:
             log_template_txt = f"\n-----------------------------------\n{error_date} ({BOT_NAME} {VERSION_NUMBER})\n{error_save_entry}"

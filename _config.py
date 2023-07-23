@@ -113,29 +113,6 @@ BOT_DISCLAIMER = (
     "^[Feedback](https://www.reddit.com/r/translatorBOT)"
 )
 
-
-"""DEFINING LOGIN CREDENTIALS"""
-
-
-def credentials_loader():
-    """
-    A simple function that takes the login credentials in a JSON file and converts them to global variables to use.
-    The keys for the variables are the same as the ones used elsewhere in these scripts (e.g. USERNAME).
-
-    :param: None
-    :return: This function declares the variables it reads from the JSON file as global variables in Python.
-    """
-
-    # Access the JSON file with the credentials.
-    with open(FILE_ADDRESS_CREDENTIALS, encoding="utf-8") as f:
-        login_data = json.load(f)
-        # Declare the variables.
-        globals().update(login_data)
-
-
-# Load the credentials from the JSON file.
-credentials_loader()
-
 """ LOGGING """
 
 # Logging code, defining the basic logger.

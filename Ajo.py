@@ -25,7 +25,13 @@ from _languages import (
     FILE_ADDRESS_ISO_ALL,
     app_multiple_definer,
 )
-from _config import *
+from _login import ZIWEN_APP_ID, ZIWEN_APP_SECRET, PASSWORD, USERNAME
+from _config import (
+    INVERSE_MULTIPLE_LEGEND,
+    DEFINED_MULTIPLE_LEGEND,
+    STATUS_KEYWORDS,
+    logger,
+)
 from _language_consts import MAIN_LANGUAGES
 import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 import re
@@ -48,19 +54,16 @@ def ajo_writer(new_ajo, cursor_ajo, conn_ajo, logger):
     # TODO we can reduce this code with UPSERT if SQLite is the right version
     if stored_ajo is not None:  # There's already a stored entry
         stored_ajo = eval(stored_ajo[2])  # We only want the stored dict here.
-        if (
-            new_ajo.__dict__ != stored_ajo
-        ):  # The dictionary representations are not the same
-            representation = str(
-                new_ajo.__dict__
-            )  # Convert the dict of the Ajo into a string.
+        if new_ajo.__dict__ != stored_ajo:
+            # The dictionary representations are not the same
+            # Convert the dict of the Ajo into a string.
+            representation = str(new_ajo.__dict__)
             update_command = "UPDATE local_database SET ajo = ? WHERE id = ?"
             cursor_ajo.execute(update_command, (representation, ajo_id))
             conn_ajo.commit()
             logger.debug("[ZW] ajo_writer: Ajo exists, data updated.")
         else:
             logger.debug("[ZW] ajo_writer: Ajo exists, but no change in data.")
-            pass
     else:  # This is a new entry, not in my files.
         representation = str(new_ajo.__dict__)
         ajo_to_store = (ajo_id, created_time, representation)

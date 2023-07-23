@@ -7,6 +7,10 @@ members with useful reference information and enforces the community's formattin
 """
 
 import calendar
+import datetime
+import os
+import random
+import re
 import sqlite3  # For processing and accessing the databases.
 import time
 import traceback  # For documenting errors that are encountered.
@@ -29,14 +33,61 @@ from mafan import simplify
 from wiktionaryparser import WiktionaryParser
 
 from Ajo import Ajo, ajo_defined_multiple_comment_parser, ajo_writer, ajo_loader
-from _languages import *
+from _languages import (
+    VERSION_NUMBER_LANGUAGES,
+    language_mention_search,
+    converter,
+    bad_title_reformat,
+    comment_info_parser,
+    title_format,
+    lang_code_search,
+    main_posts_filter,
+)
 from _language_consts import (
     MAIN_LANGUAGES,
     ISO_MACROLANGUAGES,
     CJK_LANGUAGES,
 )
-from _config import *
-from _responses import *
+from _login import USERNAME, ZIWEN_APP_ID, ZIWEN_APP_SECRET, PASSWORD
+from _config import (
+    FILE_ADDRESS_CACHE,
+    logger,
+    KEYWORDS,
+    FILE_ADDRESS_FILTER,
+    BOT_DISCLAIMER,
+    FILE_ADDRESS_ERROR,
+    FILE_ADDRESS_MAIN,
+    FILE_ADDRESS_AJO_DB,
+    FILE_ADDRESS_MECAB,
+    action_counter,
+    time_convert_to_string,
+    get_random_useragent,
+)
+from _responses import (
+    COMMENT_ADVANCED_IDENTIFY_ERROR,
+    COMMENT_BAD_TITLE,
+    COMMENT_CLAIM,
+    COMMENT_CURRENTLY_CLAIMED,
+    COMMENT_DEFINED_MULTIPLE,
+    COMMENT_PAGE_DISALLOWED,
+    COMMENT_UNKNOWN,
+    COMMENT_NO_LANGUAGE,
+    COMMENT_NO_RESULTS,
+    COMMENT_ENGLISH_ONLY,
+    COMMENT_INVALID_REFERENCE,
+    COMMENT_INVALID_CODE,
+    COMMENT_INVALID_SCRIPT,
+    COMMENT_VERIFICATION_RESPONSE,
+    COMMENT_LONG,
+    MSG_RESTORE_TEXT_TEMPLATE,
+    MSG_RESTORE_LINK_FAIL,
+    MSG_RESTORE_TEXT_FAIL,
+    MSG_RESTORE_NOT_ELIGIBLE,
+    MSG_MISSING_ASSETS,
+    MSG_WIKIPAGE_FULL,
+    MSG_SHORT_THANKS_TRANSLATED,
+    MSG_TRANSLATED,
+)
 from ja_processing import ja_character, ja_word
 from notifier import (
     notifier_over_frequency_checker,
@@ -952,7 +1003,7 @@ def record_error_log(error_save_entry):
 
     # If this error entry doesn't exist yet, let's save it.
     if error_save_entry not in existing_log:
-        error_date = strftime("%Y-%m-%d [%I:%M:%S %p]")
+        error_date = time.strftime("%Y-%m-%d [%I:%M:%S %p]")
         # Get the last post and comment as a string
         last_post_text = record_last_post_comment()
 
