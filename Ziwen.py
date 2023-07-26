@@ -109,8 +109,8 @@ as they define many of the basic functions of the bot.
 BOT_NAME = "Ziwen"
 VERSION_NUMBER = "1.8.27"
 USER_AGENT = (
-    "{} {}, a notifications messenger, general commands monitor, and moderator for r/translator. "
-    "Written and maintained by u/kungming2.".format(BOT_NAME, VERSION_NUMBER)
+    f"{BOT_NAME} {VERSION_NUMBER}, a notifications messenger, general commands monitor, and moderator for r/translator. "
+    "Written and maintained by u/kungming2."
 )
 TESTING_MODE = False
 
@@ -550,47 +550,45 @@ def points_worth_determiner(language_name):
             f"[ZW] Points determiner: {language_name} value in the cache: {final_point_value}"
         )
         return final_point_value  # Return the multipler - no need to go to the wiki.
-    else:  # Not found in the cache. Get from the wiki.
-        # Fetch the wikipage.
-        overall_page = reddit.subreddit(SUBREDDIT).wiki[language_name.lower()]
-        try:  # First see if this page actually exists
-            overall_page_content = str(overall_page.content_md)
-            last_month_data = overall_page_content.split("\n")[-1]
-        except prawcore.exceptions.NotFound:  # There is no such wikipage.
-            logger.debug("[ZW] Points determiner: The wiki page does not exist.")
-            last_month_data = "2017 | 08 | [Example Link] | 1%"
-            # Feed it dummy data if there's nothing... this language probably hasn't been done in a while.
-        try:  # Try to get the percentage from the page
-            total_percent = str(last_month_data.split(" | ")[3])[:-1]
-            total_percent = float(total_percent)
-        except IndexError:
-            # There's a page but there is something wrong with data entered.
-            logger.debug("[ZW] Points determiner: There was a second error.")
-            total_percent = float(1)
+    # Not found in the cache. Get from the wiki.
+    # Fetch the wikipage.
+    overall_page = reddit.subreddit(SUBREDDIT).wiki[language_name.lower()]
+    try:  # First see if this page actually exists
+        overall_page_content = str(overall_page.content_md)
+        last_month_data = overall_page_content.rsplit("\n", maxsplit=1)[-1]
+    except prawcore.exceptions.NotFound:  # There is no such wikipage.
+        logger.debug("[ZW] Points determiner: The wiki page does not exist.")
+        last_month_data = "2017 | 08 | [Example Link] | 1%"
+        # Feed it dummy data if there's nothing... this language probably hasn't been done in a while.
+    try:  # Try to get the percentage from the page
+        total_percent = str(last_month_data.split(" | ")[3])[:-1]
+        total_percent = float(total_percent)
+    except IndexError:
+        # There's a page but there is something wrong with data entered.
+        logger.debug("[ZW] Points determiner: There was a second error.")
+        total_percent = float(1)
 
-        # Calculate the point multiplier.
-        # The precise formula here is: (1/percentage)*35
-        try:
-            raw_point_value = 35 * (1 / total_percent)
-            final_point_value = int(round(raw_point_value))
-        except ZeroDivisionError:  # In case the total_percent is 0 for whatever reason.
-            final_point_value = 20
-        final_point_value = min(final_point_value, 20)
-        logger.debug(
-            f"[ZW] Points determiner: Multiplier for {language_name} is {final_point_value}"
-        )
+    # Calculate the point multiplier.
+    # The precise formula here is: (1/percentage)*35
+    try:
+        raw_point_value = 35 * (1 / total_percent)
+        final_point_value = int(round(raw_point_value))
+    except ZeroDivisionError:  # In case the total_percent is 0 for whatever reason.
+        final_point_value = 20
+    final_point_value = min(final_point_value, 20)
+    logger.debug(
+        f"[ZW] Points determiner: Multiplier for {language_name} is {final_point_value}"
+    )
 
-        # Add to the cached values, so we don't have to do this next time.
-        CACHED_MULTIPLIERS.update({language_name: final_point_value})
+    # Add to the cached values, so we don't have to do this next time.
+    CACHED_MULTIPLIERS.update({language_name: final_point_value})
 
-        # Write data to the cache so that it can be retrieved later.
-        current_zeit = time.time()
-        month_string = datetime.datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
-        insert_data = (month_string, language_name, final_point_value)
-        cursor_cache.execute(
-            "INSERT INTO multiplier_cache VALUES (?, ?, ?)", insert_data
-        )
-        conn_cache.commit()
+    # Write data to the cache so that it can be retrieved later.
+    current_zeit = time.time()
+    month_string = datetime.datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
+    insert_data = (month_string, language_name, final_point_value)
+    cursor_cache.execute("INSERT INTO multiplier_cache VALUES (?, ?, ?)", insert_data)
+    conn_cache.commit()
 
     return final_point_value
 
@@ -683,7 +681,7 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
         # Comment author is deleted
         return
 
-    if pauthor == "AutoModerator" or pauthor == "translator-BOT":
+    if pauthor in ["AutoModerator", "translator-BOT"]:
         return  # Ignore these bots
 
     # Load the Ajo from the database. We will check against it to see if it's None later.
@@ -820,14 +818,14 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
         points += 1 + int(round(0.25 * language_multiplier))
 
     keyword_points = {
-        "!identify:": 3,
-        "!id:": 3,
-        "`": 2,
-        "!missing": 2,
-        "!claim": 1,
-        "!page": 1,
-        "!search": 1,
-        "!reference": 1,
+        KEYWORDS.identify: 3,
+        KEYWORDS.id: 3,
+        KEYWORDS.back_quote: 2,
+        KEYWORDS.missing: 2,
+        KEYWORDS.claim: 1,
+        KEYWORDS.page: 1,
+        KEYWORDS.search: 1,
+        KEYWORDS.reference: 1,
     }
 
     for keyword, point in keyword_points.items():
@@ -874,12 +872,11 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
                 "[ZW] Points tabulator: Parent of this comment is a post. Never mind."
             )
 
-    if any(
-        pauthor in s for s in points_status
-    ):  # Check if author is already listed in our list.
-        for i in range(len(points_status)):  # Add their points if so.
-            if points_status[i][0] == pauthor:  # Get their username
-                points_status[i][1] += points  # Add the running total of points
+    if any(pauthor in s for s in points_status):
+        # Check if author is already listed in our list.
+        for point_status in points_status:  # Add their points if so.
+            if point_status[0] == pauthor:  # Get their username
+                point_status[1] += points  # Add the running total of points
     else:
         # They're not in the list. Just add them.
         points_status.append([pauthor, points])
@@ -895,10 +892,10 @@ def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
     points_status = [x for x in points_status if x[1] != 0]
 
     if translator_to_add is not None:  # We can record this information in the Ajo.
-        cajo = ajo_loader(oid, cursor_ajo, logger, POST_TEMPLATES, reddit)
+        cajo = ajo_loader(oid, cursor_ajo, POST_TEMPLATES, reddit)
         if cajo is not None:
             cajo.add_translators(translator_to_add)  # Add the name to the Ajo.
-            ajo_writer(cajo, cursor_ajo, conn_ajo, logger)
+            ajo_writer(cajo, cursor_ajo, conn_ajo)
 
     for entry in points_status:
         logger.debug(f"[ZW] Points tabulator: Saved: {entry}")
@@ -934,14 +931,13 @@ def record_filter_log(filtered_title, ocreated, filter_type):
 
     # Access the file.
     # File address for the filter log, cumulative.
-    f = open(FILE_ADDRESS_FILTER, "a+", encoding="utf-8")
-
-    # Format the new line.
-    timestamp_utc = str(datetime.datetime.fromtimestamp(ocreated).strftime("%Y-%m-%d"))
-
-    # Write the new line.
-    f.write(f"\n{timestamp_utc} | {filtered_title} | {filter_type}")
-    f.close()
+    with open(FILE_ADDRESS_FILTER, "a+", encoding="utf-8") as f:
+        # Format the new line.
+        timestamp_utc = str(
+            datetime.datetime.fromtimestamp(ocreated).strftime("%Y-%m-%d")
+        )
+        # Write the new line.
+        f.write(f"\n{timestamp_utc} | {filtered_title} | {filter_type}")
 
 
 def record_last_post_comment():
@@ -998,23 +994,22 @@ def record_error_log(error_save_entry):
     """
 
     # File address for the error log, cumulative.
-    f = open(FILE_ADDRESS_ERROR, "a+", encoding="utf-8")
-    existing_log = f.read()  # Get the data that already exists
+    with open(FILE_ADDRESS_ERROR, "a+", encoding="utf-8") as f:
+        existing_log = f.read()  # Get the data that already exists
 
-    # If this error entry doesn't exist yet, let's save it.
-    if error_save_entry not in existing_log:
-        error_date = time.strftime("%Y-%m-%d [%I:%M:%S %p]")
-        # Get the last post and comment as a string
-        last_post_text = record_last_post_comment()
+        # If this error entry doesn't exist yet, let's save it.
+        if error_save_entry not in existing_log:
+            error_date = time.strftime("%Y-%m-%d [%I:%M:%S %p]")
+            # Get the last post and comment as a string
+            last_post_text = record_last_post_comment()
 
-        try:
-            f.write(
-                f"\n-----------------------------------\n{error_date} ({BOT_NAME} {VERSION_NUMBER})\n{last_post_text}\n{error_save_entry}"
-            )
-        except UnicodeEncodeError:
-            # Occasionally this may fail on Windows thanks to its crap Unicode support.
-            logger.error("[ZW] Error_Log: Encountered a Unicode writing error.")
-        f.close()
+            try:
+                f.write(
+                    f"\n-----------------------------------\n{error_date} ({BOT_NAME} {VERSION_NUMBER})\n{last_post_text}\n{error_save_entry}"
+                )
+            except UnicodeEncodeError:
+                # Occasionally this may fail on Windows thanks to its crap Unicode support.
+                logger.error("[ZW] Error_Log: Encountered a Unicode writing error.")
 
 
 def record_to_wiki(odate, otitle, oid, oflair_text, s_or_i, oflair_new, user=None):
@@ -1347,38 +1342,37 @@ def lookup_ko_word(word):
     if "없습니다" in word_exists:
         # Check to not return anything if the entry is invalid (means "there is not")
         return "> Sorry, but that Korean word doesn't look like anything to me."
+    hangul_romanization = Romanizer(word).romanize()
+    hangul_chunk = word + " (*" + hangul_romanization + "*)"
+    hanja = tree.xpath('//*[@id="content"]/div[2]/dl/dt[1]/span/text()')
+    if len(hanja) != 0:
+        hanja = "".join(hanja)
+        hanja = hanja.strip()
+    meaning = tree.xpath('//*[@id="content"]/div[2]/dl/dd[1]/div/p[1]//text()')
+    meaning = " ".join(meaning)
+
+    if len(hanja) != 0:
+        lookup_line_1 = "# [{0}](https://en.wiktionary.org/wiki/{0}#Korean)\n\n".format(
+            word
+        )
+        lookup_line_1 += "**Reading:** " + hangul_chunk + " (" + hanja + ")"
     else:
-        hangul_romanization = Romanizer(word).romanize()
-        hangul_chunk = word + " (*" + hangul_romanization + "*)"
-        hanja = tree.xpath('//*[@id="content"]/div[2]/dl/dt[1]/span/text()')
-        if len(hanja) != 0:
-            hanja = "".join(hanja)
-            hanja = hanja.strip()
-        meaning = tree.xpath('//*[@id="content"]/div[2]/dl/dd[1]/div/p[1]//text()')
-        meaning = " ".join(meaning)
-
-        if len(hanja) != 0:
-            lookup_line_1 = (
-                "# [{0}](https://en.wiktionary.org/wiki/{0}#Korean)\n\n".format(word)
-            )
-            lookup_line_1 += "**Reading:** " + hangul_chunk + " (" + hanja + ")"
-        else:
-            lookup_line_1 = (
-                "# [{0}](https://en.wiktionary.org/wiki/{0}#Korean)\n\n".format(word)
-            )
-            lookup_line_1 += "**Reading:** " + hangul_chunk
-        lookup_line_2 = str('\n\n**Meanings**: "' + meaning + '."')
-        lookup_line_3 = (
-            "\n\n\n^Information ^from ^[Naver](https://en.dict.naver.com/#/"
-            "search?range=all&query={0}) ^| ^[Daum](https://dic.daum.net/search.do?q={0}&dic=eng)"
+        lookup_line_1 = "# [{0}](https://en.wiktionary.org/wiki/{0}#Korean)\n\n".format(
+            word
         )
-        lookup_line_3 = lookup_line_3.format(word)
+        lookup_line_1 += "**Reading:** " + hangul_chunk
+    lookup_line_2 = str('\n\n**Meanings**: "' + meaning + '."')
+    lookup_line_3 = (
+        "\n\n\n^Information ^from ^[Naver](https://en.dict.naver.com/#/"
+        "search?range=all&query={0}) ^| ^[Daum](https://dic.daum.net/search.do?q={0}&dic=eng)"
+    )
+    lookup_line_3 = lookup_line_3.format(word)
 
-        to_post = lookup_line_1 + lookup_line_2 + lookup_line_3
-        logger.info(
-            f"[ZW] lookup_ko_word: Received a word lookup for '{word}' in Korean. Returned results."
-        )
-        return to_post
+    to_post = lookup_line_1 + lookup_line_2 + lookup_line_3
+    logger.info(
+        f"[ZW] lookup_ko_word: Received a word lookup for '{word}' in Korean. Returned results."
+    )
+    return to_post
 
 
 def lookup_zhja_tokenizer(phrase, language):
@@ -1743,37 +1737,36 @@ def edit_finder():
             # Test the new retrieved text with the old one.
             if cbody == old_cbody:  # The cached comment is the same as the current one.
                 continue  # Do nothing.
-            else:  # There is a change of some sort.
-                logger.debug(
-                    f"[ZW] Edit Finder: An edit for comment '{cid}' was detected. Processing..."
-                )
-                cleanup_database = True
+            # There is a change of some sort.
+            logger.debug(
+                f"[ZW] Edit Finder: An edit for comment '{cid}' was detected. Processing..."
+            )
+            cleanup_database = True
 
-                # We detected a possible `lookup` change, where the words looked up are now different.
-                if "`" in cbody:
-                    # First thing is compare the data in a lookup comment against what we have.
+            # We detected a possible `lookup` change, where the words looked up are now different.
+            if "`" in cbody:
+                # First thing is compare the data in a lookup comment against what we have.
 
-                    # Here we use the lookup_matcher function to get a LIST of everything that used to be in the graves.
-                    total_matches = lookup_matcher(old_cbody, None)
+                # Here we use the lookup_matcher function to get a LIST of everything that used to be in the graves.
+                total_matches = lookup_matcher(old_cbody, None)
 
-                    # Then we get data from Komento, specifically looking for its version of results.
-                    new_vars = komento_analyzer(komento_submission_from_comment(cid))
-                    new_overall_lookup_data = new_vars.get("bot_lookup_correspond", {})
-                    if cid in new_overall_lookup_data:
-                        # This comment is in our data
-                        new_total_matches = new_overall_lookup_data[cid]
-                        # Get the new matches
-                        # Are they the same?
-                        if set(new_total_matches) == set(total_matches):
-                            logger.debug(
-                                f"[ZW] Edit-Finder: No change found for lookup comment '{cid}'."
-                            )
-                            continue
-                        else:
-                            logger.debug(
-                                f"[ZW] Edit-Finder: Change found for lookup comment '{cid}'."
-                            )
-                            force_change = True
+                # Then we get data from Komento, specifically looking for its version of results.
+                new_vars = komento_analyzer(komento_submission_from_comment(cid))
+                new_overall_lookup_data = new_vars.get("bot_lookup_correspond", {})
+                if cid in new_overall_lookup_data:
+                    # This comment is in our data
+                    new_total_matches = new_overall_lookup_data[cid]
+                    # Get the new matches
+                    # Are they the same?
+                    if set(new_total_matches) == set(total_matches):
+                        logger.debug(
+                            f"[ZW] Edit-Finder: No change found for lookup comment '{cid}'."
+                        )
+                        continue
+                    logger.debug(
+                        f"[ZW] Edit-Finder: Change found for lookup comment '{cid}'."
+                    )
+                    force_change = True
 
                 # Code to swap out the stored comment text with the new text. This does NOT force a reprocess.
                 delete_command = "DELETE FROM comment_cache WHERE id = ?"
@@ -2204,7 +2197,7 @@ def ziwen_posts():
                 if len(contacted) != 0:  # We have a list of notified users.
                     pajo.add_notified(contacted)
                 # Save it to the local database
-                ajo_writer(pajo, cursor_ajo, conn_ajo, logger)
+                ajo_writer(pajo, cursor_ajo, conn_ajo)
                 logger.debug(
                     "[ZW] Posts: Created Ajo for new post and saved to local database."
                 )
@@ -2287,7 +2280,7 @@ def ziwen_bot():
         # Create an Ajo object.
         if css_check(oflair_css):
             # Check the database for the Ajo.
-            oajo = ajo_loader(oid, cursor_ajo, logger, POST_TEMPLATES, reddit)
+            oajo = ajo_loader(oid, cursor_ajo, POST_TEMPLATES, reddit)
 
             if oajo is None:
                 # We couldn't find a stored dict, so we will generate it from the submission.
@@ -2364,53 +2357,49 @@ def ziwen_bot():
                 )
                 post.reply(MSG_RESTORE_NOT_ELIGIBLE + BOT_DISCLAIMER)
                 continue
-            else:  # Format a search query to Pushshift.
-                search_query = (
-                    f"https://api.pushshift.io/reddit/search/submission/?ids={oid}"
-                )
-                retrieved_data = requests.get(search_query).json()
+            # Format a search query to Pushshift.
+            search_query = (
+                f"https://api.pushshift.io/reddit/search/submission/?ids={oid}"
+            )
+            retrieved_data = requests.get(search_query).json()
 
-                if "data" in retrieved_data:  # We've got some data.
-                    returned_submission = retrieved_data["data"][0]
-                    original_title = f"> **{returned_submission['title']}**\n\n"
-                    original_text = returned_submission["selftext"]
-                    if len(original_text.strip()) > 0:  # We have text.
-                        original_text = "> " + original_text.strip().replace(
-                            "\n", "\n > "
-                        )
-                    else:  # The retrieved text is of zero length.
-                        original_text = (
-                            "> *It appears this text-only post had no text.*"
-                        )
-                    original_text = original_title + original_text
-                else:
-                    # Tell them we were not able to get any proper data.
-                    subject_line = "[Notification] About your !restore request"
-                    try:
-                        reddit.redditor(pauthor).message(
-                            subject_line, MSG_RESTORE_TEXT_FAIL.format(opermalink)
-                        )
-                    except praw.exceptions.APIException:
-                        pass
-                    else:
-                        logger.info(
-                            f"[ZW] Bot: Replied to u/{pauthor} with message, "
-                            "unable to retrieve data."
-                        )
-                    continue
-
-                # Actually send them the message, including the original text.
-                subject_line = "[Notification] Restored text for your !restore request"
+            if "data" in retrieved_data:  # We've got some data.
+                returned_submission = retrieved_data["data"][0]
+                original_title = f"> **{returned_submission['title']}**\n\n"
+                original_text = returned_submission["selftext"]
+                if len(original_text.strip()) > 0:  # We have text.
+                    original_text = "> " + original_text.strip().replace("\n", "\n > ")
+                else:  # The retrieved text is of zero length.
+                    original_text = "> *It appears this text-only post had no text.*"
+                original_text = original_title + original_text
+            else:
+                # Tell them we were not able to get any proper data.
+                subject_line = "[Notification] About your !restore request"
                 try:
                     reddit.redditor(pauthor).message(
-                        subject_line,
-                        MSG_RESTORE_TEXT_TEMPLATE.format(opermalink, original_text)
-                        + BOT_DISCLAIMER,
+                        subject_line, MSG_RESTORE_TEXT_FAIL.format(opermalink)
                     )
                 except praw.exceptions.APIException:
                     pass
                 else:
-                    logger.info(f"[ZW] Bot: Replied to u/{pauthor} with restored text.")
+                    logger.info(
+                        f"[ZW] Bot: Replied to u/{pauthor} with message, "
+                        "unable to retrieve data."
+                    )
+                continue
+
+            # Actually send them the message, including the original text.
+            subject_line = "[Notification] Restored text for your !restore request"
+            try:
+                reddit.redditor(pauthor).message(
+                    subject_line,
+                    MSG_RESTORE_TEXT_TEMPLATE.format(opermalink, original_text)
+                    + BOT_DISCLAIMER,
+                )
+            except praw.exceptions.APIException:
+                pass
+            else:
+                logger.info(f"[ZW] Bot: Replied to u/{pauthor} with restored text.")
 
         # We move the exit point if there is no author here. Since !restore relies on there being no author.
         if oauthor is None:
@@ -2479,16 +2468,15 @@ def ziwen_bot():
                                 )
                             )
                             continue
-                        else:
-                            language_code = match
-                            language_name = language_data[0]
-                            match_script = True
-                            logger.info(
-                                f"[ZW] Bot: This is a script post with code `{language_code}`."
-                            )
-                            if len(language_name) == 0:
-                                # If there are no results from the advanced converter...
-                                language_code = ""
+                        language_code = match
+                        language_name = language_data[0]
+                        match_script = True
+                        logger.info(
+                            f"[ZW] Bot: This is a script post with code `{language_code}`."
+                        )
+                        if len(language_name) == 0:
+                            # If there are no results from the advanced converter...
+                            language_code = ""
                     else:  # a catch-all for advanced mode that ISN'T a 3 or 4-letter code.
                         post.reply(COMMENT_ADVANCED_IDENTIFY_ERROR + BOT_DISCLAIMER)
                         logger.info(
@@ -2502,21 +2490,19 @@ def ziwen_bot():
                         no_match_text = COMMENT_INVALID_CODE.format(match, opermalink)
                         try:
                             post.reply(no_match_text + BOT_DISCLAIMER)
-                        except (
-                            praw.exceptions.APIException
-                        ):  # Comment has been deleted.
+                        except praw.exceptions.APIException:
+                            # Comment has been deleted.
                             pass
                         logger.info(
                             f"[ZW] Bot: But '{match}' has no match in the database. Skipping this..."
                         )
                         continue
-                    elif len(language_code) != 0:  # This is a valid language.
+                    if len(language_code) != 0:  # This is a valid language.
                         # Insert code for updating country as well here.
                         if language_country is not None:
                             # There is a country code listed.
-                            oajo.set_country(
-                                language_country
-                            )  # Add that code to the Ajo
+                            # Add that code to the Ajo
+                            oajo.set_country(language_country)
                         else:  # There was no country listed, so let's reset the code to none.
                             oajo.set_country(None)
                         oajo.set_language(language_code, True)  # Set the language.
@@ -2629,7 +2615,7 @@ def ziwen_bot():
                 )
                 continue
 
-            if oflair_css == "meta" or oflair_css == "community":
+            if oflair_css in ["meta", "community"]:
                 logger.debug("[ZW] Bot: > However, this is not a valid pageable post.")
                 continue
 
@@ -2684,7 +2670,7 @@ def ziwen_bot():
 
             if oajo.language_name is None:
                 continue
-            elif type(oajo.language_name) is not str:
+            if not isinstance(oajo.language_name, str):
                 # Multiple post?
                 search_language = oajo.language_name[0]
             else:
@@ -2745,7 +2731,7 @@ def ziwen_bot():
                     post_content.append(to_post)
                 elif match_length > 1:
                     find_word = str(match)
-                    post_content.append(ja_word(find_word), ZW_USERAGENT)
+                    post_content.append(ja_word(find_word, ZW_USERAGENT))
 
             def processKorean(match, post_content):
                 find_word = str(match)
@@ -2759,7 +2745,7 @@ def ziwen_bot():
 
             for key in total_matches.keys():
                 processFunc = processOther
-                curLang = None
+                cur_lang = None
                 for lang, func in {
                     "Chinese": processChinese,
                     "Japanese": processJapanese,
@@ -2767,11 +2753,11 @@ def ziwen_bot():
                 }.items():
                     if key in CJK_LANGUAGES[lang]:
                         processFunc = func
-                        curLang = lang
+                        cur_lang = lang
                         break
                 logger.info(
-                    f"[ZW] Bot: >> Conducting lookup search in {curLang}."
-                    if curLang
+                    f"[ZW] Bot: >> Conducting lookup search in {cur_lang}."
+                    if cur_lang
                     else "[ZW] Bot: >> Conducting Wiktionary lookup search."
                 )
                 for match in total_matches[key][:limit_num_matches]:
@@ -3007,23 +2993,22 @@ def ziwen_bot():
             exceptions_list = ["but", "however", "no"]  # Did the OP have reservations?
             if any(exception in pbody for exception in exceptions_list):
                 continue
-            else:  # Okay, it really is a short thanks
-                logger.info(
-                    f"[ZW] Bot: COMMAND: Short thanks from u/{pauthor}. Sending user a message..."
+            # Okay, it really is a short thanks
+            logger.info(
+                f"[ZW] Bot: COMMAND: Short thanks from u/{pauthor}. Sending user a message..."
+            )
+            oajo.set_status("translated")
+            oajo.set_time("translated", current_time)
+            short_msg = (
+                MSG_SHORT_THANKS_TRANSLATED.format(oauthor, opermalink) + BOT_DISCLAIMER
+            )
+            try:
+                reddit.redditor(oauthor).message(
+                    "[Notification] A message about your translation request",
+                    short_msg,
                 )
-                oajo.set_status("translated")
-                oajo.set_time("translated", current_time)
-                short_msg = (
-                    MSG_SHORT_THANKS_TRANSLATED.format(oauthor, opermalink)
-                    + BOT_DISCLAIMER
-                )
-                try:
-                    reddit.redditor(oauthor).message(
-                        "[Notification] A message about your translation request",
-                        short_msg,
-                    )
-                except praw.exceptions.APIException:  # Likely shadowbanned.
-                    pass
+            except praw.exceptions.APIException:  # Likely shadowbanned.
+                pass
 
         if KEYWORDS.claim in pbody:  # Claiming posts with the !claim command
             if oflair_css in [
@@ -3191,16 +3176,15 @@ def ziwen_bot():
 
         """MODERATOR-ONLY COMMANDS (!delete, !reset, !note, !set)"""
 
-        if (
-            KEYWORDS.delete in pbody
-        ):  # This is to allow OP or mods to !delete crossposts
+        if KEYWORDS.delete in pbody:
+            # This is to allow OP or mods to !delete crossposts
             if not oajo.is_bot_crosspost:  # If this isn't actually a crosspost..
                 continue
-            else:  # This really is a crosspost.
-                logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.delete} from u/{pauthor}")
-                if pauthor == oauthor or pauthor == requester or is_mod(pauthor):
-                    osubmission.mod.remove()  # We'll use remove for now -- can switch to delete() later.
-                    logger.info("[ZW] Bot: >> Removed crosspost.")
+            # This really is a crosspost.
+            logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.delete} from u/{pauthor}")
+            if pauthor == oauthor or pauthor == requester or is_mod(pauthor):
+                osubmission.mod.remove()  # We'll use remove for now -- can switch to delete() later.
+                logger.info("[ZW] Bot: >> Removed crosspost.")
 
         if KEYWORDS.reset in pbody:
             # !reset command, to revert a post back to as if it were freshly processed
@@ -3312,7 +3296,7 @@ def ziwen_bot():
             # There's nothing to change for these
             oajo.update_reddit()  # Push all changes to the server
             # Write the Ajo to the local database
-            ajo_writer(oajo, cursor_ajo, conn_ajo, logger)
+            ajo_writer(oajo, cursor_ajo, conn_ajo)
             logger.info(
                 f"[ZW] Bot: Ajo for {oid} updated and saved to the local database."
             )
@@ -3439,7 +3423,7 @@ def progress_checker():
 
         # Load its Ajo.
         # First check the local database for the Ajo.
-        oajo = ajo_loader(oid, cursor_ajo, logger, POST_TEMPLATES, reddit)
+        oajo = ajo_loader(oid, cursor_ajo, POST_TEMPLATES, reddit)
         if oajo is None:
             # We couldn't find a stored dict, so we will generate it from the submission.
             logger.debug(
@@ -3465,7 +3449,7 @@ def progress_checker():
                 oajo.set_status("untranslated")
                 oajo.update_reddit()  # Push all changes to the server
                 # Write the Ajo to the local database
-                ajo_writer(oajo, cursor_ajo, conn_ajo, logger)
+                ajo_writer(oajo, cursor_ajo, conn_ajo)
 
 
 """LESSER RUNTIMES"""
@@ -3522,7 +3506,7 @@ def cc_ref():
                     post_content.append(to_post)
                 elif match_length >= 2:
                     find_word = str(match)
-                    post_content.append(zh_word(find_word), ZW_USERAGENT)
+                    post_content.append(zh_word(find_word, ZW_USERAGENT))
 
             post_content = "\n\n".join(post_content)
             if len(post_content) > 10000:  # Truncate only if absolutely necessary.

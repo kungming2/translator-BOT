@@ -339,27 +339,24 @@ def ja_word_surname(name, zw_useragent):
     if len(str(ja_reading)) <= 4 or len(name) < 2:
         # This indicates that it's blank. No results.
         return None
-    else:
-        furigana_chunk = ""
-        for reading in ja_reading:
-            furigana_chunk_new = (
-                reading.strip() + " (*" + romkan.to_hepburn(reading).title() + "*)"
-            )
-            furigana_chunk += f", {furigana_chunk_new}"
-        lookup_line_1 = (
-            "# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n".format(name)
+    furigana_chunk = ""
+    for reading in ja_reading:
+        furigana_chunk_new = (
+            reading.strip() + " (*" + romkan.to_hepburn(reading).title() + "*)"
         )
-        # We return the formatted readings of this name
-        lookup_line_1 += f"**Readings:** {furigana_chunk[2:]}"
-        lookup_line_2 = "\n\n**Meanings**: A Japanese surname."
-        lookup_line_3 = "\n\n\n^Information ^from [^Myoji](https://myoji-yurai.net/searchResult.htm?myojiKanji={0}) "
-        lookup_line_3 += "^| [^Weblio ^EJJE](https://ejje.weblio.jp/content/{0})"
-        lookup_line_3 = lookup_line_3.format(name)
-        to_post = lookup_line_1 + lookup_line_2 + "\n" + lookup_line_3
-        logger.info(
-            f"[ZW] JA-Name: '{name}' is a Japanese name. Returned search results."
-        )
-        return to_post
+        furigana_chunk += f", {furigana_chunk_new}"
+    lookup_line_1 = "# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n".format(
+        name
+    )
+    # We return the formatted readings of this name
+    lookup_line_1 += f"**Readings:** {furigana_chunk[2:]}"
+    lookup_line_2 = "\n\n**Meanings**: A Japanese surname."
+    lookup_line_3 = "\n\n\n^Information ^from [^Myoji](https://myoji-yurai.net/searchResult.htm?myojiKanji={0}) "
+    lookup_line_3 += "^| [^Weblio ^EJJE](https://ejje.weblio.jp/content/{0})"
+    lookup_line_3 = lookup_line_3.format(name)
+    to_post = lookup_line_1 + lookup_line_2 + "\n" + lookup_line_3
+    logger.info(f"[ZW] JA-Name: '{name}' is a Japanese name. Returned search results.")
+    return to_post
 
 
 def ja_word(japanese_word, zw_useragent):
@@ -405,22 +402,21 @@ def ja_word(japanese_word, zw_useragent):
         if surname_data is not None:
             logger.info("[ZW] JA-Word: Found a matching Japanese surname.")
             return surname_data
-        elif given_name_data is not None:
+        if given_name_data is not None:
             logger.info("[ZW] JA-Word: Found a matching Japanese given name.")
             return given_name_data
-        elif sfx_data is not None:
+        if sfx_data is not None:
             logger.info("[ZW] JA-Word: Found matching Japanese sound effects.")
             return sfx_data
+        if katakana_test is None:  # It's a character
+            to_post = ja_character(japanese_word, zw_useragent)
+            logger.info(
+                "[ZW] JA-Word: No results found for a Japanese name. Getting individual character data."
+            )
         else:
-            if katakana_test is None:  # It's a character
-                to_post = ja_character(japanese_word)
-                logger.info(
-                    "[ZW] JA-Word: No results found for a Japanese name. Getting individual character data."
-                )
-            else:
-                to_post = f"There were no results for `{japanese_word}`."
-                logger.info("[ZW] JA-Word: Unknown katakana word. No results.")
-            return to_post
+            to_post = f"There were no results for `{japanese_word}`."
+            logger.info("[ZW] JA-Word: Unknown katakana word. No results.")
+        return to_post
 
     # Jisho data is good, format the data from the returned JSON.
     word_reading_chunk = f"{word_reading} (*{romkan.to_hepburn(word_reading)}*)"

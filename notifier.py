@@ -177,17 +177,17 @@ def messaging_language_frequency(language_name, reddit, subreddit):
             lang_wiki_name, str(daily_rate), "day", lang_name_original
         )
         return freq_string, stats_package
-    elif 2 > daily_rate > 0.05:
+    if daily_rate > 0.05:
         # This is a frequent one, a few requests a month. But not the most.
         freq_string = MSG_LANGUAGE_FREQUENCY.format(
             lang_wiki_name, str(monthly_rate), "month", lang_name_original
         )
         return freq_string, stats_package
-    else:  # These are pretty infrequent languages. Maybe a few times a year at most.
-        freq_string = MSG_LANGUAGE_FREQUENCY.format(
-            lang_wiki_name, str(yearly_rate), "year", lang_name_original
-        )
-        return freq_string, stats_package
+    # These are pretty infrequent languages. Maybe a few times a year at most.
+    freq_string = MSG_LANGUAGE_FREQUENCY.format(
+        lang_wiki_name, str(yearly_rate), "year", lang_name_original
+    )
+    return freq_string, stats_package
 
 
 def notifier_list_pruner(username, reddit, cursor_main, conn_main):
@@ -201,31 +201,31 @@ def notifier_list_pruner(username, reddit, cursor_main, conn_main):
 
     if messaging_is_valid_user(username, reddit):  # This user does exist
         return None
-    else:  # User does not exist.
-        final_codes = []
+    # User does not exist.
+    final_codes = []
 
-        # Fetch a list of what this user WAS subscribed to. (For the final error message)
-        sql_cn = "SELECT * FROM notify_users WHERE username = ?"
+    # Fetch a list of what this user WAS subscribed to. (For the final error message)
+    sql_cn = "SELECT * FROM notify_users WHERE username = ?"
 
-        # We try to retrieve the languages the user is subscribed to.
-        cursor_main.execute(sql_cn, (username,))
-        all_subscriptions = cursor_main.fetchall()
+    # We try to retrieve the languages the user is subscribed to.
+    cursor_main.execute(sql_cn, (username,))
+    all_subscriptions = cursor_main.fetchall()
 
-        for subscription in all_subscriptions:
-            # We only want the language codes (don't need the username).
-            final_codes.append(subscription[0])
-        # Gather a list of the languages user WAS subscribed to
-        to_post = ", ".join(final_codes)
+    for subscription in all_subscriptions:
+        # We only want the language codes (don't need the username).
+        final_codes.append(subscription[0])
+    # Gather a list of the languages user WAS subscribed to
+    to_post = ", ".join(final_codes)
 
-        # Remove the user from the database.
-        sql_command = "DELETE FROM notify_users WHERE username = ?"
-        cursor_main.execute(sql_command, (username,))
-        conn_main.commit()
-        logger.info(
-            f"[ZW] notifier_list_pruner: Deleted subscription information for u/{username}."
-        )
+    # Remove the user from the database.
+    sql_command = "DELETE FROM notify_users WHERE username = ?"
+    cursor_main.execute(sql_command, (username,))
+    conn_main.commit()
+    logger.info(
+        f"[ZW] notifier_list_pruner: Deleted subscription information for u/{username}."
+    )
 
-        return to_post  # Return the list of formerly subscribed languages
+    return to_post  # Return the list of formerly subscribed languages
 
 
 def notifier_regional_language_fetcher(targeted_language, cursor_main):
@@ -532,42 +532,41 @@ def notifier_page_translators(
 
     if len(page_users_list) == 0:  # There is no one on the list for it.
         return None  # Exit, return None.
-    else:
-        for target_username in page_users_list:
-            message = MSG_PAGE.format(
-                username=target_username,
-                pauthor=pauthor,
-                language_name=language_name,
-                otitle=otitle,
-                opermalink=opermalink,
-                oauthor=oauthor,
-                removal_link=MSG_REMOVAL_LINK.format(language_name=language_code),
-            )
-            subject_line = (
-                f"[Page] Message from r/translator regarding a {language_name} post"
-            )
-            # Add on a NSFW warning if appropriate.
-            if is_nsfw:
-                message += MSG_NSFW_WARNING
+    for target_username in page_users_list:
+        message = MSG_PAGE.format(
+            username=target_username,
+            pauthor=pauthor,
+            language_name=language_name,
+            otitle=otitle,
+            opermalink=opermalink,
+            oauthor=oauthor,
+            removal_link=MSG_REMOVAL_LINK.format(language_name=language_code),
+        )
+        subject_line = (
+            f"[Page] Message from r/translator regarding a {language_name} post"
+        )
+        # Add on a NSFW warning if appropriate.
+        if is_nsfw:
+            message += MSG_NSFW_WARNING
 
-            # Send the actual message. Delete the username if an error is encountered.
-            try:
-                reddit.redditor(str(target_username)).message(
-                    subject_line, message + BOT_DISCLAIMER
-                )
-                logger.info(
-                    f"[ZW] Paging: Messaged u/{target_username} for a {language_name} post."
-                )
-            except (
-                praw.exceptions.APIException
-            ):  # There was an error... User probably does not exist anymore.
-                logger.debug(
-                    f"[ZW] Paging: Error occurred sending message to u/{target_username}. Removing..."
-                )
-                # Remove the username from our database.
-                notifier_list_pruner(target_username, reddit, cursor_main, conn_main)
+        # Send the actual message. Delete the username if an error is encountered.
+        try:
+            reddit.redditor(str(target_username)).message(
+                subject_line, message + BOT_DISCLAIMER
+            )
+            logger.info(
+                f"[ZW] Paging: Messaged u/{target_username} for a {language_name} post."
+            )
+        except (
+            praw.exceptions.APIException
+        ):  # There was an error... User probably does not exist anymore.
+            logger.debug(
+                f"[ZW] Paging: Error occurred sending message to u/{target_username}. Removing..."
+            )
+            # Remove the username from our database.
+            notifier_list_pruner(target_username, reddit, cursor_main, conn_main)
 
-        return page_users_list
+    return page_users_list
 
 
 def notifier_page_multiple_detector(pbody):
@@ -582,29 +581,29 @@ def notifier_page_multiple_detector(pbody):
     # Returns a number of pages detected in a single comment.
     num_count_pages = pbody.count("!page:")
 
-    if num_count_pages == 0:
+    if num_count_pages < 1:
         return None
-    elif num_count_pages >= 1:  # There are one or more page languages.
-        new_matches = []
-        initial_matches = []
+    # There are one or more page languages.
+    new_matches = []
 
-        page_chunks = pbody.split("!page:")[1:]
-        page_chunks = ["!page:" + s for s in page_chunks]
+    page_chunks = pbody.split("!page:")[1:]
+    page_chunks = ["!page:" + s for s in page_chunks]
 
-        for chunk in page_chunks:
-            try:
-                new_match = comment_info_parser(chunk, "!page:")[0]
-                new_matches.append(new_match)
-            except TypeError:
-                continue
+    for chunk in page_chunks:
+        try:
+            new_match = comment_info_parser(chunk, "!page:")[0]
+            new_matches.append(new_match)
+        except TypeError:
+            continue
 
-        for match in new_matches:
-            match_code = converter(match)[0]
-            if len(match_code) != 0:  # This is a valid language code.
-                initial_matches.append(match_code)
+    initial_matches = []
+    for match in new_matches:
+        match_code = converter(match)[0]
+        if len(match_code) != 0:  # This is a valid language code.
+            initial_matches.append(match_code)
 
-        # We need code in case we don't have valid data for one.
-        return initial_matches or None
+    # We need code in case we don't have valid data for one.
+    return initial_matches or None
 
 
 def notifier_language_list_editer(
@@ -754,16 +753,12 @@ def messaging_user_statistics_loader(username, cursor_main):
     if username_commands_data is None and notifications_commands_data is None:
         # Absolutely no information.
         return None
-    else:
-        # Format everything together. Convert None to blank list.
-        if commands_lines_to_post is None:
-            commands_lines_to_post = []
-        if notifications_lines_to_post is None:
-            notifications_lines_to_post = []
-        to_post = header + "\n".join(
-            commands_lines_to_post + notifications_lines_to_post
-        )
-        return to_post
+    # Format everything together. Convert None to blank list.
+    if commands_lines_to_post is None:
+        commands_lines_to_post = []
+    if notifications_lines_to_post is None:
+        notifications_lines_to_post = []
+    return header + "\n".join(commands_lines_to_post + notifications_lines_to_post)
 
 
 def record_retrieve_error_log():
@@ -919,7 +914,7 @@ def ziwen_notifier(
         # Get just the Reddit ID.
         mid = re.search(r"comments/(.*)/\w", opermalink).group(1)
         # Load the Ajo
-        majo = ajo_loader(mid, cursor_ajo, logger, post_templates, reddit)
+        majo = ajo_loader(mid, cursor_ajo, post_templates, reddit)
 
         # Checking the language history and the user history of the particular submission.
         try:
@@ -1023,7 +1018,9 @@ def ziwen_notifier(
             logger.info(
                 f"[ZW] Notifier: An error occured while sending a message to u/{username}. Removing..."
             )
-            notifier_list_pruner(username)  # Remove the username from our database.
+            notifier_list_pruner(
+                username, reddit, cursor_main, conn_main
+            )  # Remove the username from our database.
 
     # Record to a log how long it took.
     messaging_mins = (time.time() - messaging_start) / 60
@@ -1193,9 +1190,8 @@ def ziwen_messages(reddit, cursor_main, conn_main, is_mod):
             logger.info("[ZW] Messages: Replied with ping call.")
 
         elif "status" in msubject:
-            logger.info("[ZW] Messages: New status request from u/" + mauthor + ".")
+            logger.info(f"[ZW] Messages: New status request from u/{mauthor}.")
             final_match_codes = []
-            final_match_names = []
 
             # We try to retrieve the languages the user is subscribed to.
             sql_stat = "SELECT * FROM notify_users WHERE username = ?"
@@ -1210,6 +1206,7 @@ def ziwen_messages(reddit, cursor_main, conn_main, is_mod):
             if len(final_match_codes) == 0:
                 status_component = MSG_NO_SUBSCRIPTIONS.format(MSG_SUBSCRIBE_LINK)
             else:
+                final_match_names = []
                 for code in final_match_codes:  # Convert the codes into names
                     converted_result = converter(code)  # This will return a tuple.
                     match_name = converted_result[1]  # Should get the name from each

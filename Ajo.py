@@ -38,7 +38,7 @@ import re
 import csv
 
 
-def ajo_writer(new_ajo, cursor_ajo, conn_ajo, logger):
+def ajo_writer(new_ajo, cursor_ajo, conn_ajo):
     """
     Function takes an Ajo object and saves it to a local database.
 
@@ -74,7 +74,7 @@ def ajo_writer(new_ajo, cursor_ajo, conn_ajo, logger):
     logger.debug("[ZW] ajo_writer: Wrote Ajo to local database.")
 
 
-def ajo_loader(ajo_id, cursor_ajo, logger, post_templates, reddit):
+def ajo_loader(ajo_id, cursor_ajo, post_templates, reddit):
     """
     This function takes an ID string and returns an Ajo object from a local database that matches that string.
     This ID is the same as the ID of the Reddit post it's associated with.
@@ -90,11 +90,11 @@ def ajo_loader(ajo_id, cursor_ajo, logger, post_templates, reddit):
     if new_ajo is None:  # We couldn't find a stored dict for it.
         logger.debug("[ZW] ajo_loader: No local Ajo stored.")
         return None
-    else:  # We do have stored data.
-        new_ajo_dict = eval(new_ajo[2])  # We only want the stored dict here.
-        new_ajo = Ajo(new_ajo_dict, post_templates, reddit)
-        logger.debug("[ZW] ajo_loader: Loaded Ajo from local database.")
-        return new_ajo  # Note: the Ajo class can build itself from this dict.
+    # We do have stored data.
+    new_ajo_dict = eval(new_ajo[2])  # We only want the stored dict here.
+    new_ajo = Ajo(new_ajo_dict, post_templates, reddit)
+    logger.debug("[ZW] ajo_loader: Loaded Ajo from local database.")
+    return new_ajo  # Note: the Ajo class can build itself from this dict.
 
 
 def ajo_defined_multiple_flair_assessor(flairtext):
@@ -119,8 +119,8 @@ def ajo_defined_multiple_flair_assessor(flairtext):
             # There's a difference - maybe a symbol in DEFINED_MULTIPLE_LEGEND
             final_language_codes.update(
                 {
-                    language_code: DEFINED_MULTIPLE_LEGEND[symbol]
-                    for symbol in DEFINED_MULTIPLE_LEGEND
+                    language_code: keyword
+                    for symbol, keyword in DEFINED_MULTIPLE_LEGEND.items()
                     if symbol in language
                 }
             )
@@ -202,12 +202,15 @@ def ajo_retrieve_script_code(script_name):
     codes_list = []
     names_list = []
 
-    csv_file = csv.reader(open(FILE_ADDRESS_ISO_ALL, encoding="utf-8"), delimiter=",")
-    for row in csv_file:
-        if len(row[0]) == 4:  # This is a script code. (the others are 3 characters. )
-            codes_list.append(row[0])
-            # It is normally returned as a list, so we need to convert into a string.
-            names_list.append(row[2:][0])
+    with open(FILE_ADDRESS_ISO_ALL, encoding="utf-8") as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=",")
+        for row in csv_reader:
+            if (
+                len(row[0]) == 4
+            ):  # This is a script code. (the others are 3 characters. )
+                codes_list.append(row[0])
+                # It is normally returned as a list, so we need to convert into a string.
+                names_list.append(row[2:][0])
 
     if script_name in names_list:  # The name is in the code list
         item_index = names_list.index(script_name)
@@ -271,7 +274,7 @@ class Ajo:
     # noinspection PyUnboundLocalVariable
     def __init__(self, reddit_submission, post_templates, user_agent):
         # This takes a Reddit Submission object and generates info from it.
-        if type(reddit_submission) is dict:  # Loaded from a file?
+        if isinstance(reddit_submission, dict):  # Loaded from a file?
             logger.debug("[ZW] Ajo: Loaded Ajo from local database.")
             for key in reddit_submission:
                 setattr(self, key, reddit_submission[key])
@@ -413,7 +416,7 @@ class Ajo:
                         :-1
                     ].lower()  # Get the characters
 
-                    if language_tag != "?" and language_tag != "--":
+                    if language_tag not in ["?", "--"]:
                         # Non-generic versions
                         converter_data = converter(language_tag)
                         self.language_name = converter_data[1]
@@ -509,9 +512,8 @@ class Ajo:
                     self.status = "untranslated"
                 elif multiple_languages is not None:  # This is a defined multiple
                     #  Construct a status dictionary.(we could also use multiple_languages)
-                    actual_list = reddit_submission.link_flair_text.split("[")[1][
-                        :-1
-                    ]  # Get just the codes
+                    # Get just the codes
+                    actual_list = reddit_submission.link_flair_text.split("[")[1][:-1]
                     # Pass it to dictionary constructor
                     self.status = ajo_defined_multiple_flair_assessor(actual_list)
             else:
@@ -528,6 +530,8 @@ class Ajo:
                     self.is_bot_crosspost = False
             except AttributeError:  # It's not a crosspost.
                 self.is_bot_crosspost = False
+        self.output_oflair_css = None
+        self.output_oflair_text = None
 
     def __eq__(self, other):
         """

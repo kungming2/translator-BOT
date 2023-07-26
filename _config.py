@@ -80,7 +80,7 @@ keywords_dict = {
     "long": "!long",
     "restore": "!restore",
 }
-KEYWORDS = StrEnum("StrEnum", {key: value for key, value in keywords_dict.items()})
+KEYWORDS = StrEnum("StrEnum", keywords_dict)
 
 STATUS_KEYWORDS = {
     KEYWORDS.missing: KEYWORDS.missing.name,

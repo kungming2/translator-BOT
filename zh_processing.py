@@ -19,7 +19,7 @@ import csv
 import random
 import re
 import time
-import bs4
+from bs4 import BeautifulSoup
 from _config import (
     logger,
     FILE_ADDRESS_OLD_CHINESE,
@@ -46,43 +46,42 @@ def zh_character_oc_search(character):
     mc_oc_readings = {}
 
     # Iterate over the CSV
-    csv_file = csv.reader(
-        open(FILE_ADDRESS_OLD_CHINESE, encoding="utf-8"), delimiter=","
-    )
-    for row in csv_file:
-        my_character = row[0]
-        # It is normally returned as a list, so we need to convert into a string.
-        mc_reading = row[2:][0]
-        oc_reading = row[4:][0]
-        if "(" in oc_reading:
-            oc_reading = oc_reading.split("(", 1)[0]
+    with open(FILE_ADDRESS_OLD_CHINESE, encoding="utf-8") as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=",")
+        for row in csv_reader:
+            my_character = row[0]
+            # It is normally returned as a list, so we need to convert into a string.
+            mc_reading = row[2:][0]
+            oc_reading = row[4:][0]
+            if "(" in oc_reading:
+                oc_reading = oc_reading.split("(", 1)[0]
 
-        # Add the character as a key with the readings as a tuple
-        mc_oc_readings[my_character] = (mc_reading.strip(), oc_reading.strip())
+            # Add the character as a key with the readings as a tuple
+            mc_oc_readings[my_character] = (mc_reading.strip(), oc_reading.strip())
 
     # Check to see if I actually have the key in my dictionary.
     if character not in mc_oc_readings:  # Character not found.
         return None
-    else:  # Character exists!
-        character_data = mc_oc_readings[character]  # Get the tuple
-        return f"\n**Middle Chinese** | \\**{character_data[0]}*\n**Old Chinese** | \\*{character_data[1]}*"
+    # Character exists!
+    character_data = mc_oc_readings[character]  # Get the tuple
+    return f"\n**Middle Chinese** | \\**{character_data[0]}*\n**Old Chinese** | \\*{character_data[1]}*"
 
 
-def zh_character_variant_search(searchTerm, retries=3):
+def zh_character_variant_search(search_term, retries=3):
     """
     Function to search the MOE dictionary for a link to character
     variants, and returns the link if found. None if nothing is found.
     """
 
-    searchTerm = searchTerm.strip()
+    search_term = search_term.strip()
     entry_url = None
     timeout_amount = 4
 
     session = requests.Session()
-    baseURL = "https://dict.variants.moe.edu.tw/variants/rbt"
+    base_url = "https://dict.variants.moe.edu.tw/variants/rbt"
     try:
-        initialResp = session.get(
-            f"{baseURL}/query_by_standard_tiles.rbt",
+        initial_resp = session.get(
+            f"{base_url}/query_by_standard_tiles.rbt",
             timeout=0.5,
         )
     except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError):
@@ -90,37 +89,37 @@ def zh_character_variant_search(searchTerm, retries=3):
         return
 
     try:
-        rci = re.search("componentId=(rci_.*_4)", initialResp.text).group(1)
+        rci = re.search("componentId=(rci_.*_4)", initial_resp.text).group(1)
         cookies = session.cookies.get_dict()  # sets JSESSIONID
     except AttributeError:
         return
 
-    searchParams = {
+    search_params = {
         "rbtType": "AJAX_INVOKE",
         "componentId": rci,
     }
 
-    data = {"searchedText": searchTerm}
+    data = {"searchedText": search_term}
     try:
-        searchResponse = requests.post(
-            f"{baseURL}/query_by_standard.rbt",
-            params=searchParams,
+        search_response = requests.post(
+            f"{base_url}/query_by_standard.rbt",
+            params=search_params,
             cookies=cookies,
             data=data,
             timeout=1,
         )
-        fetchID = bs4(searchResponse.text, "lxml").findAll("a")[0].get("id")
+        fetch_id = BeautifulSoup(search_response.text, "lxml").findAll("a")[0].get("id")
     except (IndexError, requests.exceptions.ReadTimeout):
         return
 
-    fetchParams = {"quote_code": fetchID}
+    fetch_params = {"quote_code": fetch_id}
 
     # Regular function iteration.
     for _ in range(retries):
         try:
             response = requests.get(
-                f"{baseURL}/word_attribute.rbt",
-                params=fetchParams,
+                f"{base_url}/word_attribute.rbt",
+                params=fetch_params,
                 cookies=cookies,
                 timeout=timeout_amount,
             )
@@ -227,7 +226,7 @@ def zh_character_calligraphy_search(character):
     }  # Form data to pass on to the POST system.
     try:
         rdata = requests.post("http://www.shufazidian.com/", data=formdata)
-        tree = bs4(rdata.content, "lxml")
+        tree = BeautifulSoup(rdata.content, "lxml")
         tree = str(tree)
         tree = html.fromstring(tree)
     except requests.exceptions.ConnectionError:
@@ -580,6 +579,7 @@ def zh_word_decode_pinyin(s):
     return result
 
 
+# TODO handle overlap with zh_word_buddhist_dictionary_search
 def zh_word_buddhist_dictionary_search(chinese_word):
     """
     Function that allows us to consult the Soothill-Hodous 'Dictionary of Chinese Buddhist Terms.'
@@ -592,10 +592,8 @@ def zh_word_buddhist_dictionary_search(chinese_word):
     general_dictionary = {}
 
     # We open the file.
-    f = open(FILE_ADDRESS_ZH_BUDDHIST, encoding="utf-8")
-    existing_data = f.read()
-    existing_data = existing_data.split("\n")
-    f.close()
+    with open(FILE_ADDRESS_ZH_BUDDHIST, encoding="utf-8") as f:
+        existing_data = f.read().split("\n")
 
     relevant_line = None
 
@@ -609,18 +607,18 @@ def zh_word_buddhist_dictionary_search(chinese_word):
     if relevant_line is not None:  # We found a matching word.
         # Parse the entry (code courtesy Marcanuy at https://github.com/marcanuy/cedict_utils, MIT license)
         hanzis = relevant_line.partition("[")[0].split(" ", 1)
-        keywords = dict(
-            meanings=relevant_line.partition("/")[2]
+        keywords = {
+            "meanings": relevant_line.partition("/")[2]
             .replace('"', "'")
             .rstrip("/")
             .strip()
             .split("/"),
-            traditional=hanzis[0].strip(" "),
-            simplified=hanzis[1].strip(" "),
+            "traditional": hanzis[0].strip(" "),
+            "simplified": hanzis[1].strip(" "),
             # Take the content in between the two brackets
-            pinyin=relevant_line.partition("[")[2].partition("]")[0],
-            raw_line=relevant_line,
-        )
+            "pinyin": relevant_line.partition("[")[2].partition("]")[0],
+            "raw_line": relevant_line,
+        }
 
         # Format the data nicely.
         if len(keywords["meanings"]) > 2:  # Truncate if too long.
@@ -651,10 +649,8 @@ def zh_word_cccanto_search(cantonese_word):
     general_dictionary = {}
 
     # We open the file.
-    f = open(FILE_ADDRESS_ZH_CCCANTO, encoding="utf-8")
-    existing_data = f.read()
-    existing_data = existing_data.split("\n")
-    f.close()
+    with open(FILE_ADDRESS_ZH_CCCANTO, encoding="utf-8") as f:
+        existing_data = f.read().split("\n")
 
     relevant_line = None
 
@@ -668,19 +664,19 @@ def zh_word_cccanto_search(cantonese_word):
     if relevant_line is not None:
         # Parse the entry (based on code from Marcanuy at https://github.com/marcanuy/cedict_utils, MIT license)
         hanzis = relevant_line.partition("[")[0].split(" ", 1)
-        keywords = dict(
-            meanings=relevant_line.partition("/")[2]
+        keywords = {
+            "meanings": relevant_line.partition("/")[2]
             .replace('"', "'")
             .rstrip("/")
             .strip()
             .split("/"),
-            traditional=hanzis[0].strip(" "),
-            simplified=hanzis[1].strip(" "),
+            "traditional": hanzis[0].strip(" "),
+            "simplified": hanzis[1].strip(" "),
             # Take the content in between the two brackets
-            pinyin=relevant_line.partition("[")[2].partition("]")[0],
-            jyutping=relevant_line.partition("{")[2].partition("}")[0],
-            raw_line=relevant_line,
-        )
+            "pinyin": relevant_line.partition("[")[2].partition("]")[0],
+            "jyutping": relevant_line.partition("{")[2].partition("}")[0],
+            "raw_line": relevant_line,
+        }
 
         formatted_line = '\n\n**Cantonese Meanings**: "{}."'.format(
             "; ".join(keywords["meanings"])
@@ -733,25 +729,25 @@ def zh_word_tea_dictionary_search(chinese_word, zw_useragent):
     if chinese_word not in head_word:
         # If the characters don't match: Exit. This includes null searches.
         return None
-    else:  # It exists.
-        try:
-            pinyin = re.search(r"\((.*?)\)", word_content[2]).group(1).lower()
-        except AttributeError:  # Never mind, it does not exist.
-            return None
+    # It exists.
+    try:
+        pinyin = re.search(r"\((.*?)\)", word_content[2]).group(1).lower()
+    except AttributeError:  # Never mind, it does not exist.
+        return None
 
-        meaning = word_content[3:]
-        meaning = [item.strip() for item in meaning]
+    meaning = word_content[3:]
+    meaning = [item.strip() for item in meaning]
 
-        # Format the entry to return
-        formatted_line = f"\n\n**Tea Meanings**: \"{' '.join(meaning)}.\""
-        formatted_line = formatted_line.replace(" )", " ")
-        formatted_line = formatted_line.replace("  ", " ")
-        formatted_line += f" ([Babelcarp]({web_search}))"  # Append source
+    # Format the entry to return
+    formatted_line = f"\n\n**Tea Meanings**: \"{' '.join(meaning)}.\""
+    formatted_line = formatted_line.replace(" )", " ")
+    formatted_line = formatted_line.replace("  ", " ")
+    formatted_line += f" ([Babelcarp]({web_search}))"  # Append source
 
-        general_dictionary["meaning"] = formatted_line
-        general_dictionary["pinyin"] = pinyin
+    general_dictionary["meaning"] = formatted_line
+    general_dictionary["pinyin"] = pinyin
 
-        return general_dictionary
+    return general_dictionary
 
 
 def zh_word_alt_romanization(pinyin_string):
@@ -769,12 +765,11 @@ def zh_word_alt_romanization(pinyin_string):
 
     # Get the corresponding pronunciations into a dictonary.
     corresponding_dict = {}
-    csv_file = csv.reader(
-        open(FILE_ADDRESS_ZH_ROMANIZATION, encoding="utf-8"), delimiter=","
-    )
-    for row in csv_file:
-        pinyin_p, yale_p, wadegiles_p = row
-        corresponding_dict[pinyin_p] = [yale_p.strip(), wadegiles_p.strip()]
+    with open(FILE_ADDRESS_ZH_ROMANIZATION, encoding="utf-8") as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=",")
+        for row in csv_reader:
+            pinyin_p, yale_p, wadegiles_p = row
+            corresponding_dict[pinyin_p] = [yale_p.strip(), wadegiles_p.strip()]
 
     # Divide the string into syllables
     syllables = pinyin_string.split(" ")
@@ -850,7 +845,7 @@ def zh_word_chengyu(chengyu):
     if "找到 0 个成语" in chengyu_exists[1]:  # There are no results...
         logger.info(f"[ZW] ZH-Chengyu: No chengyu results found for {chengyu}.")
         return None
-    elif r_tree is not None:  # There are results.
+    if r_tree is not None:  # There are results.
         # Look through the results page.
         link_results = r_tree.xpath('//tr[contains(@bgcolor,"#ffffff")]/td/a')
         try:
@@ -871,9 +866,8 @@ def zh_word_chengyu(chengyu):
             requests.exceptions.ConnectionError,
         ):
             return
-        else:
-            # Grab the data from the table.
-            zh_data = tree.xpath('//td[contains(@colspan, "5")]/text()')
+        # Grab the data from the table.
+        zh_data = tree.xpath('//td[contains(@colspan, "5")]/text()')
 
         # Assign them to variables.
         chengyu_meaning = zh_data[1]
@@ -936,28 +930,28 @@ def zh_word(word, zw_useragent):
             )
             # This will split the word into character chunks.
             if len(word) < 2:
-                to_post = zh_character(word)
+                to_post = zh_character(word, zw_useragent)
             else:  # The word is longer than one character.
                 to_post = ""
                 search_characters = list(word)
                 for character in search_characters:
-                    to_post += "\n\n" + zh_character(character)
+                    to_post += "\n\n" + zh_character(character, zw_useragent)
             return to_post
 
-        else:  # Otherwise, let's try to format the data nicely.
-            if search_results_buddhist is not None:
-                alternate_meanings.append(search_results_buddhist["meaning"])
-                alternate_pinyin = search_results_buddhist["pinyin"]
-            if search_results_tea is not None:
-                alternate_meanings.append(search_results_tea["meaning"])
-                alternate_pinyin = search_results_tea["pinyin"]
-            if search_results_cccanto is not None:
-                alternate_meanings.append(search_results_cccanto["meaning"])
-                alternate_pinyin = search_results_cccanto["pinyin"]
-                alternate_jyutping = search_results_cccanto["jyutping"]
-            logger.info(
-                f"[ZW] ZH-Word: No results for word {word}, but results are in specialty dictionaries."
-            )
+        # Otherwise, let's try to format the data nicely.
+        if search_results_buddhist is not None:
+            alternate_meanings.append(search_results_buddhist["meaning"])
+            alternate_pinyin = search_results_buddhist["pinyin"]
+        if search_results_tea is not None:
+            alternate_meanings.append(search_results_tea["meaning"])
+            alternate_pinyin = search_results_tea["pinyin"]
+        if search_results_cccanto is not None:
+            alternate_meanings.append(search_results_cccanto["meaning"])
+            alternate_pinyin = search_results_cccanto["pinyin"]
+            alternate_jyutping = search_results_cccanto["jyutping"]
+        logger.info(
+            f"[ZW] ZH-Word: No results for word {word}, but results are in specialty dictionaries."
+        )
 
     if len(alternate_meanings) == 0:  # The standard search function for regular words.
         # Get alternate pinyin from a separate function. We get Wade Giles and Yale. Like 'Guan1 yin1 Pu2 sa4'
@@ -978,9 +972,8 @@ def zh_word(word, zw_useragent):
         meaning = [
             div.text_content() for div in tree.xpath('//div[contains(@class,"defs")]')
         ]
-        meaning = [
-            x for x in meaning if x != " " and x != ", "
-        ]  # This removes any empty spaces or commas that are in the list.
+        # This removes any empty spaces or commas that are in the list.
+        meaning = [x for x in meaning if x not in [" ", ", "]]
         meaning = "/ ".join(meaning)
         meaning = meaning.strip()
 

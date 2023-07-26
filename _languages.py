@@ -139,11 +139,11 @@ def language_name_search(search_term):
     :return: The equivalent language code if found, a blank string otherwise.
     """
 
-    for key in MAIN_LANGUAGES:
-        if search_term == MAIN_LANGUAGES[key]["name"]:
+    for key, language_info in MAIN_LANGUAGES.items():
+        if search_term == language_info["name"]:
             return key
-        elif MAIN_LANGUAGES[key]["alternate_names"] is not None:
-            for alternate_name in MAIN_LANGUAGES[key]["alternate_names"]:
+        if language_info["alternate_names"] is not None:
+            for alternate_name in language_info["alternate_names"]:
                 if search_term == alternate_name:
                     return key
 
@@ -194,9 +194,8 @@ def lang_code_search(search_term, script_search):
             item_name = master_dict[search_term.lower()][0]
             # Since the first two rows are the language code and 639-1 code, we take it from the third.
             return item_name, is_script
-        else:
-            return "", False
-    elif len(search_term) == 4 and script_search is True:  # This is a script
+        return "", False
+    if len(search_term) == 4 and script_search is True:  # This is a script
         if search_term.lower() in master_dict:
             # Since the first two rows are the language code and 639-1 code, we take it from the third row.
             item_name = master_dict[search_term.lower()][0]
@@ -280,7 +279,7 @@ def country_converter(text_input, abbreviations_okay=True):
                 country_code = country[1]
                 country_name = country[0]
                 return country_code, country_name  # Exit the loop, we're done.
-            elif text_input in country[0] and len(text_input) >= 3:
+            if text_input in country[0] and len(text_input) >= 3:
                 country_code = country[1]
                 country_name = country[0]
 
@@ -497,12 +496,11 @@ def country_validator(word_list, language_list):
         return None  # There's nothing we can process.
 
     if 2 < len(word_list) <= 4:  # There's more than two words. [Swiss, German, Geneva]
-        for L in range(0, len(word_list) + 1):  # Get all possible combinations.
-            for subset in itertools.combinations(word_list, L):
-                if len(subset) > 1:  # What we want are varying word combinations.
-                    # This is useful for getting countries that have more than one word (Costa Rica)
-                    # Join the words together as a string for searching.
-                    final_word_list.append(" ".join(subset))
+        for position in range(2, len(word_list) + 1):  # Get all possible combinations.
+            for subset in itertools.combinations(word_list, position):
+                # This is useful for getting countries that have more than one word (Costa Rica)
+                # Join the words together as a string for searching.
+                final_word_list.append(" ".join(subset))
 
     final_word_list += word_list
 
@@ -888,14 +886,11 @@ def determine_title_direction(source_languages_list, target_languages_list):
 
     if "English" in source_languages_local and "English" not in target_languages_local:
         return "english_from"
-    elif (
-        "English" in target_languages_local and "English" not in source_languages_local
-    ):
+    if "English" in target_languages_local and "English" not in source_languages_local:
         return "english_to"
-    elif "English" in target_languages_local and "English" in source_languages_local:
+    if "English" in target_languages_local and "English" in source_languages_local:
         return "english_both"
-    else:
-        return "english_none"
+    return "english_none"
 
 
 def final_title_salvager(d_source_languages, d_target_languages):
@@ -914,13 +909,13 @@ def final_title_salvager(d_source_languages, d_target_languages):
 
     if len(all_languages) is None:  # No way of saving this.
         return None
-    else:  # We can get a last language classification
-        try:
-            salvaged_css = converter(all_languages[0])[0]
-            salvaged_css_text = converter(all_languages[0])[1]
-            return salvaged_css, salvaged_css_text
-        except IndexError:
-            return None
+    # We can get a last language classification
+    try:
+        salvaged_css = converter(all_languages[0])[0]
+        salvaged_css_text = converter(all_languages[0])[1]
+        return salvaged_css, salvaged_css_text
+    except IndexError:
+        return None
 
 
 def title_format(title, display_process=False):
@@ -1104,7 +1099,7 @@ def title_format(title, display_process=False):
             None,
             "english_to",
         )
-    elif "???" in title[0:5] or "??" in title[0:4] or "?" in title[0:3]:
+    if "???" in title[0:5] or "??" in title[0:4] or "?" in title[0:3]:
         # This is if the first few characters are just question marks...
         return (
             ["Unknown"],
@@ -1274,7 +1269,7 @@ def title_format(title, display_process=False):
                 d_source_languages_m = [
                     x
                     for x in d_source_languages
-                    if x != "Unknown" and x != "English" and x != "Multiple Languages"
+                    if x not in ["Unknown", "English", "Multiple Languages"]
                 ]
                 if len(d_source_languages_m) == 0:  # Uh-oh, we deleted everything.
                     d_source_languages_m = list(d_source_languages)
@@ -1417,7 +1412,7 @@ def title_format(title, display_process=False):
     else:  # This is a script
         final_css_text = f"{lang_code_search(final_css, True)[0]} (Script)"
         # Returns a category like unknown-cyrl for notifications
-        language_country = "unknown-{}".format(final_css)
+        language_country = f"unknown-{final_css}"
 
     if (
         notify_languages is not None

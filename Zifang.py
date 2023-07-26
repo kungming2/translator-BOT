@@ -61,6 +61,7 @@ logger.info(
 )
 
 
+# TODO merge this with the similar function in Ziwen
 def record_error_log(error_save_entry):
     """
     A function to SAVE errors to a log for later examination.
@@ -70,23 +71,19 @@ def record_error_log(error_save_entry):
     :return: Nothing.
     """
 
-    f = open(
-        FILE_ADDRESS_ERROR, "a+", encoding="utf-8"
-    )  # File address for the error log, cumulative.
-    existing_log = f.read()  # Get the data that already exists
+    # File address for the error log, cumulative.
+    with open(FILE_ADDRESS_ERROR, "a+", encoding="utf-8") as f:
+        existing_log = f.read()  # Get the data that already exists
+        # If this error entry doesn't exist yet, let's save it.
+        if error_save_entry not in existing_log:
+            error_date = time.strftime("%Y-%m-%d [%I:%M:%S %p]")
 
-    # If this error entry doesn't exist yet, let's save it.
-    if error_save_entry not in existing_log:
-        error_date = time.strftime("%Y-%m-%d [%I:%M:%S %p]")
-
-        try:
-            log_template_txt = f"\n-----------------------------------\n{error_date} ({BOT_NAME} {VERSION_NUMBER})\n{error_save_entry}"
-            f.write(log_template_txt)
-        except (
-            UnicodeEncodeError
-        ):  # Occasionally this may fail on Windows thanks to its crap Unicode support.
-            logger.error("[ZF] Error_Log: Encountered a Unicode writing error.")
-        f.close()
+            try:
+                log_template_txt = f"\n-----------------------------------\n{error_date} ({BOT_NAME} {VERSION_NUMBER})\n{error_save_entry}"
+                f.write(log_template_txt)
+            except UnicodeEncodeError:
+                # Occasionally this may fail on Windows thanks to its crap Unicode support.
+                logger.error("[ZF] Error_Log: Encountered a Unicode writing error.")
 
 
 def is_mod(username):
@@ -128,9 +125,9 @@ def wiki_access(post_ids, retrieve=False):
         wiki_page.edit(
             content=str(merged), reason=f"Updating with new IDs ({diff_ids[0:2]}...)."
         )
-        logger.info(f"[ZF]: Updated Zifang configuration page with new IDs.")
+        logger.info("[ZF]: Updated Zifang configuration page with new IDs.")
     else:
-        logger.debug(f"[ZF]: No new IDs.")
+        logger.debug("[ZF]: No new IDs.")
 
 
 def closeout(list_posts):
@@ -210,7 +207,7 @@ def closeout(list_posts):
     actionable_posts_ids = [x.id for x in actionable_posts]
     if actionable_posts:
         wiki_access(actionable_posts_ids)
-        logger.debug(f"[ZF]: > Saved post IDs to the wikipage.")
+        logger.debug("[ZF]: > Saved post IDs to the wikipage.")
 
 
 """DUPLICATE DETECTOR"""
@@ -276,7 +273,7 @@ def numerical_sequence(strings):
 
     # Exit early if no numbers were detected.
     if not numbers:
-        logger.info(f">>> [ZF]: No numbers found in these titles. Skipping...")
+        logger.info(">>> [ZF]: No numbers found in these titles. Skipping...")
         return False
 
     # Go through the differences.
@@ -443,7 +440,7 @@ def wikipedia_lookup(terms, language="English"):
 
     if entries:
         body_text = "\n".join(entries)
-        logger.info(f"[ZF]: > Wikpedia entry data obtained.")
+        logger.info("[ZF]: > Wikpedia entry data obtained.")
         action_counter(len(entries), "Wikipedia lookup")
         return body_text
 
@@ -451,7 +448,7 @@ def wikipedia_lookup(terms, language="English"):
 """MAIN RUNTIME"""
 
 
-def zifang_posts():
+def zifang_posts(removal_reasons):
     """
     Currently, does two things:
 
@@ -476,7 +473,7 @@ def zifang_posts():
         for dupe_id in duplicate_data:
             dupe_post = reddit.submission(dupe_id)
             dupe_post.mod.remove(
-                reason_id=search_removal_reasons(REMOVAL_REASONS, "duplicate"),
+                reason_id=search_removal_reasons(removal_reasons, "duplicate"),
                 mod_note=f"Posted duplicate at {dupe_post.id}",
             )
             bot_reply = dupe_post.reply(
@@ -553,8 +550,7 @@ def zifang_comments(comment_limit=200):
 # */10 * * * *
 if __name__ == "__main__":
     try:
-        REMOVAL_REASONS = fetch_removal_reasons(SUBREDDIT)
-        zifang_posts()
+        zifang_posts(fetch_removal_reasons(SUBREDDIT))
         zifang_comments()
     except Exception as e:  # The bot encountered an error/exception.
         logger.error(f"[ZF] Main: Encounted error {e}.")
