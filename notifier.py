@@ -15,6 +15,7 @@ import csv
 import random
 import re
 import time
+from typing import List
 import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 import prawcore
 from Ajo import ajo_loader
@@ -53,7 +54,7 @@ from _languages import (
 from datetime import datetime
 
 
-def messaging_is_valid_user(username, reddit):
+def messaging_is_valid_user(username: str, reddit: praw.Reddit) -> bool:
     """
     Simple function that tests if a Redditor is a valid user. Used to keep the notifications database clean.
     Note that `AttributeError` is returned if a user is *suspended* by Reddit.
@@ -92,7 +93,9 @@ def messaging_months_elapsed():
     return months_num
 
 
-def messaging_language_frequency(language_name, reddit, subreddit):
+def messaging_language_frequency(
+    language_name: str, reddit: praw.Reddit, subreddit: praw.SubredditHelper
+):
     """
     Function to check how many messages a person can expect for a subscription request. Note that if the language is
     common (that is, it's been requested every single month) we get the last `months_calculate` months' data for more
@@ -190,7 +193,7 @@ def messaging_language_frequency(language_name, reddit, subreddit):
     return freq_string, stats_package
 
 
-def notifier_list_pruner(username, reddit, cursor_main, conn_main):
+def notifier_list_pruner(username: str, reddit: praw.Reddit, cursor_main, conn_main):
     """
     Function that removes deleted users from the notifications database.
     It performs a test, and if they don't exist, it will delete their entries from the SQLite database.
@@ -228,7 +231,7 @@ def notifier_list_pruner(username, reddit, cursor_main, conn_main):
     return to_post  # Return the list of formerly subscribed languages
 
 
-def notifier_regional_language_fetcher(targeted_language, cursor_main):
+def notifier_regional_language_fetcher(targeted_language: str, cursor_main):
     """
     Takes a code like "ar-LB" or an ISO 639-3 code, fetches notifications users for their equivalents too.
     Returns a list of usernames that match both criteria. This will also remove people who are on the broader list.
@@ -288,7 +291,7 @@ def notifier_regional_language_fetcher(targeted_language, cursor_main):
     return final_specific_determined
 
 
-def notifier_duplicate_checker(language_code, username, cursor_main):
+def notifier_duplicate_checker(language_code: str, username: str, cursor_main) -> bool:
     """
     Function that checks to see if there is a duplicate entry in the notifications database. That is, there is a user
     who is signed up for this specific language code.
@@ -305,7 +308,7 @@ def notifier_duplicate_checker(language_code, username, cursor_main):
     return len(specific_entries) > 0  # There already is an entry.
 
 
-def notifier_title_cleaner(otitle):
+def notifier_title_cleaner(otitle: str) -> str:
     """
     Simple function to replace problematic Markdown characters like `[` or `]` that can mess up links.
     These characters can interfere with the display of Markdown links in notifications.
@@ -342,7 +345,7 @@ def notifier_history_checker(thing_to_send, majo_history):
     return not (language_name in majo_history and language_name != majo_history[-1])
 
 
-def notifier_over_frequency_checker(username, most_recent_op):
+def notifier_over_frequency_checker(username: str, most_recent_op) -> bool:
     """
     This function checks the username against a list of OPs from the last 24 hours.
     If the OP has posted more than the limit it will return True. Notifications will *not* be sent out if the user has
@@ -360,7 +363,7 @@ def notifier_over_frequency_checker(username, most_recent_op):
 
 
 def notifier_limit_writer(
-    username, language_code, cursor_main, conn_main, num_notifications=1
+    username: str, language_code, cursor_main, conn_main, num_notifications=1
 ):
     """
     A function to record how many notifications a user has received. (e.g. kungming2, {'yue': 2, 'unknown': 1, 'ar': 3})
@@ -415,7 +418,7 @@ def notifier_limit_writer(
 
 
 def notifier_equalizer(
-    notify_users_list, language_name, monthly_limit, reddit, subreddit
+    notify_users_list, language_name, monthly_limit, reddit: praw.Reddit, subreddit
 ):
     """
     Function that equalizes out notifications for popular languages so that people can get fewer.
@@ -485,14 +488,14 @@ def notifier_equalizer(
 
 
 def notifier_page_translators(
-    language_code,
+    language_code: str,
     language_name,
-    pauthor,
+    pauthor: str,
     otitle,
-    opermalink,
+    opermalink: str,
     oauthor,
     is_nsfw,
-    reddit,
+    reddit: praw.Reddit,
     cursor_main,
     conn_main,
 ):
@@ -652,7 +655,7 @@ def notifier_language_list_editer(
                 continue
 
 
-def messaging_language_frequency_table(language_list):
+def messaging_language_frequency_table(language_list: List[str]) -> str:
     """
     This is a function that supercedes `messaging_language_frequency` and can generate a table given a list of language
     codes about the relative frequency for language notifications.
@@ -761,7 +764,7 @@ def messaging_user_statistics_loader(username, cursor_main):
     return header + "\n".join(commands_lines_to_post + notifications_lines_to_post)
 
 
-def record_retrieve_error_log():
+def record_retrieve_error_log() -> str:
     """
     A simple routine to GET the last two errors and counters and include them in a ping reply.
 
@@ -786,7 +789,7 @@ def record_retrieve_error_log():
     return f"\n\n{ping_error_output}"
 
 
-def points_retreiver(username, cursor_main):
+def points_retreiver(username: str, cursor_main) -> str:
     """
     Fetches the total number of points earned by a user in the current month.
     This is used with the messages routine to tell people how many points they have earned.
@@ -857,7 +860,7 @@ def points_retreiver(username, cursor_main):
     return to_post
 
 
-def record_activity_csv(data_tuple):
+def record_activity_csv(data_tuple) -> None:
     """
     Function that writes tuples of data to a CSV. It can be used for
     various things, but the first part should be activity type, then
@@ -874,12 +877,12 @@ def record_activity_csv(data_tuple):
 
 def ziwen_notifier(
     suggested_css_text,
-    otitle,
-    opermalink,
-    oauthor,
+    otitle: str,
+    opermalink: str,
+    oauthor: str,
     is_identify,
     post_templates,
-    reddit,
+    reddit: praw.Reddit,
     cursor_ajo,
     cursor_main,
     conn_main,
@@ -1041,7 +1044,7 @@ def ziwen_notifier(
     return notify_users_list
 
 
-def ziwen_messages(reddit, cursor_main, conn_main, is_mod):
+def ziwen_messages(reddit: praw.Reddit, cursor_main, conn_main, is_mod):
     """
     A top-level system to process commands via the messaging system of Reddit. This system acts upon keywords included
     in the message's subject field, including the following.

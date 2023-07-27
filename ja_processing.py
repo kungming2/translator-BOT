@@ -14,6 +14,7 @@ More general ones are prefixed by `lookup`.
 """
 
 import re
+from typing import Dict
 import requests
 from lxml import html
 import romkan  # Needed for automatic Japanese romaji conversion.
@@ -21,7 +22,7 @@ from _config import logger
 from zh_processing import zh_character_calligraphy_search
 
 
-def ja_character(character, zw_useragent):
+def ja_character(character, zw_useragent: Dict[str, str]):
     """
     This function looks up a Japanese kanji's pronunciations and meanings
 
@@ -208,7 +209,7 @@ def ja_character(character, zw_useragent):
     return to_post
 
 
-def ja_word_sfx(katakana_string, zw_useragent):
+def ja_word_sfx(katakana_string: str, zw_useragent: Dict[str, str]) -> None | str:
     """
     A function that consults the SFX Dictionary to provide explanations for katakana sound effects, often found in manga
     For more information, visit: http://thejadednetwork.com/sfx
@@ -226,9 +227,7 @@ def ja_word_sfx(katakana_string, zw_useragent):
         return None
 
     # Format the search URL.
-    search_url = "http://thejadednetwork.com/sfx/search/?keyword=+{}&submitSearch=Search+SFX&x=".format(
-        katakana_string
-    )
+    search_url = f"http://thejadednetwork.com/sfx/search/?keyword=+{katakana_string}&submitSearch=Search+SFX&x="
 
     # Conduct a search.
     eth_page = requests.get(search_url, headers=zw_useragent)
@@ -273,7 +272,9 @@ def ja_word_sfx(katakana_string, zw_useragent):
         return finished_comment
 
 
-def ja_word_given_name_search(ja_given_name, zw_useragent):
+def ja_word_given_name_search(
+    ja_given_name: str, zw_useragent: Dict[str, str]
+) -> str | None:
     """
     A function to get the kanji readings of Japanese given names, which may not necessarily be in dictionaries.
     This also returns readings of place names, such as temples.
@@ -285,13 +286,11 @@ def ja_word_given_name_search(ja_given_name, zw_useragent):
     names_w_readings = []
 
     # Conduct a search.
-    web_search = "http://kanji.reader.bz/{}".format(ja_given_name, headers=zw_useragent)
-    eth_page = requests.get(web_search)
+    web_search = f"http://kanji.reader.bz/{ja_given_name}"
+    eth_page = requests.get(web_search, headers=zw_useragent)
     tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
     name_content = tree.xpath('//div[contains(@id,"main")]/p[1]/text()')
     hiragana_content = tree.xpath('//div[contains(@id,"main")]/p[1]/a/text()')
-    print(name_content)
-    print(hiragana_content)
 
     # Check for validity.
     if "見つかりませんでした" in str(name_content):  # Could not be found
@@ -321,7 +320,7 @@ def ja_word_given_name_search(ja_given_name, zw_useragent):
     return formatted_section
 
 
-def ja_word_surname(name, zw_useragent):
+def ja_word_surname(name: str, zw_useragent: Dict[str, str]) -> None | str:
     """
     Function to get a Japanese surname (backup if a word search fails).
 
@@ -359,7 +358,7 @@ def ja_word_surname(name, zw_useragent):
     return to_post
 
 
-def ja_word(japanese_word, zw_useragent):
+def ja_word(japanese_word: str, zw_useragent: Dict[str, str]):
     """
     A newer function that uses Jisho's unlisted API in order to return data from Jisho.org for Japanese words.
     See here for more information: https://jisho.org/forum/54fefc1f6e73340b1f160000-is-there-any-kind-of-search-api
@@ -460,7 +459,7 @@ def ja_word(japanese_word, zw_useragent):
     return return_comment
 
 
-def ja_word_yojijukugo(yojijukugo, zw_useragent):
+def ja_word_yojijukugo(yojijukugo, zw_useragent: Dict[str, str]):
     """
     A newer rewrite of the yojijukugo function that has been changed to match the zh_word_chengyu function.
     That is, now its role is to grab a Japanese meaning and explanation in order to give some insight.

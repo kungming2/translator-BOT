@@ -15,6 +15,8 @@ External Ajo-specific/related functions are all prefixed with `ajo` in their nam
 class functions.
 """
 
+from sqlite3 import Connection, Cursor
+from typing import Dict, List, Tuple
 from _languages import (
     language_mention_search,
     iso639_3_to_iso639_1,
@@ -36,186 +38,6 @@ from _language_consts import MAIN_LANGUAGES
 import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 import re
 import csv
-
-
-def ajo_writer(new_ajo, cursor_ajo, conn_ajo):
-    """
-    Function takes an Ajo object and saves it to a local database.
-
-    :param new_ajo: An Ajo object that should be saved to the database.
-    :return: Nothing.
-    """
-
-    ajo_id = str(new_ajo.id)
-    created_time = new_ajo.created_utc
-    cursor_ajo.execute("SELECT * FROM local_database WHERE id = ?", (ajo_id,))
-    stored_ajo = cursor_ajo.fetchone()
-
-    # TODO we can reduce this code with UPSERT if SQLite is the right version
-    if stored_ajo is not None:  # There's already a stored entry
-        stored_ajo = eval(stored_ajo[2])  # We only want the stored dict here.
-        if new_ajo.__dict__ != stored_ajo:
-            # The dictionary representations are not the same
-            # Convert the dict of the Ajo into a string.
-            representation = str(new_ajo.__dict__)
-            update_command = "UPDATE local_database SET ajo = ? WHERE id = ?"
-            cursor_ajo.execute(update_command, (representation, ajo_id))
-            conn_ajo.commit()
-            logger.debug("[ZW] ajo_writer: Ajo exists, data updated.")
-        else:
-            logger.debug("[ZW] ajo_writer: Ajo exists, but no change in data.")
-    else:  # This is a new entry, not in my files.
-        representation = str(new_ajo.__dict__)
-        ajo_to_store = (ajo_id, created_time, representation)
-        cursor_ajo.execute("INSERT INTO local_database VALUES (?, ?, ?)", ajo_to_store)
-        conn_ajo.commit()
-        logger.debug("[ZW] ajo_writer: New Ajo not found in the database.")
-
-    logger.debug("[ZW] ajo_writer: Wrote Ajo to local database.")
-
-
-def ajo_loader(ajo_id, cursor_ajo, post_templates, reddit):
-    """
-    This function takes an ID string and returns an Ajo object from a local database that matches that string.
-    This ID is the same as the ID of the Reddit post it's associated with.
-
-    :param ajo_id: ID of the Reddit post/Ajo that's desired.
-    :return: None if there is no stored Ajo, otherwise it will return the Ajo itself (not a dictionary).
-    """
-
-    # Checks the database
-    cursor_ajo.execute("SELECT * FROM local_database WHERE id = ?", (ajo_id,))
-    new_ajo = cursor_ajo.fetchone()
-
-    if new_ajo is None:  # We couldn't find a stored dict for it.
-        logger.debug("[ZW] ajo_loader: No local Ajo stored.")
-        return None
-    # We do have stored data.
-    new_ajo_dict = eval(new_ajo[2])  # We only want the stored dict here.
-    new_ajo = Ajo(new_ajo_dict, post_templates, reddit)
-    logger.debug("[ZW] ajo_loader: Loaded Ajo from local database.")
-    return new_ajo  # Note: the Ajo class can build itself from this dict.
-
-
-def ajo_defined_multiple_flair_assessor(flairtext):
-    """
-    A routine that evaluates a defined multiple flair text and its statuses as a dictionary.
-    It can make sense of the symbols that are associated with various states of a post.
-
-    :param flairtext: The flair text of a defined multiple post. (e.g. `Multiple Languages [CS, DE✔, HU✓, IT, NL✔]`)
-    :return final_language_codes: A dictionary keyed by language and their respective states (translated, claimed, etc)
-    """
-
-    final_language_codes = {}
-    flairtext = flairtext.lower()
-
-    languages_list = flairtext.split(", ")
-
-    for language in languages_list:
-        # Get just the language code.
-        language_code = " ".join(re.findall("[a-zA-Z]+", language))
-
-        if len(language_code) != len(language):
-            # There's a difference - maybe a symbol in DEFINED_MULTIPLE_LEGEND
-            final_language_codes.update(
-                {
-                    language_code: keyword
-                    for symbol, keyword in DEFINED_MULTIPLE_LEGEND.items()
-                    if symbol in language
-                }
-            )
-        else:  # No difference, must be untranslated.
-            final_language_codes[language_code] = "untranslated"
-
-    return final_language_codes
-
-
-def ajo_defined_multiple_flair_former(flairdict):
-    """
-    Takes a dictionary of defined multiple statuses and returns a string.
-    To be used with the ajo_defined_multiple_flair_assessor() function above.
-
-    :param flairdict: A dictionary keyed by language and their respective states.
-    :return output_text: A string for use in the flair text. (e.g. `Multiple Languages [CS, DE✔, HU✓, IT, NL✔]`)
-    """
-
-    output_text = []
-
-    for language, status in flairdict.items():
-        # Try to get the ISO 639-1 if possible
-        language_code = iso639_3_to_iso639_1(language) or language  # No ISO 639-1 code
-
-        symbol = (
-            status in INVERSE_MULTIPLE_LEGEND and INVERSE_MULTIPLE_LEGEND[status] or ""
-        )
-        output_text.append(f"{language_code.upper()}{symbol}")
-
-    output_text = ", ".join(sorted(output_text))  # Create a string.
-    return f"[{output_text}]"
-
-
-def ajo_defined_multiple_comment_parser(pbody, language_names_list):
-    """
-    Takes a comment and a list of languages and looks for commands and language names.
-    This allows for defined multiple posts to have separate statuses for each language.
-    We don't keep English though.
-
-    :param pbody: The text of a comment on a defined multiple post we're searching for.
-    :param language_names_list: The languages defined in the post (e.g. [CS, DE✔, HU✓, IT, NL✔])
-    :return: None if none found, otherwise a tuple with the language name that was detected and its status.
-    """
-
-    detected_status = None
-
-    # Look for language names.
-    detected_languages = language_mention_search(pbody)
-
-    # Remove English if detected.
-    if detected_languages is not None and "English" in detected_languages:
-        detected_languages.remove("English")
-
-    if detected_languages is None or len(detected_languages) == 0:
-        return None
-
-    # We only want to keep the ones defined in the spec.
-    detected_languages = list(
-        filter(lambda language: language in language_names_list, detected_languages)
-    )
-
-    # If there are none left then we return None
-    if len(detected_languages) == 0:
-        return None
-
-    for keyword, detected_status in STATUS_KEYWORDS.items():
-        if keyword in pbody:
-            return detected_languages, detected_status
-
-
-def ajo_retrieve_script_code(script_name):
-    """
-    This function takes the name of a script, outputs its ISO 15925 code and the name as a tuple if valid.
-
-    :param script_name: The *name* of a script (e.g. Siddham, Nastaliq, etc).
-    :return: None if the script name is invalid, otherwise a tuple with the ISO 15925 code and the script's name.
-    """
-
-    codes_list = []
-    names_list = []
-
-    with open(FILE_ADDRESS_ISO_ALL, encoding="utf-8") as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=",")
-        for row in csv_reader:
-            if (
-                len(row[0]) == 4
-            ):  # This is a script code. (the others are 3 characters. )
-                codes_list.append(row[0])
-                # It is normally returned as a list, so we need to convert into a string.
-                names_list.append(row[2:][0])
-
-    if script_name in names_list:  # The name is in the code list
-        item_index = names_list.index(script_name)
-        item_code = str(codes_list[item_index])
-        return item_code, script_name
 
 
 class Ajo:
@@ -272,7 +94,12 @@ class Ajo:
     """
 
     # noinspection PyUnboundLocalVariable
-    def __init__(self, reddit_submission, post_templates, user_agent):
+    def __init__(
+        self,
+        reddit_submission: Dict[any, any] | praw.models.submission,
+        post_templates: Dict[str, str],
+        user_agent,
+    ):
         # This takes a Reddit Submission object and generates info from it.
         if isinstance(reddit_submission, dict):  # Loaded from a file?
             logger.debug("[ZW] Ajo: Loaded Ajo from local database.")
@@ -376,9 +203,8 @@ class Ajo:
 
             if self.type == "single":
                 if "[" not in oflair_text:  # Does not have a language tag. e.g., [DE]
-                    if (
-                        "{" in oflair_text
-                    ):  # Has a country tag in the flair, so let's take that out.
+                    if "{" in oflair_text:
+                        # Has a country tag in the flair, so let's take that out.
                         country_suffix_name = re.search(r"{(\D+)}", oflair_text)
                         # Get the Country name only
                         country_suffix_name = country_suffix_name.group(1)
@@ -543,7 +369,7 @@ class Ajo:
 
         return self.__dict__ == other.__dict__
 
-    def set_status(self, new_status):
+    def set_status(self, new_status: str):
         """
         Change the status/state of the Ajo - a status like translated, doublecheck, etc.
 
@@ -567,7 +393,7 @@ class Ajo:
             # Once something's marked as translated stay there.
             self.status[status_language_code] = new_status
 
-    def set_long(self, new_long):
+    def set_long(self, new_long: bool):
         """
         Change the `is_long` boolean of the Ajo, a variable that defines whether it's considered a long post.
         Moderators can call this function with the command `!long`.
@@ -577,7 +403,7 @@ class Ajo:
         """
         self.is_long = new_long
 
-    def set_author_messaged(self, is_messaged):
+    def set_author_messaged(self, is_messaged: bool) -> None:
         """
         Change the `author_messaged` boolean of the Ajo, a variable that notes whether the OP of the post has been
         messaged that it's been translated.
@@ -587,7 +413,7 @@ class Ajo:
         """
         self.author_messaged = is_messaged
 
-    def set_country(self, new_country_code):
+    def set_country(self, new_country_code: str) -> None:
         """
         A function that allows us to change the country code in the Ajo. Country codes are generally optional for Ajos,
         but they can be defined to provide more granular detail (e.g. `de-AO`).
@@ -615,10 +441,8 @@ class Ajo:
 
         old_language_name = str(self.language_name)
 
-        if new_language_code not in [
-            "multiple",
-            "app",
-        ]:  # This is just a single type of languyage.
+        if new_language_code not in ["multiple", "app"]:
+            # This is just a single type of language.
             self.type = "single"
             if len(new_language_code) == 2:
                 self.language_name = converter(new_language_code)[1]
@@ -755,7 +579,7 @@ class Ajo:
         ):  # There was no language_history defined... Let's create it.
             self.language_history = [old_language_name, "Multiple Languages"]
 
-    def set_time(self, status, moment):
+    def set_time(self, status: str, moment: int) -> None:
         """
         This function creates or updates a dictionary, marking times when the status/state of the Ajo changed.
         This updates a dictionary where it is keyed by status and contains Unix times of the changes.
@@ -774,14 +598,13 @@ class Ajo:
         ):  # There was no time_delta defined... Let's create it.
             working_dictionary = {}
 
-        if (
-            status not in working_dictionary
-        ):  # This status hasn't been recorded. Create it as a key in the dictionary.
-            working_dictionary[status] = int(moment)
+        if status not in working_dictionary:
+            # This status hasn't been recorded. Create it as a key in the dictionary.
+            working_dictionary[status] = moment
 
         self.time_delta = working_dictionary
 
-    def add_translators(self, translator_name):
+    def add_translators(self, translator_name: str) -> None:
         """
         A function to add the username of who translated what to the Ajo of a post (by appending their name to list).
         This allows Ziwen to keep track of translators and contributors.
@@ -800,7 +623,7 @@ class Ajo:
             # There were no translators defined in the Ajo... Let's create it.
             self.recorded_translators = [translator_name]
 
-    def add_notified(self, notified_list):
+    def add_notified(self, notified_list: List[str]) -> None:
         """
         A function to add usernames of who has been notified by the bot of a post.
         This allows Ziwen to make sure it doesn't contact people more than once for a post.
@@ -816,7 +639,7 @@ class Ajo:
         except AttributeError:  # There were no notified users defined in the Ajo.
             self.notified = notified_list
 
-    def reset(self, original_title):
+    def reset(self, original_title: str) -> None:
         """
         A function that will completely reset it to the original specifications. Not intended to be used often.
         Moderators and OPs can call this with `!reset` to make Ziwen reprocess its flair and languages.
@@ -874,7 +697,7 @@ class Ajo:
                 )[2]
 
     # noinspection PyAttributeOutsideInit,PyAttributeOutsideInit
-    def update_reddit(self):
+    def update_reddit(self) -> None:
         """
         Sets the flair properly on Reddit. No arguments taken.
         It collates all the attributes and decides what flair
@@ -1030,3 +853,184 @@ class Ajo:
             logger.info(
                 f"[ZW] Set post `{self.id}` to CSS `{self.output_oflair_css}` and text `{self.output_oflair_text}`."
             )
+
+
+def ajo_writer(new_ajo: Ajo, cursor_ajo: Cursor, conn_ajo: Connection) -> None:
+    """
+    Function takes an Ajo object and saves it to a local database.
+
+    :param new_ajo: An Ajo object that should be saved to the database.
+    :return: Nothing.
+    """
+
+    ajo_id = str(new_ajo.id)
+    created_time = new_ajo.created_utc
+    cursor_ajo.execute("SELECT * FROM local_database WHERE id = ?", (ajo_id,))
+    stored_ajo = cursor_ajo.fetchone()
+
+    # TODO we can reduce this code with UPSERT if SQLite is the right version
+    if stored_ajo is not None:  # There's already a stored entry
+        stored_ajo = eval(stored_ajo[2])  # We only want the stored dict here.
+        if new_ajo.__dict__ != stored_ajo:
+            # The dictionary representations are not the same
+            # Convert the dict of the Ajo into a string.
+            representation = str(new_ajo.__dict__)
+            update_command = "UPDATE local_database SET ajo = ? WHERE id = ?"
+            cursor_ajo.execute(update_command, (representation, ajo_id))
+            conn_ajo.commit()
+            logger.debug("[ZW] ajo_writer: Ajo exists, data updated.")
+        else:
+            logger.debug("[ZW] ajo_writer: Ajo exists, but no change in data.")
+    else:  # This is a new entry, not in my files.
+        representation = str(new_ajo.__dict__)
+        ajo_to_store = (ajo_id, created_time, representation)
+        cursor_ajo.execute("INSERT INTO local_database VALUES (?, ?, ?)", ajo_to_store)
+        conn_ajo.commit()
+        logger.debug("[ZW] ajo_writer: New Ajo not found in the database.")
+
+    logger.debug("[ZW] ajo_writer: Wrote Ajo to local database.")
+
+
+def ajo_loader(
+    ajo_id, cursor_ajo: Cursor, post_templates: Dict[str, str], reddit: praw.Reddit
+) -> Ajo | None:
+    """
+    This function takes an ID string and returns an Ajo object from a local database that matches that string.
+    This ID is the same as the ID of the Reddit post it's associated with.
+
+    :param ajo_id: ID of the Reddit post/Ajo that's desired.
+    :return: None if there is no stored Ajo, otherwise it will return the Ajo itself (not a dictionary).
+    """
+
+    # Checks the database
+    cursor_ajo.execute("SELECT * FROM local_database WHERE id = ?", (ajo_id,))
+    new_ajo = cursor_ajo.fetchone()
+
+    if new_ajo is None:  # We couldn't find a stored dict for it.
+        logger.debug("[ZW] ajo_loader: No local Ajo stored.")
+        return None
+    # We do have stored data.
+    new_ajo_dict = eval(new_ajo[2])  # We only want the stored dict here.
+    new_ajo = Ajo(new_ajo_dict, post_templates, reddit)
+    logger.debug("[ZW] ajo_loader: Loaded Ajo from local database.")
+    return new_ajo  # Note: the Ajo class can build itself from this dict.
+
+
+def ajo_defined_multiple_flair_assessor(flairtext):
+    """
+    A routine that evaluates a defined multiple flair text and its statuses as a dictionary.
+    It can make sense of the symbols that are associated with various states of a post.
+
+    :param flairtext: The flair text of a defined multiple post. (e.g. `Multiple Languages [CS, DE✔, HU✓, IT, NL✔]`)
+    :return final_language_codes: A dictionary keyed by language and their respective states (translated, claimed, etc)
+    """
+
+    final_language_codes = {}
+    flairtext = flairtext.lower()
+
+    languages_list = flairtext.split(", ")
+
+    for language in languages_list:
+        # Get just the language code.
+        language_code = " ".join(re.findall("[a-zA-Z]+", language))
+
+        if len(language_code) != len(language):
+            # There's a difference - maybe a symbol in DEFINED_MULTIPLE_LEGEND
+            final_language_codes.update(
+                {
+                    language_code: keyword
+                    for symbol, keyword in DEFINED_MULTIPLE_LEGEND.items()
+                    if symbol in language
+                }
+            )
+        else:  # No difference, must be untranslated.
+            final_language_codes[language_code] = "untranslated"
+
+    return final_language_codes
+
+
+def ajo_defined_multiple_flair_former(flairdict) -> str:
+    """
+    Takes a dictionary of defined multiple statuses and returns a string.
+    To be used with the ajo_defined_multiple_flair_assessor() function above.
+
+    :param flairdict: A dictionary keyed by language and their respective states.
+    :return output_text: A string for use in the flair text. (e.g. `Multiple Languages [CS, DE✔, HU✓, IT, NL✔]`)
+    """
+
+    output_text = []
+
+    for language, status in flairdict.items():
+        # Try to get the ISO 639-1 if possible
+        language_code = iso639_3_to_iso639_1(language) or language  # No ISO 639-1 code
+
+        symbol = (
+            status in INVERSE_MULTIPLE_LEGEND and INVERSE_MULTIPLE_LEGEND[status] or ""
+        )
+        output_text.append(f"{language_code.upper()}{symbol}")
+
+    output_text = ", ".join(sorted(output_text))  # Create a string.
+    return f"[{output_text}]"
+
+
+def ajo_defined_multiple_comment_parser(pbody, language_names_list):
+    """
+    Takes a comment and a list of languages and looks for commands and language names.
+    This allows for defined multiple posts to have separate statuses for each language.
+    We don't keep English though.
+
+    :param pbody: The text of a comment on a defined multiple post we're searching for.
+    :param language_names_list: The languages defined in the post (e.g. [CS, DE✔, HU✓, IT, NL✔])
+    :return: None if none found, otherwise a tuple with the language name that was detected and its status.
+    """
+
+    detected_status = None
+
+    # Look for language names.
+    detected_languages = language_mention_search(pbody)
+
+    # Remove English if detected.
+    if detected_languages is not None and "English" in detected_languages:
+        detected_languages.remove("English")
+
+    if detected_languages is None or len(detected_languages) == 0:
+        return None
+
+    # We only want to keep the ones defined in the spec.
+    detected_languages = list(
+        filter(lambda language: language in language_names_list, detected_languages)
+    )
+
+    # If there are none left then we return None
+    if len(detected_languages) == 0:
+        return None
+
+    for keyword, detected_status in STATUS_KEYWORDS.items():
+        if keyword in pbody:
+            return detected_languages, detected_status
+
+
+def ajo_retrieve_script_code(script_name: str) -> Tuple[str, str] | None:
+    """
+    This function takes the name of a script, outputs its ISO 15925 code and the name as a tuple if valid.
+
+    :param script_name: The *name* of a script (e.g. Siddham, Nastaliq, etc).
+    :return: None if the script name is invalid, otherwise a tuple with the ISO 15925 code and the script's name.
+    """
+
+    codes_list = []
+    names_list = []
+
+    with open(FILE_ADDRESS_ISO_ALL, encoding="utf-8") as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=",")
+        for row in csv_reader:
+            if len(row[0]) == 4:
+                # This is a script code. (the others are 3 characters. )
+                codes_list.append(row[0])
+                # It is normally returned as a list, so we need to convert into a string.
+                names_list.append(row[2:][0])
+
+    if script_name in names_list:  # The name is in the code list
+        item_index = names_list.index(script_name)
+        item_code = str(codes_list[item_index])
+        return item_code, script_name

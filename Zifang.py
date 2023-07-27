@@ -8,6 +8,7 @@ import re
 import sys
 import time
 import traceback
+from typing import List
 
 import praw
 import wikipedia
@@ -86,10 +87,9 @@ def record_error_log(error_save_entry):
                 logger.error("[ZF] Error_Log: Encountered a Unicode writing error.")
 
 
-def is_mod(username):
+def is_mod(username: str) -> bool:
     """Checks if the user is a moderator of the subreddit."""
     mod_list = [x.name.lower() for x in r.moderator()]
-    print(mod_list)
 
     return username in mod_list
 
@@ -213,7 +213,7 @@ def closeout(list_posts):
 """DUPLICATE DETECTOR"""
 
 
-def fetch_removal_reasons(subreddit):
+def fetch_removal_reasons(subreddit: str):
     """
     Fetches the removal reasons present on a subreddit.
     :param subreddit: Name of the subreddit.
@@ -240,7 +240,7 @@ def search_removal_reasons(reasons_dict, prompt):
             return entry_id
 
 
-def calculate_similarity(strings):
+def calculate_similarity(strings: List[str]) -> float:
     """Assesses several strings and returns a probability (out of 100)
     on how similar they are."""
     similarity_scores = []
@@ -255,7 +255,7 @@ def calculate_similarity(strings):
     return sum(similarity_scores) / len(similarity_scores)
 
 
-def numerical_sequence(strings):
+def numerical_sequence(strings: List[str]) -> bool:
     """
     Assesses titles to see if they are likely related but differ purely
     based on numbers.
@@ -373,14 +373,14 @@ def duplicate_detector(list_posts):
 """WIKIPEDIA DETECTOR (COMMENTS"""
 
 
-def extract_text_within_curly_braces(text):
+def extract_text_within_curly_braces(text: str):
     """Gets text from between curly braces."""
     pattern = r"\{{([^}}]+)\}"  # Regex pattern to match text within curly braces
     matches = re.findall(pattern, text)
     return matches
 
 
-def wikipedia_lookup(terms, language="English"):
+def wikipedia_lookup(terms: List[str], language: str = "English") -> str | None:
     """
     Basic function to look up terms on Wikipedia.
     :param terms: A list of strings to look up.
@@ -448,7 +448,7 @@ def wikipedia_lookup(terms, language="English"):
 """MAIN RUNTIME"""
 
 
-def zifang_posts(removal_reasons):
+def zifang_posts(removal_reasons) -> None:
     """
     Currently, does two things:
 
@@ -490,7 +490,7 @@ def zifang_posts(removal_reasons):
     closeout(posts)
 
 
-def zifang_comments(comment_limit=200):
+def zifang_comments(comment_limit: int = 200) -> None:
     """
     :param comment_limit: How many past comments should the bot look.
 

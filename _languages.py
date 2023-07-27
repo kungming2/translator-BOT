@@ -6,6 +6,7 @@ import csv
 import re
 import os
 import itertools
+from typing import Dict, List, Tuple
 
 from rapidfuzz import fuzz  # Switched to rapidfuzz
 from _language_consts import (
@@ -55,7 +56,7 @@ WRONG_BRACKETS_LEFT = ["［", "〚", "【 ", "〔", "〖", "⟦", "｟", "《"]
 WRONG_BRACKETS_RIGHT = ["］", "〛", "】", "〕", "〗", "⟧", "｠", "》"]
 
 
-def language_lists_generator():
+def language_lists_generator() -> None:
     """
     A routine that creates a bunch of the old lists that used to power `converter()`
 
@@ -112,7 +113,7 @@ def language_lists_generator():
 language_lists_generator()
 
 
-def fuzzy_text(word):
+def fuzzy_text(word: str) -> str | None:
     """
     A quick function that assesses misspellings of supported languages. For example, 'Chinnsse' will be returned as
     'Chinese." The closeness ratio can be adjusted to make this more or less sensitive.
@@ -129,7 +130,7 @@ def fuzzy_text(word):
             return str(language)
 
 
-def language_name_search(search_term):
+def language_name_search(search_term: str) -> str:
     """
     Function that searches for a language name or its mispellings/alternate names. It will only return the code if it's
     an *exact* match. There's a separate module in `fuzzy_text` above and in `converter` that will take care of
@@ -150,7 +151,7 @@ def language_name_search(search_term):
     return ""
 
 
-def transbrackets_new(title):
+def transbrackets_new(title: str) -> str:
     """
     A simple function that takes a bracketed tag and moves the bracketed component to the front.
     It will also work if the bracketed section is in the middle of the sentence.
@@ -172,7 +173,7 @@ def transbrackets_new(title):
     return f"{bracketed_tag} {title_remainder}"
 
 
-def lang_code_search(search_term, script_search):
+def lang_code_search(search_term: str, script_search: bool):
     """
     Returns a tuple: name of a code or a script, is it a script? (that's a boolean)
 
@@ -195,7 +196,7 @@ def lang_code_search(search_term, script_search):
             # Since the first two rows are the language code and 639-1 code, we take it from the third.
             return item_name, is_script
         return "", False
-    if len(search_term) == 4 and script_search is True:  # This is a script
+    if len(search_term) == 4 and script_search:  # This is a script
         if search_term.lower() in master_dict:
             # Since the first two rows are the language code and 639-1 code, we take it from the third row.
             item_name = master_dict[search_term.lower()][0]
@@ -228,7 +229,7 @@ def lang_code_search(search_term, script_search):
     return "", False
 
 
-def iso639_3_to_iso639_1(specific_code):
+def iso639_3_to_iso639_1(specific_code: str) -> None | str:
     """
     Function to get the equivalent ISO 639-1 code from an ISO 639-3 code if it exists.
 
@@ -244,7 +245,7 @@ def iso639_3_to_iso639_1(specific_code):
     return None
 
 
-def country_converter(text_input, abbreviations_okay=True):
+def country_converter(text_input: str, abbreviations_okay: bool = True):
     """
     Function that detects a country name in a given word.
 
@@ -304,7 +305,7 @@ def country_converter(text_input, abbreviations_okay=True):
     return country_code, country_name
 
 
-def converter(input_text):
+def converter(input_text: str):
     """
     A function that can convert between language names and codes, and also parse additional data.
     This is one of the most crucial components of Ziwen and is very commonly used.
@@ -321,7 +322,7 @@ def converter(input_text):
     regional_case = False
     is_script = False
     country_code = None
-    targeted_language = str(input_text)
+    targeted_language = input_text
 
     # There's a hyphen... probably a special code.
     if "-" in input_text and "Anglo" not in input_text:
@@ -471,7 +472,9 @@ def converter(input_text):
     return language_code, language_name, supported, country_code
 
 
-def country_validator(word_list, language_list):
+def country_validator(
+    word_list: List[str], language_list: List[str]
+) -> Tuple[str, str] | None:
     """
     Takes a list of words, check for a country and a matching language. This allows us to find combinations like de-AT.
 
@@ -532,7 +535,7 @@ def country_validator(word_list, language_list):
                             return lang_country_combined, relevant_iso_code
 
 
-def comment_info_parser(pbody, command):
+def comment_info_parser(pbody: str, command: str):
     """
     A function that takes a comment and looks for actable information like languages or words to lookup.
     This drives commands that take a language variable, like `!identify:` or `!translate:`.
@@ -611,7 +614,7 @@ def comment_info_parser(pbody, command):
         return match, advanced_mode
 
 
-def english_fuzz(word):
+def english_fuzz(word: str) -> bool:
     """
     A quick function that detects if a word is likely to be "English." Used in replace_bad_english_typing below.
 
@@ -624,7 +627,7 @@ def english_fuzz(word):
     return closeness > 70  # Very likely
 
 
-def replace_bad_english_typing(title):
+def replace_bad_english_typing(title: str) -> str:
     """
     Function that will replace a misspelling for English, so that it can still pass the title filter routine.
 
@@ -652,7 +655,7 @@ def replace_bad_english_typing(title):
     return title  # Return the title, now cleaned up.
 
 
-def language_mention_search(search_paragraph):
+def language_mention_search(search_paragraph: str) -> None | List[str]:
     """
     Returns a list of identified language names from a text. Useful for Wiktionary search and title formatting.
     This function only looks for more common languages; there are too many ISO 639-3 languages (about 7800 of them),
@@ -683,7 +686,7 @@ def language_mention_search(search_paragraph):
     return language_name_matches or None
 
 
-def bad_title_reformat(title_text):
+def bad_title_reformat(title_text: str) -> str:
     """
     Function that takes a badly formatted title and makes it okay. It searches for a language name in the title text.
     If it finds a language name, then it creates a language tag to it and adds it to the original title.
@@ -737,7 +740,7 @@ def bad_title_reformat(title_text):
     return new_title
 
 
-def detect_languages_reformat(title_text):
+def detect_languages_reformat(title_text: str) -> str | None:
     """
     This function tries to salvage a badly formatted title and render it better for the title routine.
     For example, the title may be: `English to Chinese Lorem Ipsum`. This function can take that and reformat it to
@@ -791,7 +794,7 @@ def detect_languages_reformat(title_text):
     return new_title_text or None
 
 
-def app_multiple_definer(title_text):
+def app_multiple_definer(title_text: str) -> bool:
     """
     This function takes in a title text and returns a boolean as to whether it should be given the 'App' code.
     This is only applicable for 'multiple' posts.
@@ -802,27 +805,6 @@ def app_multiple_definer(title_text):
 
     title_text = title_text.lower()
     return any(keyword in title_text for keyword in APP_WORDS)
-
-
-def multiple_language_script_assessor(language_list):
-    """
-    A function that takes a list of languages/scripts and determines if it is actually all multiple languages.
-
-    :param language_list: A list of languages and possibly scripts.
-    :return: True if everything is on the list is a language, False if there are in fact script codes in the list.
-    """
-
-    multiple_status = True
-
-    for language in language_list:
-        code = converter(language)[0]
-        if len(code) == 4:  # This is a script
-            language_list.remove(language)
-            multiple_status = False
-        else:  # This is just a language.
-            multiple_status = True
-
-    return multiple_status or language_list
 
 
 def both_non_english_detector(source_language, target_language):
@@ -847,7 +829,9 @@ def both_non_english_detector(source_language, target_language):
     return None if len(all_languages) <= 1 else all_languages
 
 
-def determine_title_direction(source_languages_list, target_languages_list):
+def determine_title_direction(
+    source_languages_list: List[str], target_languages_list: List[str]
+) -> str:
     """
     Function takes two language lists and determines what the direction of the request is.
     This statistic is stored in Ajos and Wenyuan uses it for statistics as well.
@@ -893,7 +877,7 @@ def determine_title_direction(source_languages_list, target_languages_list):
     return "english_none"
 
 
-def final_title_salvager(d_source_languages, d_target_languages):
+def final_title_salvager(d_source_languages: List[str], d_target_languages: List[str]):
     """
     This function takes two list of languages and tries to salvage SOMETHING out of them. This is used for titles
     that are just plain incomprehensible and is a last-ditch function by title_format() below.
@@ -918,7 +902,7 @@ def final_title_salvager(d_source_languages, d_target_languages):
         return None
 
 
-def title_format(title, display_process=False):
+def title_format(title: str, display_process: bool = False):
     """
     This is the main function to help format a title and to determine information from it.
     The creation of Ajos relies on this process, and the flair and flair text that's assigned to an incoming post is
@@ -1329,12 +1313,12 @@ def title_format(title, display_process=False):
             # We want to remove these to see if there really is many targets
             if name in d_target_languages:
                 is_multiple_test.remove(name)
-        # Check to see if there's a script here
-        script_check = multiple_language_script_assessor(is_multiple_test)
 
-        if script_check is not True:
-            # There appears to be a script in our "multiple" selection.
-            is_multiple_test = script_check
+        # Check to see if there's a script here
+        for language in is_multiple_test:
+            code = converter(language)[0]
+            if len(code) == 4:  # This is a script
+                is_multiple_test.remove(language)
 
         if len(is_multiple_test) >= 2 and "English" not in d_target_languages:
             # Looks like it really does have more than two non-English target languages.
@@ -1502,7 +1486,7 @@ def title_format(title, display_process=False):
     )
 
 
-def language_list_splitter(list_string):
+def language_list_splitter(list_string: List[str]):
     """
     A function to help split up lists of codes or names of languages with different delimiters.
     An example would be a string like `ar, latin, yi` or `ko+lo`. This function will be able to split it no matter what.
@@ -1561,7 +1545,7 @@ def language_list_splitter(list_string):
     return None if len(final_codes) == 0 else final_codes
 
 
-def main_posts_filter_required_keywords():
+def main_posts_filter_required_keywords() -> Dict[str, List[str]]:
     """
     This function takes the language name list and a series of okay words for English and generates a list of keywords
     that we can use to enforce the formatting requirements. This is case-insensitive and also allows more flexibility
@@ -1640,7 +1624,7 @@ def main_posts_filter_required_keywords():
     return possible_strings
 
 
-def main_posts_filter(otitle):
+def main_posts_filter(otitle: str):
     """
     A functionized filter for title filtering (removing posts that don't match the formatting guidelines).
     This was decoupled from ziwen_posts in order to be more easily maintained and to allow Wenyuan to use it.

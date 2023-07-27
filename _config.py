@@ -9,19 +9,18 @@ import os
 import random
 from time import strftime
 from enum import StrEnum
+from typing import Dict
 
 # Set up the directories based on the current location of the bots.
 # Fetch the absolute directory the script is in.
 script_directory = os.path.dirname(os.path.realpath(__file__))
 script_directory += "/Data/"  # Where the main files are kept.
-SOURCE_FOLDER = script_directory
 
 # A number that defines the soft number of notifications an individual will get in a month *per language*.
 NOTIFICATIONS_LIMIT = 100
 SUBREDDIT = "translator"
 
 # Ziwen main database files (either static files or files that will be written to).
-FILE_ADDRESS_CREDENTIALS = os.path.join(script_directory, "_login.json")
 FILE_ADDRESS_UA = os.path.join(script_directory, "_ua.json")
 FILE_ADDRESS_ALL_STATISTICS = os.path.join(script_directory, "_statistics.json")
 FILE_ADDRESS_AJO_DB = os.path.join(script_directory, "_database_ajo.db")
@@ -132,7 +131,7 @@ logger.addHandler(handler)
 """ UNIVERSAL FUNCTIONS SHARED BY COMPONENTS """
 
 
-def get_random_useragent():
+def get_random_useragent() -> Dict[str, str]:
     """
     Simple function that chooses items for use in `requests` from the list above.
 
@@ -151,7 +150,7 @@ def get_random_useragent():
         return {"User-Agent": random_ua, "Accept": accept_string}  # headers
 
 
-def action_counter(messages_number, action_type):
+def action_counter(messages_number, action_type: str) -> None:
     """
     Function takes in a number and an action type and writes it to a file.
 
@@ -188,7 +187,7 @@ def action_counter(messages_number, action_type):
             json.dump(current_actions_dict, f, sort_keys=True, indent=4)
 
 
-def load_statistics_data(language_code):
+def load_statistics_data(language_code: str):
     """
     Function that loads the language statistics dictionary from our saved JSON file.
 
@@ -202,7 +201,7 @@ def load_statistics_data(language_code):
         return stats_data.get(language_code)
 
 
-def time_convert_to_string(unix_integer):
+def time_convert_to_string(unix_integer) -> str:
     """Converts a UNIX integer into a time formatted according to
     ISO 8601 for UTC time.
 

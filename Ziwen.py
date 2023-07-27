@@ -15,6 +15,7 @@ import sqlite3  # For processing and accessing the databases.
 import time
 import traceback  # For documenting errors that are encountered.
 import sys
+from typing import Dict, List
 
 import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 import prawcore  # The base module praw for error logging.
@@ -53,6 +54,7 @@ from _config import (
     FILE_ADDRESS_CACHE,
     logger,
     KEYWORDS,
+    SUBREDDIT,
     FILE_ADDRESS_FILTER,
     BOT_DISCLAIMER,
     FILE_ADDRESS_ERROR,
@@ -212,7 +214,7 @@ Maintenance functions are all prefixed with `maintenance` in their name.
 """
 
 
-def maintenance_template_retriever():
+def maintenance_template_retriever() -> Dict[str, str]:
     """
     Function that retrieves the current flairs available on the subreddit and returns a dictionary.
     Dictionary is keyed by the old css_class, with the long-form template ID as a value per key.
@@ -233,7 +235,7 @@ def maintenance_template_retriever():
     return new_template_ids if len(new_template_ids.keys()) != 0 else {}
 
 
-def maintenance_most_recent():
+def maintenance_most_recent() -> List[str]:
     """
     A function that grabs the usernames of people who have submitted to r/translator in the last 24 hours.
     Another function can check against this to make sure people aren't submitting too many.
@@ -290,7 +292,7 @@ def maintenance_get_verified_thread():
     return verification_id
 
 
-def maintenance_blacklist_checker():
+def maintenance_blacklist_checker() -> List[str]:
     """
     A start-up function that runs once and gets blacklisted usernames from the wiki of r/translatorBOT.
     Blacklisted users are those who have abused the subreddit functions on r/translator but are not banned.
@@ -317,7 +319,7 @@ def maintenance_blacklist_checker():
     return blacklist_usernames
 
 
-def maintenance_database_processed_cleaner():
+def maintenance_database_processed_cleaner() -> None:
     """
     Function that cleans up the database of processed comments, but not posts (yet).
 
@@ -339,7 +341,7 @@ Komento-related functions are all prefixed with `komento` in their name.
 """
 
 
-def komento_submission_from_comment(comment_id):
+def komento_submission_from_comment(comment_id: str) -> praw.models.Submission:
     """
     Returns the parent submission as an object from a comment ID.
 
@@ -525,7 +527,7 @@ Points-related functions are all prefixed with `points` in their name.
 """
 
 
-def points_worth_determiner(language_name):
+def points_worth_determiner(language_name: str):
     """
     This function takes a language name and determines the points worth for a translation for it. (the cap is 20)
 
@@ -593,7 +595,7 @@ def points_worth_determiner(language_name):
     return final_point_value
 
 
-def points_worth_cacher():
+def points_worth_cacher() -> None:
     """
     Simple routine that caches the most frequently used languages' points worth in a local database.
 
@@ -655,7 +657,7 @@ def points_worth_cacher():
             conn_cache.commit()
 
 
-def points_tabulator(oid, oauthor, oflair_text, oflair_css, comment):
+def points_tabulator(oid, oauthor: str, oflair_text: str, oflair_css, comment):
     """
     The main function to save a user's points, given a post submission's content and comment.
     This is intended to be able to assess the points at the point of the comment's writing.
@@ -919,7 +921,7 @@ Recording functions are all prefixed with `record` in their name.
 """
 
 
-def record_filter_log(filtered_title, ocreated, filter_type):
+def record_filter_log(filtered_title: str, ocreated: float, filter_type: str) -> None:
     """
     Simple function to write the titles of removed posts to an external text file as an entry in a Markdown table.
 
@@ -940,7 +942,7 @@ def record_filter_log(filtered_title, ocreated, filter_type):
         f.write(f"\n{timestamp_utc} | {filtered_title} | {filter_type}")
 
 
-def record_last_post_comment():
+def record_last_post_comment() -> str:
     """
     A simple function to get the last post/comment on r/translator for reference storage when there's an error.
     Typically when something goes wrong, it's the last comment that caused the problem.
@@ -984,7 +986,7 @@ def record_last_post_comment():
     return f"Last post     |   {s_format_time}:    {slink}\nLast comment  |   {c_format_time}:    {cpermalink}\n{cbody}\n"
 
 
-def record_error_log(error_save_entry):
+def record_error_log(error_save_entry: str) -> None:
     """
     A function to SAVE errors to a log for later examination.
     This is more advanced than the basic version kept in _config, as it includes data about last post/comment.
@@ -1012,7 +1014,15 @@ def record_error_log(error_save_entry):
                 logger.error("[ZW] Error_Log: Encountered a Unicode writing error.")
 
 
-def record_to_wiki(odate, otitle, oid, oflair_text, s_or_i, oflair_new, user=None):
+def record_to_wiki(
+    odate: int,
+    otitle: str,
+    oid: str,
+    oflair_text: str,
+    s_or_i: bool,
+    oflair_new: str,
+    user=None,
+) -> None:
     """
     A function that saves information to one of two wiki pages on the r/translator subreddit.
     "Saved" is for languages that do not have an associated CSS class.
@@ -1072,7 +1082,7 @@ These non-notifier functions are all prefixed with `messaging` in their name.
 """
 
 
-def messaging_user_statistics_writer(body_text, username):
+def messaging_user_statistics_writer(body_text: str, username: str) -> None:
     """
     Function that records which commands are written by whom, cumulatively, and stores it into an SQLite file.
     Takes the body text of their comment as an input.
@@ -1131,7 +1141,7 @@ def messaging_user_statistics_writer(body_text, username):
         logger.debug("[ZW] messaging_user_statistics_writer: No commands to write.")
 
 
-def messaging_translated_message(oauthor, opermalink):
+def messaging_translated_message(oauthor: str, opermalink: str) -> None:
     """
     Function to message requesters (OPs) that their post has been translated.
 
@@ -1160,7 +1170,7 @@ def messaging_translated_message(oauthor, opermalink):
 
 
 # General Lookup Functions
-def lookup_cjk_matcher(content_text):
+def lookup_cjk_matcher(content_text: str) -> List[str]:
     """
     A simple function to allow for compatibility with a greater number of CJK characters.
     This function can be expanded in the future to support more languages and be more robust.
@@ -1190,7 +1200,7 @@ def lookup_cjk_matcher(content_text):
     return matches if len(matches) != 0 else []
 
 
-def lookup_matcher(content_text, language_name):
+def lookup_matcher(content_text: str, language_name: str):
     """
     A general-purpose function that evaluates a comment for lookup and returns the detected text in a dictionary keyed
     by the language that's passed to it. This function also tokenizes spaced languages and Chinese/Japanese.
@@ -1319,63 +1329,7 @@ def lookup_matcher(content_text, language_name):
     return master_dictionary
 
 
-def lookup_ko_word(word):
-    """
-    A function to define Korean words from KRDICT.
-    Deprecated.
-
-    :param word: Any Korean word.
-    :return: A formatted string containing meanings and information to post as a comment.
-    """
-
-    eth_page = requests.get(
-        "https://krdict.korean.go.kr/m/eng/searchResult?nationCode=6"
-        "&nation=eng&divSearch=search&pageNo=1&displayNum=10&preKeyword="
-        "&sort=&proverb=&examples=&mainSearchWord=" + word
-    )
-
-    tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
-    # word_exists = str(tree.xpath('//strong[@class="highlight"]/text()[1]'))
-    word_exists = str(tree.xpath('//em[@class="blue ml5"]/text()[1]'))
-    print(word_exists)
-
-    if "없습니다" in word_exists:
-        # Check to not return anything if the entry is invalid (means "there is not")
-        return "> Sorry, but that Korean word doesn't look like anything to me."
-    hangul_romanization = Romanizer(word).romanize()
-    hangul_chunk = word + " (*" + hangul_romanization + "*)"
-    hanja = tree.xpath('//*[@id="content"]/div[2]/dl/dt[1]/span/text()')
-    if len(hanja) != 0:
-        hanja = "".join(hanja)
-        hanja = hanja.strip()
-    meaning = tree.xpath('//*[@id="content"]/div[2]/dl/dd[1]/div/p[1]//text()')
-    meaning = " ".join(meaning)
-
-    if len(hanja) != 0:
-        lookup_line_1 = "# [{0}](https://en.wiktionary.org/wiki/{0}#Korean)\n\n".format(
-            word
-        )
-        lookup_line_1 += "**Reading:** " + hangul_chunk + " (" + hanja + ")"
-    else:
-        lookup_line_1 = "# [{0}](https://en.wiktionary.org/wiki/{0}#Korean)\n\n".format(
-            word
-        )
-        lookup_line_1 += "**Reading:** " + hangul_chunk
-    lookup_line_2 = str('\n\n**Meanings**: "' + meaning + '."')
-    lookup_line_3 = (
-        "\n\n\n^Information ^from ^[Naver](https://en.dict.naver.com/#/"
-        "search?range=all&query={0}) ^| ^[Daum](https://dic.daum.net/search.do?q={0}&dic=eng)"
-    )
-    lookup_line_3 = lookup_line_3.format(word)
-
-    to_post = lookup_line_1 + lookup_line_2 + lookup_line_3
-    logger.info(
-        f"[ZW] lookup_ko_word: Received a word lookup for '{word}' in Korean. Returned results."
-    )
-    return to_post
-
-
-def lookup_zhja_tokenizer(phrase, language):
+def lookup_zhja_tokenizer(phrase: str, language: str):
     """
     Language should be 'zh' or 'ja'. Returns a list of tokenized words. This uses Jieba for Chinese and either
     TinySegmenter or MeCab for Japanese. The live version should be using MeCab as it is running on Linux.
@@ -1433,7 +1387,7 @@ def lookup_zhja_tokenizer(phrase, language):
     return final_list  # Returns a list of words / characters
 
 
-def lookup_wiktionary_search(search_term, language_name):
+def lookup_wiktionary_search(search_term: str, language_name: str) -> str | None:
     """
     This is a general lookup function for Wiktionary, updated and
     cleaned up to be better than the previous version.
@@ -1584,11 +1538,11 @@ All reference functions are prefixed with `reference` in their name.
 """
 
 
-def reference_search(lookup_term):
+def reference_search(lookup_term: str):
     """
     Function to look up reference languages on Ethnologue and Wikipedia.
-    This also searches MultiTree (no longer a
-    separate function) for languages which may be constructed or dead.
+    This also searches MultiTree (no longer a separate function)
+    for languages which may be constructed or dead.
     Due to web settings the live search function of this has been
     disabled.
 
@@ -1631,7 +1585,7 @@ def reference_search(lookup_term):
             return reference_cached_info
 
 
-def reference_reformatter(original_entry):
+def reference_reformatter(original_entry: str) -> str:
     """
     Takes a reference string and tries to make it more compact and simple.
     The replacement for Unknown posts will use this abbreviated version.
@@ -1677,7 +1631,7 @@ commands are changes in the content that's looked up.
 """
 
 
-def edit_finder():
+def edit_finder() -> None:
     """
     A top-level function to detect edits and changes of note in r/translator comments, including commands and
     lookup items. `comment_limit` defines how many of the latest comments it will store in the cache.
@@ -1829,7 +1783,7 @@ The function also removes posts that don't match the formatting guidelines.
 """
 
 
-def is_mod(user):
+def is_mod(user: str) -> bool:
     """
     A function that can tell us if a user is a moderator of the operating subreddit (r/translator) or not.
 
@@ -1841,10 +1795,9 @@ def is_mod(user):
     return user.lower() in moderators
 
 
-def css_check(css_class):
+def css_check(css_class: str) -> bool:
     """
     Function that checks if a CSS class is something that a command can act on.
-    Generally speaking we do not act upon posts with these two classes.
 
     :param css_class: The css_class of the post.
     :return: True if the post is something than can be worked with, False if it's in either of the defined two classes.
@@ -1853,7 +1806,7 @@ def css_check(css_class):
     return css_class not in ["meta", "community"]
 
 
-def bad_title_commenter(title_text, author):
+def bad_title_commenter(title_text: str, author: str) -> str:
     """
     This function takes a filtered title and constructs a comment that contains a suggested new title for the user to
     use and a resubmit link that has that new title filled in automatically. This streamlines the process of
@@ -1878,7 +1831,7 @@ def bad_title_commenter(title_text, author):
     return COMMENT_BAD_TITLE.format(author=author, new_url=new_url, new_title=new_title)
 
 
-def ziwen_posts():
+def ziwen_posts() -> None:
     """
     The main top-level post filtering runtime for r/translator.
     It removes posts that do not meet the subreddit's guidelines.
@@ -2003,9 +1956,7 @@ def ziwen_posts():
 
                 # Write the title to the log.
                 filter_num = returned_info[2]
-                record_filter_log(
-                    filtered_title=otitle, ocreated=ocreated, filter_type=filter_num
-                )
+                record_filter_log(otitle, ocreated, filter_num)
                 action_counter(1, "Removed posts")  # Write to the counter log
                 logger.info(
                     f"[ZW] Posts: Removed post that violated formatting guidelines. Title: {otitle}"
@@ -2050,9 +2001,7 @@ def ziwen_posts():
                 # If it's an English only post, filter it out.
                 post.mod.remove()
                 post.reply(COMMENT_ENGLISH_ONLY.format(oauthor=oauthor))
-                record_filter_log(
-                    filtered_title=otitle, ocreated=ocreated, filter_type="EE"
-                )
+                record_filter_log(otitle, ocreated, "EE")
                 action_counter(1, "Removed posts")  # Write to the counter log
                 logger.info("[ZW] Posts: Removed an English-only post.")
 
@@ -2065,7 +2014,7 @@ def ziwen_posts():
                     # It's a supported language but not a supported
                     # flair, so write to the saved page.
                     record_to_wiki(
-                        odate=ocreated,
+                        odate=int(ocreated),
                         otitle=otitle,
                         oid=oid,
                         oflair_text=suggested_css_text,
@@ -2210,7 +2159,7 @@ This is the main routine that processes commands from r/translator users.
 """
 
 
-def ziwen_bot():
+def ziwen_bot() -> None:
     """
     This is the main runtime for r/translator that checks for keywords and commands.
 
@@ -3305,7 +3254,7 @@ def ziwen_bot():
             logger.debug("[ZW] Bot: Recorded user commands in database.")
 
 
-def verification_parser():
+def verification_parser() -> None:
     """
     Top-level function to collect requests for verified flairs. Ziwen will write their information into a log
     and also report their comment to the moderators for inspection and verification.
@@ -3395,7 +3344,7 @@ def verification_parser():
         )
 
 
-def progress_checker():
+def progress_checker() -> None:
     """
     This is an independent top-level function that checks to see what posts are still marked as "In Progress."
     It checks to see if they have expired (that is, the claim period is past a defined time).
@@ -3455,7 +3404,7 @@ def progress_checker():
 """LESSER RUNTIMES"""
 
 
-def cc_ref():
+def cc_ref() -> None:
     """
     This is a secondary runtime for Chinese language subreddits. The subreddits the bot monitors are contained in a
     multireddit called 'chinese'. It provides character and word lookup for them, same results as the
@@ -3524,7 +3473,7 @@ def cc_ref():
                 )
 
 
-def ziwen_maintenance():
+def ziwen_maintenance() -> None:
     """
     A simple top-level function to group together common activities that need to be run on an occasional basis.
     This is usually activated after almost a hundred cycles to update information.
@@ -3553,9 +3502,8 @@ def ziwen_maintenance():
     logger.debug(f"[ZW] # Current user agent: {ZW_USERAGENT}")
 
     global GLOBAL_BLACKLIST
-    GLOBAL_BLACKLIST = (
-        maintenance_blacklist_checker()
-    )  # We download the blacklist of users.
+    # We download the blacklist of users.
+    GLOBAL_BLACKLIST = maintenance_blacklist_checker()
     logger.debug(
         f"[ZW] # Current global blacklist retrieved: {len(GLOBAL_BLACKLIST)} users"
     )

@@ -19,6 +19,7 @@ import csv
 import random
 import re
 import time
+from typing import Dict, Tuple
 from bs4 import BeautifulSoup
 from _config import (
     logger,
@@ -33,7 +34,7 @@ from mafan import simplify, tradify
 from korean_romanizer.romanizer import Romanizer
 
 
-def zh_character_oc_search(character):
+def zh_character_oc_search(character: str) -> str | None:
     """
     A simple routine that retrieves data from a CSV of Baxter-Sagart's reconstruction of Middle and Old Chinese.
     For more information, visit: http://ocbaxtersagart.lsait.lsa.umich.edu/
@@ -67,7 +68,7 @@ def zh_character_oc_search(character):
     return f"\n**Middle Chinese** | \\**{character_data[0]}*\n**Old Chinese** | \\*{character_data[1]}*"
 
 
-def zh_character_variant_search(search_term, retries=3):
+def zh_character_variant_search(search_term: str, retries: int = 3) -> str | None:
     """
     Function to search the MOE dictionary for a link to character
     variants, and returns the link if found. None if nothing is found.
@@ -137,7 +138,7 @@ def zh_character_variant_search(search_term, retries=3):
     return entry_url
 
 
-def zh_character_min_hak(character, zw_useragent):
+def zh_character_min_hak(character: str, zw_useragent: Dict[str, str]) -> str:
     """
     Function to get the Hokkien and Hakka (Sixian) pronunciations from the ROC Ministry of Education dictionary.
     This actually will accept either single-characters or multi-character words.
@@ -193,7 +194,7 @@ def zh_character_min_hak(character, zw_useragent):
     return min_reading + hak_reading
 
 
-def zh_character_calligraphy_search(character):
+def zh_character_calligraphy_search(character: str) -> str | None:
     """
     A function to get an overall image of Chinese calligraphic search containing different styles from various time
     periods.
@@ -220,10 +221,8 @@ def zh_character_calligraphy_search(character):
         )
 
     # Next get an image from Shufazidian.
-    formdata = {
-        "sort": "7",
-        "wd": character,
-    }  # Form data to pass on to the POST system.
+    # Form data to pass on to the POST system.
+    formdata = {"sort": "7", "wd": character}
     try:
         rdata = requests.post("http://www.shufazidian.com/", data=formdata)
         tree = BeautifulSoup(rdata.content, "lxml")
@@ -259,7 +258,9 @@ def zh_character_calligraphy_search(character):
     return image_string
 
 
-def zh_character_other_readings(character, zw_useragent):
+def zh_character_other_readings(
+    character: str, zw_useragent: Dict[str, str]
+) -> str | None:
     """
     A function to get non-Chinese pronunciations of characters (Sino-Xenic readings) from the Chinese Character API.
     We use the Korean, Vietnamese, and Japanese readings.
@@ -317,7 +318,7 @@ def zh_character_other_readings(character, zw_useragent):
         return "\n".join(to_post)
 
 
-def zh_character(character, zw_useragent):
+def zh_character(character, zw_useragent: Dict[str, str]):
     """
     This function looks up a Chinese character's pronunciations and meanings.
     It also ties together a lot of the other reference functions above.
@@ -519,7 +520,7 @@ def zh_character(character, zw_useragent):
     return lookup_line_1 + lookup_line_2
 
 
-def zh_word_decode_pinyin(s):
+def zh_word_decode_pinyin(s: str) -> str:
     """
     Function to convert numbered pin1 yin1 into proper tone marks. CC-CEDICT's format uses numerical pinyin.
     This code is courtesy of Greg Hewgill on StackOverflow:
@@ -580,7 +581,7 @@ def zh_word_decode_pinyin(s):
 
 
 # TODO handle overlap with zh_word_buddhist_dictionary_search
-def zh_word_buddhist_dictionary_search(chinese_word):
+def zh_word_buddhist_dictionary_search(chinese_word: str):
     """
     Function that allows us to consult the Soothill-Hodous 'Dictionary of Chinese Buddhist Terms.'
     For more information, please visit: https://mahajana.net/texts/soothill-hodous.html
@@ -638,7 +639,7 @@ def zh_word_buddhist_dictionary_search(chinese_word):
         return general_dictionary
 
 
-def zh_word_cccanto_search(cantonese_word):
+def zh_word_cccanto_search(cantonese_word: str):
     """
     Function that parses and returns data from the CC-Canto database, which uses CC-CEDICT's format.
     More information can be found here: https://cantonese.org/download.html
@@ -700,7 +701,7 @@ def zh_word_cccanto_search(cantonese_word):
 
 
 # noinspection PyBroadException
-def zh_word_tea_dictionary_search(chinese_word, zw_useragent):
+def zh_word_tea_dictionary_search(chinese_word: str, zw_useragent: Dict[str, str]):
     """
     Function that searches the Babelcarp Chinese Tea Lexicon for Chinese tea terms.
 
@@ -750,7 +751,7 @@ def zh_word_tea_dictionary_search(chinese_word, zw_useragent):
     return general_dictionary
 
 
-def zh_word_alt_romanization(pinyin_string):
+def zh_word_alt_romanization(pinyin_string: str) -> Tuple[str, str]:
     """
     Takes a pinyin with number item and returns version of it in the legacy Wade-Giles and Yale romanization schemes.
     This is only used for zh_word at the moment. We don't deal with diacritics for this. Too complicated.
@@ -796,7 +797,7 @@ def zh_word_alt_romanization(pinyin_string):
     return yale_post, wadegiles_post
 
 
-def zh_word_chengyu(chengyu):
+def zh_word_chengyu(chengyu: str) -> str | None:
     """
     Function to get Chinese information for Chinese chengyu, including literary sources and explanations.
     Note: this is the second version. This version just adds supplementary Chinese information to zh_word.
@@ -887,7 +888,7 @@ def zh_word_chengyu(chengyu):
         return cy_to_post
 
 
-def zh_word(word, zw_useragent):
+def zh_word(word: str, zw_useragent: Dict[str, str]):
     """
     Function to define Chinese words and return their readings and meanings. A Chinese word is one that is longer than
     a single character.
