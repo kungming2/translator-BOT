@@ -556,7 +556,7 @@ def notifier_page_multiple_detector(pbody: str) -> List[str]:
 
     initial_matches = []
     for match in new_matches:
-        match_code = converter(match)[0]
+        match_code = converter(match).language_code
         if len(match_code) != 0:  # This is a valid language code.
             initial_matches.append(match_code)
 
@@ -639,7 +639,7 @@ def messaging_language_frequency_table(language_list: List[str]) -> str:
 
     # Iterate over the language codes.
     for code in language_list:
-        language_name = converter(code)[1]
+        language_name = converter(code).language_name
 
         # Retrieve stored data.
         language_data = load_statistics_data(code)
@@ -901,7 +901,7 @@ def ziwen_notifier(
             contacted = majo.notified  # Load the people who have been contacted before.
             logger.debug(f"Ziwen Notifier: Already contacted {contacted}")
 
-            language_name = converter(suggested_css_text)[1]
+            language_name = converter(suggested_css_text).language_name
 
             # We allow it to send if it's the last (and only) item in this history.
             permission_to_proceed = not (
@@ -917,8 +917,9 @@ def ziwen_notifier(
 
     # First we need to do a test to see if it's a specific code or not.
     if "-" not in suggested_css_text:  # This is a regular notification.
-        language_code = converter(suggested_css_text)[0]
-        language_name = converter(suggested_css_text)[1]
+        converted_language = converter(suggested_css_text)
+        language_code = converted_language.language_code
+        language_name = converted_language.language_name
         if suggested_css_text == "Multiple Languages":
             # Debug fix for the multiple ones.
             language_code = "multiple"
@@ -936,7 +937,7 @@ def ziwen_notifier(
         # Note, this only gets people who are specifically signed up for them, not
         # We get the broader category here. (ar, unknown)
         language_code = suggested_css_text.split("-", 1)[0]
-        language_name = converter(suggested_css_text)[1]
+        language_name = converter(suggested_css_text).language_name
         if language_code == "unknown":  # Add a new script phrase
             language_name += " (Script)"  # This is to distinguish script notifications
         regional_data = notifier_regional_language_fetcher(
@@ -1079,7 +1080,7 @@ def ziwen_messages(
 
                 # Get the language names of those codes.
                 for code in language_matches:
-                    final_match_names.append(converter(code)[1])
+                    final_match_names.append(converter(code).language_name)
 
                 # Add the various components of the reply.
                 thanks_phrase = MAIN_LANGUAGES.get(language_matches[0], {}).get(
@@ -1141,7 +1142,9 @@ def ziwen_messages(
                     language_matches, mauthor, cursor_main, conn_main, "delete"
                 )
                 # Get the language names of those codes.
-                final_match_names = [converter(code)[1] for code in language_matches]
+                final_match_names = [
+                    converter(code).language_name for code in language_matches
+                ]
 
                 # Join the list into a string that is bulleted.
                 bullet_list = "\n* ".join(final_match_names)
@@ -1192,7 +1195,9 @@ def ziwen_messages(
                 final_match_names = []
                 for code in final_match_codes:  # Convert the codes into names
                     converted_result = converter(code)  # This will return a tuple.
-                    match_name = converted_result[1]  # Should get the name from each
+                    match_name = (
+                        converted_result.language_name
+                    )  # Should get the name from each
                     if code == "meta":
                         match_name = "Meta"
                     elif code == "community":

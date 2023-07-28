@@ -6,7 +6,7 @@ import csv
 import itertools
 import os
 import re
-from typing import Dict, List, Tuple
+from typing import Dict, List, NamedTuple, Tuple
 
 from rapidfuzz import fuzz  # Switched to rapidfuzz
 
@@ -307,6 +307,13 @@ def country_converter(text_input: str, abbreviations_okay: bool = True):
     return country_code, country_name
 
 
+class ConverterTuple(NamedTuple):
+    language_code: str
+    language_name: str
+    supported: bool
+    country_code: str | None
+
+
 def converter(input_text: str):
     """
     A function that can convert between language names and codes, and also parse additional data.
@@ -385,12 +392,8 @@ def converter(input_text: str):
             input_text = value
 
     # Convert and reassign special-reserved ISO 639-3 codes to their r/translator equivalents.
-    if input_text in [
-        "mis",
-        "und",
-        "mul",
-        "qnp",
-    ]:  # These are special codes that we reassign
+    if input_text in ["mis", "und", "mul", "qnp"]:
+        # These are special codes that we reassign
         supported = True
         if input_text == "mul":
             input_text = "multiple"
@@ -401,7 +404,7 @@ def converter(input_text: str):
     if len(input_text) < 2:  # This is too short.
         language_code = ""
         language_name = ""
-    elif is_script:  # This is a script.
+    elif is_script and specific_code:  # This is a script.
         language_code = specific_code
         language_name = input_text
     elif input_text.lower() in ISO_639_1:
@@ -470,8 +473,7 @@ def converter(input_text: str):
     elif regional_case and len(country_name) != 0 and len(language_code) != 0:
         # This was for a specific language area.
         language_name += " {" + country_name + "}"
-
-    return language_code, language_name, supported, country_code
+    return ConverterTuple(language_code, language_name, supported, country_code)
 
 
 def country_validator(
@@ -517,7 +519,7 @@ def country_validator(
 
     if len(detected_word) != 0:
         for language in language_list:
-            language_code = converter(language)[0]
+            language_code = converter(language).language_code
 
             if language_code in LANGUAGE_COUNTRY_ASSOCIATED:
                 # There's a language assoc.
@@ -673,8 +675,8 @@ def language_mention_search(search_paragraph: str) -> None | List[str]:
     for match in matches:
         if len(match) > 3:  # We explicitly DO NOT want to match ISO 639-3 codes.
             converter_result = converter(match)
-            language_code = converter_result[0]
-            language_name = converter_result[1]
+            language_code = converter_result.language_code
+            language_name = converter_result.language_name
 
             # We do a quick check to make sure it's not some obscure ISO 639-3 language.
             proceed = len(language_code) != 3 or language_code in SUPPORTED_CODES
@@ -897,9 +899,8 @@ def final_title_salvager(d_source_languages: List[str], d_target_languages: List
         return None
     # We can get a last language classification
     try:
-        salvaged_css = converter(all_languages[0])[0]
-        salvaged_css_text = converter(all_languages[0])[1]
-        return salvaged_css, salvaged_css_text
+        converter_output = converter(all_languages[0])
+        return converter_output.language_code, converter_output.language_name
     except IndexError:
         return None
 
@@ -1042,7 +1043,7 @@ def title_format(title: str, display_process: bool = False):
         if hyphen_match is not None:
             hyphen_match = hyphen_match.group(0)
             # Check to see if it's a valid language name
-            hyphen_match_name = converter(hyphen_match)[1]
+            hyphen_match_name = converter(hyphen_match).language_name
             if len(hyphen_match_name) == 0:
                 # No language match found, let's replace the dash with a space.
                 title = title.replace("-", " ")
@@ -1147,7 +1148,7 @@ def title_format(title: str, display_process: bool = False):
         if "Eng" in language.title() and len(language) <= 8:
             # If it's just English, we can assign it already.
             language = "English"
-        converter_search = converter(language)[1]
+        converter_search = converter(language).language_name
         if converter_search != "":
             # Try to get only the valid languages. Delete anything that isn't a language.
             d_source_languages.append(converter_search)
@@ -1211,7 +1212,7 @@ def title_format(title: str, display_process: bool = False):
     d_target_languages = []  # Account for misspellings
 
     for language in target_language:
-        converter_target_search = converter(language)[1]
+        converter_target_search = converter(language).language_name
         if converter_target_search != "":
             # Try to get only the valid languages. Delete anything that isn't a language.
             d_target_languages.append(converter_target_search)
@@ -1274,28 +1275,28 @@ def title_format(title: str, display_process: bool = False):
                     continue
 
             if not complete_override:
-                final_css = converter(str(d_source_languages_m[0]))[0]
+                final_css = converter(str(d_source_languages_m[0])).language_code
             elif complete_override:  # Override.
-                final_css = converter(complete_source)[0]
+                final_css = converter(complete_source).language_code
         else:  # every other case
-            final_css = converter(str(d_source_languages[0]))[0]
+            final_css = converter(str(d_source_languages[0])).language_code
     elif "English" in d_source_languages and "English" not in d_target_languages:
         # If the source language is English, we want to give it a target language CSS.
-        final_css = converter(str(d_target_languages[0]))[0]
+        final_css = converter(str(d_target_languages[0])).language_code
         if len(d_target_languages) > 1:
             # We do a test to see if there's a specific target, e.g. Egyptian Arabic
             joined_target = target_language[-1]  # Get the last full string.
             joined_target_data = converter(joined_target)
-            if len(joined_target_data[0]) != 0:
+            if len(joined_target_data.language_code) != 0:
                 # The converter actually found a specific language code for this.
-                final_css = joined_target_data[0]
-                d_target_languages = [joined_target_data[1]]
+                final_css = joined_target_data.language_code
+                d_target_languages = [joined_target_data.language_name]
     elif "English" in d_source_languages and "English" in d_target_languages:
         # English is in both areas here.
         combined_total = list(set(d_source_languages + d_target_languages))
         combined_total.remove("English")
         if len(combined_total) > 0:  # There's still a Non English item here
-            final_css = converter(combined_total[0])[0]
+            final_css = converter(combined_total[0]).language_code
         else:
             final_css = "en"  # Obviously it was just English
 
@@ -1318,7 +1319,7 @@ def title_format(title: str, display_process: bool = False):
 
         # Check to see if there's a script here
         for language in is_multiple_test:
-            code = converter(language)[0]
+            code = converter(language).language_code
             if len(code) == 4:  # This is a script
                 is_multiple_test.remove(language)
 
@@ -1351,7 +1352,9 @@ def title_format(title: str, display_process: bool = False):
                 ):
                     # There is only one source language. Let's replace it with the determined one.
                     # This is also assuming English is the target language.
-                    d_source_languages = [converter(language_country_code)[1]]
+                    d_source_languages = [
+                        converter(language_country_code).language_name
+                    ]
                     final_css = language_country_code  # Change it to the ISO 639-3 code
                     # final_css_text = d_source_languages[0]
                     # print(d_source_languages)
@@ -1373,7 +1376,9 @@ def title_format(title: str, display_process: bool = False):
                 ):
                     # There is only one source language. Let's replace it with the determined one.
                     # This is also assuming English is the target language.
-                    d_target_languages = [converter(language_country_code)[1]]
+                    d_target_languages = [
+                        converter(language_country_code).language_name
+                    ]
                     final_css = language_country_code  # Change it to the ISO 639-3 code
                     # print(d_target_languages)
                 elif (
@@ -1385,7 +1390,8 @@ def title_format(title: str, display_process: bool = False):
         language_country = f"{final_css}-{country_suffix_code}"
 
     if len(final_css) != 4:  # This is not a script
-        final_css_text = converter(final_css)[1]  # Get the flair text for inclusion.
+        # Get the flair text for inclusion.
+        final_css_text = converter(final_css).language_name
         if (
             language_country is not None
             and len(language_country) != 0
@@ -1409,7 +1415,7 @@ def title_format(title: str, display_process: bool = False):
         multiple_code_tag = []
         for language in notify_languages:
             # Get the code from the name
-            multiple_code_tag.append(converter(language)[0].upper())
+            multiple_code_tag.append(converter(language).language_code.upper())
             multiple_code_tag = sorted(multiple_code_tag)  # Alphabetize
             if "MULTIPLE" in multiple_code_tag:
                 multiple_code_tag.remove("MULTIPLE")
@@ -1431,11 +1437,11 @@ def title_format(title: str, display_process: bool = False):
         # This is one where the target languages may not be what we want MULTIPLE.
         if "English" in d_source_languages:
             # The source is English, so let's choose a target css
-            final_css = converter(d_target_languages[0])[0]
+            final_css = converter(d_target_languages[0]).language_code
             # we will send the multiple notifications, just in case.
             final_css_text = d_target_languages[0]
         else:  # English is in the targets, so let's take the source.
-            final_css = converter(d_source_languages[0])[0]
+            final_css = converter(d_source_languages[0]).language_code
             final_css_text = d_source_languages[0]  # Just the name
             # Clear the notifications, we don't need them for this one.
             notify_languages = None
@@ -1513,7 +1519,7 @@ def language_list_splitter(list_string: List[str]):
     # Special case if there's only spaces - check to see if the whole thing
     if "," not in list_string and " " in list_string:
         # Assess whether the whole thing is a multi-word language itself.
-        all_match = converter(list_string)[0]
+        all_match = converter(list_string).language_code
         temporary_list = list_string.split() if len(all_match) == 0 else [all_match]
     else:
         # Get the individual elements with a first pass.
@@ -1528,10 +1534,12 @@ def language_list_splitter(list_string: List[str]):
         # Get the code.
         converted_data = converter(item)
 
-        if converted_data[3] is None:  # This has no country data attached to it.
-            code = converted_data[0]
+        if (
+            converted_data.country_code is None
+        ):  # This has no country data attached to it.
+            code = converted_data.language_code
         else:
-            code = f"{converted_data[0]}-{converted_data[3]}"
+            code = f"{converted_data.language_code}-{converted_data.country_code}"
 
         if len(code) != 0 and item != "all":
             final_codes.append(code)

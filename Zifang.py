@@ -400,7 +400,7 @@ def wikipedia_lookup(terms: List[str], language: str = "English") -> str | None:
 
     # Code for searching non-English Wikipedia, currently not needed.
     if language != "English":
-        lang_code = converter(language)[0]
+        lang_code = converter(language).language_code
         wikipedia.set_lang(lang_code)
 
     # Look up the terms and format them appropriately.

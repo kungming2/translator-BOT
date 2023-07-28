@@ -710,7 +710,7 @@ def points_tabulator(
     else:  # Regular posts here. Let's get the language.
         if "[" in oflair_text:
             language_tag = "[" + oflair_text.split("[")[1]
-            language_name = converter(language_tag.lower()[1:-1])[1]
+            language_name = converter(language_tag.lower()[1:-1]).language_name
         elif "{" in oflair_text:  # Contains a bracket. Spanish {Mexico} (Identified)
             language_name = oflair_text.split("{")[0].strip()
         elif "(" in oflair_text:  # Contains a parantheses. Spanish (Identified)
@@ -719,7 +719,9 @@ def points_tabulator(
             language_name = oflair_text
 
     try:
-        language_multiplier = points_worth_determiner(converter(language_name)[1])
+        language_multiplier = points_worth_determiner(
+            converter(language_name).language_name
+        )
         # How much is this language worth? Obtain it from our wiki.
     except prawcore.exceptions.Redirect:  # The wiki doesn't have this.
         language_multiplier = 20
@@ -1228,7 +1230,7 @@ def lookup_matcher(
                 parsed_data = key
 
         # Set the language name to the identified language.
-        language_name = converter(parsed_data)[1]
+        language_name = converter(parsed_data).language_name
     # Secondly we see if there's a language mentioned.
     elif (
         language_mention_search(content_text) is not None
@@ -1552,7 +1554,7 @@ def reference_search(lookup_term: str) -> None | str:
         return None  # Just exit.
 
     # Get the language code (specifically the ISO 639-3 one)
-    language_code = converter(lookup_term)[0]
+    language_code = converter(lookup_term).language_code
     language_lookup_code = str(language_code)
     if len(language_code) == 2:  # This appears to be an ISO 639-1 code.
         # Get the ISO 639-3 version.
@@ -2073,7 +2075,7 @@ def ziwen_posts() -> None:
                     # This part of the function also sends notifications if both languages are non-English
                     for notification in multiple_notifications:
                         # This is the language name for consistency
-                        multiple_language_text = converter(notification)[1]
+                        multiple_language_text = converter(notification).language_name
                         contacted = ziwen_notifier(
                             multiple_language_text,
                             otitle,
@@ -2368,11 +2370,11 @@ def ziwen_bot() -> None:
 
             if "+" not in match:  # This is just a regular single !identify command.
                 if not advanced_mode:  # This is the regular results conversion
-                    language_code = converter(match)[0]
-                    language_name = converter(match)[1]
-                    language_country = converter(match)[
-                        3
-                    ]  # The country code for the language. Regularly none.
+                    language_converter = converter(match)
+                    language_code = language_converter.language_code
+                    language_name = language_converter.language_name
+                    # The country code for the language. Regularly none.
+                    language_country = language_converter.country_code
                     match_script = False
                 elif advanced_mode:
                     if len(match) == 3:
@@ -2397,9 +2399,7 @@ def ziwen_bot() -> None:
                             bad_script_reply = COMMENT_INVALID_SCRIPT + BOT_DISCLAIMER
                             post.reply(bad_script_reply.format(match))
                             logger.info(
-                                "Bot: But '{}' is not a valid script code. Skipping...".format(
-                                    match
-                                )
+                                f"Bot: But '{match}' is not a valid script code. Skipping..."
                             )
                             continue
                         language_code = match
@@ -2450,7 +2450,7 @@ def ziwen_bot() -> None:
                 if (
                     not match_script
                     and o_language_name != oajo.language_name
-                    or not converter(oajo.language_name)[2]
+                    or not converter(oajo.language_name).supported
                 ):
                     # Definitively a language. Let's archive this to the wiki.
                     # We've also made sure that it's not just a change of state, and write to the `identified` page.
@@ -2568,7 +2568,7 @@ def ziwen_bot() -> None:
             else:  # There were results. Let's loop through them.
                 for result in page_results:
                     language_code = result
-                    language_name = converter(language_code)[1]
+                    language_name = converter(language_code).language_name
 
                     is_nsfw = bool(post.submission.over_18)
 
@@ -2845,7 +2845,7 @@ def ziwen_bot() -> None:
                     if comment_check is not None:
                         # Start setting the flairs, from a list.
                         for language in comment_check[0]:
-                            language_code = converter(language)[0]
+                            language_code = converter(language).language_code
                             oajo.set_status_multiple(language_code, "doublecheck")
                             logger.info(
                                 f"Bot: > {language} in defined multiple post for doublechecking"
@@ -3037,7 +3037,7 @@ def ziwen_bot() -> None:
                     if comment_check is not None:
                         # Start setting the flairs, from a list.
                         for language in comment_check[0]:
-                            language_code = converter(language)[0]
+                            language_code = converter(language).language_code
                             oajo.set_status_multiple(language_code, "translated")
                             logger.info(
                                 f"Bot: > Marked {language} in this defined multiple post as done."
@@ -3152,7 +3152,7 @@ def ziwen_bot() -> None:
                 # Check to see if the person calling this command is a moderator
                 continue
             match = comment_info_parser(pbody, KEYWORDS.note)[0]
-            language_name = converter(match)[1]
+            language_name = converter(match).language_name
             logger.info(f"Bot: COMMAND: {KEYWORDS.note}, from moderator u/{pauthor}.")
             record_to_wiki(
                 odate=int(ocreated),
@@ -3180,9 +3180,10 @@ def ziwen_bot() -> None:
 
             logger.info(f"Bot: COMMAND: {KEYWORDS.set}, from moderator u/{pauthor}.")
 
-            language_code = converter(match)[0]
-            language_name = converter(match)[1]
-            language_country = converter(match)[3]
+            language_converter = converter(match)
+            language_code = language_converter.language_code
+            language_name = language_converter.language_name
+            language_country = language_converter.country_code
 
             if language_country is not None:  # There is a country code listed.
                 oajo.set_country(language_country)  # Add that code to the Ajo
@@ -3288,7 +3289,7 @@ def verification_parser() -> None:
             notes = ""
 
         # Try and get a native language thank-you from our main language dictionary.
-        language_code = converter(language_name)[0]
+        language_code = converter(language_name).language_code
         thanks_phrase = MAIN_LANGUAGES.get(language_code, {}).get("thanks", "Thank you")
 
         # Form the entry for the verification log.
