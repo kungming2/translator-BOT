@@ -78,7 +78,7 @@ def ja_character(character, zw_useragent: Dict[str, str]) -> str:
                     f"There were no results for {character}. Please check to make sure it is a valid Japanese "
                     "character or word."
                 )
-                logger.info(f"[ZW] JA-Character: No results for {character}")
+                logger.info(f"JA-Character: No results for {character}")
                 return to_post
             if len(kun_reading) == 0:
                 on_reading = tree.xpath(
@@ -202,7 +202,7 @@ def ja_character(character, zw_useragent: Dict[str, str]) -> str:
 
     to_post = total_data + lookup_line_3
     logger.info(
-        "[ZW] JA-Character: Received lookup command for "
+        "JA-Character: Received lookup command for "
         + character
         + " in Japanese. Returned results."
     )
@@ -267,7 +267,7 @@ def ja_word_sfx(katakana_string: str, zw_useragent: Dict[str, str]) -> None | st
         finished_comment = f"# [{katakana_string}](https://en.wiktionary.org/wiki/{katakana_string}#Japanese)\n\n##### *Sound effect*\n\n**Reading:** {katakana_reading}{formatted_line}"
 
         logger.info(
-            f"[ZW] JA-Word-SFX: Found a dictionary entry for {katakana_string} at {actual_link}"
+            f"JA-Word-SFX: Found a dictionary entry for {katakana_string} at {actual_link}"
         )
 
         return finished_comment
@@ -355,7 +355,7 @@ def ja_word_surname(name: str, zw_useragent: Dict[str, str]) -> None | str:
     lookup_line_3 += "^| [^Weblio ^EJJE](https://ejje.weblio.jp/content/{0})"
     lookup_line_3 = lookup_line_3.format(name)
     to_post = lookup_line_1 + lookup_line_2 + "\n" + lookup_line_3
-    logger.info(f"[ZW] JA-Name: '{name}' is a Japanese name. Returned search results.")
+    logger.info(f"JA-Name: '{name}' is a Japanese name. Returned search results.")
     return to_post
 
 
@@ -387,9 +387,7 @@ def ja_word(japanese_word: str, zw_useragent: Dict[str, str]) -> str:
         word_reading = ""
 
     if len(word_reading) == 0:  # It appears that this word doesn't exist on Jisho.
-        logger.info(
-            f"[ZW] JA-Word: No results found for a Japanese word '{japanese_word}'."
-        )
+        logger.info(f"JA-Word: No results found for a Japanese word '{japanese_word}'.")
 
         # Check if katakana. Will return none if kanji.
         katakana_test = re.search("[\u30a0-\u30ff]", japanese_word)
@@ -400,22 +398,22 @@ def ja_word(japanese_word: str, zw_useragent: Dict[str, str]) -> str:
 
         # Test against the other dictionary modules.
         if surname_data is not None:
-            logger.info("[ZW] JA-Word: Found a matching Japanese surname.")
+            logger.info("JA-Word: Found a matching Japanese surname.")
             return surname_data
         if given_name_data is not None:
-            logger.info("[ZW] JA-Word: Found a matching Japanese given name.")
+            logger.info("JA-Word: Found a matching Japanese given name.")
             return given_name_data
         if sfx_data is not None:
-            logger.info("[ZW] JA-Word: Found matching Japanese sound effects.")
+            logger.info("JA-Word: Found matching Japanese sound effects.")
             return sfx_data
         if katakana_test is None:  # It's a character
             to_post = ja_character(japanese_word, zw_useragent)
             logger.info(
-                "[ZW] JA-Word: No results found for a Japanese name. Getting individual character data."
+                "JA-Word: No results found for a Japanese name. Getting individual character data."
             )
         else:
             to_post = f"There were no results for `{japanese_word}`."
-            logger.info("[ZW] JA-Word: Unknown katakana word. No results.")
+            logger.info("JA-Word: Unknown katakana word. No results.")
         return to_post
 
     # Jisho data is good, format the data from the returned JSON.
@@ -438,7 +436,7 @@ def ja_word(japanese_word: str, zw_useragent: Dict[str, str]) -> str:
     if len(japanese_word) == 4:
         y_data = ja_word_yojijukugo(japanese_word, zw_useragent)
         if y_data is not None:  # If there's data, append it.
-            logger.debug("[ZW] JA-Word: Yojijukugo data retrieved.")
+            logger.debug("JA-Word: Yojijukugo data retrieved.")
             return_comment += y_data
 
     # Add the footer
@@ -454,7 +452,7 @@ def ja_word(japanese_word: str, zw_useragent: Dict[str, str]) -> str:
         )
     return_comment += footer.format(japanese_word)
     logger.info(
-        f"[ZW] JA-Word: Received a lookup command for the word '{japanese_word}' in Japanese."
+        f"JA-Word: Received a lookup command for the word '{japanese_word}' in Japanese."
     )
 
     return return_comment
@@ -487,13 +485,13 @@ def ja_word_yojijukugo(yojijukugo, zw_useragent: Dict[str, str]) -> str | None:
         # Retrieve only the main title of the page.
         entry_title = entry_title.split("」", 1)[0][1:]
         if entry_title != yojijukugo:  # If the data doesn't match
-            logger.debug("[ZW] JA-Chengyu: The titles don't match.")
+            logger.debug("JA-Chengyu: The titles don't match.")
             return None
 
         # Format the data properly.
         row_data = [td.text_content() for td in entry_tree.xpath("//td")]
         logger.info(
-            f"[ZW] JA-Chengyu: Retrieved information on {yojijukugo} from {url_entry}."
+            f"JA-Chengyu: Retrieved information on {yojijukugo} from {url_entry}."
         )
 
         # Add the literary info.

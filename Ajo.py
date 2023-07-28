@@ -104,11 +104,11 @@ class Ajo:
     ):
         # This takes a Reddit Submission object and generates info from it.
         if isinstance(reddit_submission, dict):  # Loaded from a file?
-            logger.debug("[ZW] Ajo: Loaded Ajo from local database.")
+            logger.debug("Ajo: Loaded Ajo from local database.")
             for key in reddit_submission:
                 setattr(self, key, reddit_submission[key])
         else:  # This is loaded from reddit.
-            logger.debug("[ZW] Ajo: Getting Ajo from Reddit.")
+            logger.debug("Ajo: Getting Ajo from Reddit.")
             self.id = reddit_submission.id  # The base Reddit submission ID.
             self.created_utc = int(reddit_submission.created_utc)
 
@@ -620,7 +620,7 @@ class Ajo:
                 # The username isn't already in it.
                 self.recorded_translators.append(translator_name)
                 # Add the username of the translator to the Ajo.
-                logger.debug(f"[ZW] Ajo: Added translator name u/{translator_name}.")
+                logger.debug(f"Ajo: Added translator name u/{translator_name}.")
         except AttributeError:
             # There were no translators defined in the Ajo... Let's create it.
             self.recorded_translators = [translator_name]
@@ -637,7 +637,7 @@ class Ajo:
             for name in notified_list:
                 if name not in self.notified:
                     self.notified.append(name)
-                    logger.debug(f"[ZW] Ajo: Added notified name u/{name}.")
+                    logger.debug(f"Ajo: Added notified name u/{name}.")
         except AttributeError:  # There were no notified users defined in the Ajo.
             self.notified = notified_list
 
@@ -847,13 +847,13 @@ class Ajo:
         if self.output_oflair_css in self.post_templates.keys():
             output_template = self.post_templates[self.output_oflair_css]
             logger.info(
-                f"[ZW] Update Reddit: Template for CSS `{self.output_oflair_css}` is `{output_template}`."
+                f"Update Reddit: Template for CSS `{self.output_oflair_css}` is `{output_template}`."
             )
             original_submission.flair.select(
                 flair_template_id=output_template, text=self.output_oflair_text
             )
             logger.info(
-                f"[ZW] Set post `{self.id}` to CSS `{self.output_oflair_css}` and text `{self.output_oflair_text}`."
+                f"Set post `{self.id}` to CSS `{self.output_oflair_css}` and text `{self.output_oflair_text}`."
             )
 
 
@@ -880,17 +880,17 @@ def ajo_writer(new_ajo: Ajo, cursor_ajo: Cursor, conn_ajo: Connection) -> None:
             update_command = "UPDATE local_database SET ajo = ? WHERE id = ?"
             cursor_ajo.execute(update_command, (representation, ajo_id))
             conn_ajo.commit()
-            logger.debug("[ZW] ajo_writer: Ajo exists, data updated.")
+            logger.debug("ajo_writer: Ajo exists, data updated.")
         else:
-            logger.debug("[ZW] ajo_writer: Ajo exists, but no change in data.")
+            logger.debug("ajo_writer: Ajo exists, but no change in data.")
     else:  # This is a new entry, not in my files.
         representation = str(new_ajo.__dict__)
         ajo_to_store = (ajo_id, created_time, representation)
         cursor_ajo.execute("INSERT INTO local_database VALUES (?, ?, ?)", ajo_to_store)
         conn_ajo.commit()
-        logger.debug("[ZW] ajo_writer: New Ajo not found in the database.")
+        logger.debug("ajo_writer: New Ajo not found in the database.")
 
-    logger.debug("[ZW] ajo_writer: Wrote Ajo to local database.")
+    logger.debug("ajo_writer: Wrote Ajo to local database.")
 
 
 def ajo_loader(
@@ -909,12 +909,12 @@ def ajo_loader(
     new_ajo = cursor_ajo.fetchone()
 
     if new_ajo is None:  # We couldn't find a stored dict for it.
-        logger.debug("[ZW] ajo_loader: No local Ajo stored.")
+        logger.debug("ajo_loader: No local Ajo stored.")
         return None
     # We do have stored data.
     new_ajo_dict = eval(new_ajo[2])  # We only want the stored dict here.
     new_ajo = Ajo(new_ajo_dict, post_templates, reddit)
-    logger.debug("[ZW] ajo_loader: Loaded Ajo from local database.")
+    logger.debug("ajo_loader: Loaded Ajo from local database.")
     return new_ajo  # Note: the Ajo class can build itself from this dict.
 
 

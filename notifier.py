@@ -221,7 +221,7 @@ def notifier_list_pruner(
     cursor_main.execute(sql_command, (username,))
     conn_main.commit()
     logger.info(
-        f"[ZW] notifier_list_pruner: Deleted subscription information for u/{username}."
+        f"notifier_list_pruner: Deleted subscription information for u/{username}."
     )
 
     # We only want the language codes (don't need the username).
@@ -435,7 +435,7 @@ def notifier_equalizer(
         # Pick X people at random. Cut the list down
         notify_users_list = random.sample(notify_users_list, limit_number)
         logger.info(
-            f"[ZW] Notifier Equalizer: {limit_number}+ people for {language_name} notifications. Randomized."
+            f"Notifier Equalizer: {limit_number}+ people for {language_name} notifications. Randomized."
         )
 
     # Alphabetize
@@ -513,13 +513,13 @@ def notifier_page_translators(
                 subject_line, message + BOT_DISCLAIMER
             )
             logger.info(
-                f"[ZW] Paging: Messaged u/{target_username} for a {language_name} post."
+                f"Paging: Messaged u/{target_username} for a {language_name} post."
             )
         except (
             praw.exceptions.APIException
         ):  # There was an error... User probably does not exist anymore.
             logger.debug(
-                f"[ZW] Paging: Error occurred sending message to u/{target_username}. Removing..."
+                f"Paging: Error occurred sending message to u/{target_username}. Removing..."
             )
             # Remove the username from our database.
             notifier_list_pruner(target_username, reddit, cursor_main, conn_main)
@@ -996,7 +996,7 @@ def ziwen_notifier(
             notifier_limit_writer(username, language_code, cursor_main, conn_main)
         except praw.exceptions.APIException:  # If the user deleted their account...
             logger.info(
-                f"[ZW] Notifier: An error occured while sending a message to u/{username}. Removing..."
+                f"Notifier: An error occured while sending a message to u/{username}. Removing..."
             )
             notifier_list_pruner(
                 username, reddit, cursor_main, conn_main
@@ -1015,7 +1015,7 @@ def ziwen_notifier(
     )
     record_activity_csv(payload)
     logger.info(
-        f"[ZW] Notifier: Sent notifications to {len(notify_users_list)} users signed up for {language_name}."
+        f"Notifier: Sent notifications to {len(notify_users_list)} users signed up for {language_name}."
     )
 
     return notify_users_list
@@ -1058,7 +1058,7 @@ def ziwen_messages(
 
         if "subscribe" in msubject and "un" not in msubject:
             # User wants to subscribe to language notifications.
-            logger.info(f"[ZW] Messages: New subscription request from u/{mauthor}.")
+            logger.info(f"Messages: New subscription request from u/{mauthor}.")
 
             # This gets a list of language codes from the message body.
             language_matches = language_list_splitter(mbody)
@@ -1068,9 +1068,7 @@ def ziwen_messages(
                 message.reply(
                     MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER
                 )
-                logger.info(
-                    "[ZW] Messages: Subscription languages listed are not valid."
-                )
+                logger.info("Messages: Subscription languages listed are not valid.")
             else:  # There are valid codes. Let's insert them into our database and reply with a confirmation message.
                 final_match_names = []
 
@@ -1098,12 +1096,12 @@ def ziwen_messages(
                 # Reply to the subscribing user.
                 message.reply(main_body + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
                 logger.info(
-                    f"[ZW] Messages: Added notification subscriptions for u/{mauthor}."
+                    f"Messages: Added notification subscriptions for u/{mauthor}."
                 )
                 action_counter(len(language_matches), "Subscriptions")
 
         elif "unsubscribe" in msubject:  # User wants to unsubscribe from notifications.
-            logger.info(f"[ZW] Messages: New unsubscription request from u/{mauthor}.")
+            logger.info(f"Messages: New unsubscription request from u/{mauthor}.")
 
             # This gets a list of language codes from the message body.
             language_matches = language_list_splitter(mbody)
@@ -1122,7 +1120,7 @@ def ziwen_messages(
                     message=f"Forwarded message:\n\n---\n\n{mbody}",
                 )
                 logger.info(
-                    "[ZW] Messages: Unsubscription languages listed are invalid. Replied w/ more info."
+                    "Messages: Unsubscription languages listed are invalid. Replied w/ more info."
                 )
             elif "all" in language_matches:
                 # User wants to unsubscribe from everything.
@@ -1155,12 +1153,12 @@ def ziwen_messages(
                     + MSG_UNSUBSCRIBE_BUTTON
                 )
                 logger.info(
-                    f"[ZW] Messages: Removed notification subscriptions for u/{mauthor}."
+                    f"Messages: Removed notification subscriptions for u/{mauthor}."
                 )
                 action_counter(len(language_matches), "Unsubscriptions")
 
         elif "ping" in msubject:
-            logger.info(f"[ZW] Messages: New status check from u/{mauthor}.")
+            logger.info(f"Messages: New status check from u/{mauthor}.")
             to_post = "Ziwen is running nominally.\n\n"
 
             # Determine if user is a moderator.
@@ -1172,10 +1170,10 @@ def ziwen_messages(
 
             # Reply to user.
             message.reply(to_post + BOT_DISCLAIMER)
-            logger.info("[ZW] Messages: Replied with ping call.")
+            logger.info("Messages: Replied with ping call.")
 
         elif "status" in msubject:
-            logger.info(f"[ZW] Messages: New status request from u/{mauthor}.")
+            logger.info(f"Messages: New status request from u/{mauthor}.")
             final_match_codes = []
 
             # We try to retrieve the languages the user is subscribed to.
@@ -1237,7 +1235,7 @@ def ziwen_messages(
         elif "add" in msubject and is_mod(mauthor):
             # Mod manually adding people to the notifications database.
             logger.info(
-                f"[ZW] Messages: New username addition message from moderator u/{mauthor}."
+                f"Messages: New username addition message from moderator u/{mauthor}."
             )
 
             # Get the username of the user we want to add to the database.
@@ -1266,7 +1264,7 @@ def ziwen_messages(
         elif "remove" in msubject and is_mod(mauthor):
             # Mod manually removing people from the notifications database.
             logger.info(
-                f"[ZW] Messages: New username removal message from moderator u/{mauthor}."
+                f"Messages: New username removal message from moderator u/{mauthor}."
             )
 
             subscribed_codes = []
@@ -1295,7 +1293,7 @@ def ziwen_messages(
             message.reply(removal_message)
 
         elif "points" in msubject:
-            logger.info(f"[ZW] Messages: New points status request from u/{mauthor}.")
+            logger.info(f"Messages: New points status request from u/{mauthor}.")
 
             # Get the user's points
             user_points_output = "### Points on r/translator\n\n" + points_retreiver(

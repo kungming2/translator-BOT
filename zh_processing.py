@@ -249,7 +249,7 @@ def zh_character_calligraphy_search(character: str) -> str | None:
 
         if len(complete_image) != 0:
             logger.debug(
-                f"[ZW] ZH-Calligraphy: There is a Chinese calligraphic image for {character}."
+                f"ZH-Calligraphy: There is a Chinese calligraphic image for {character}."
             )
             image_string = (
                 f"\n\n**Chinese Calligraphy Variants**: [{character}]({complete_image}) (*[SFZD](http://www.shufazidian.com/)*, "
@@ -345,7 +345,7 @@ def zh_character(character, zw_useragent: Dict[str, str]):
     cmn_pronunciation, yue_pronunciation = pronunciation[::2], pronunciation[1::2]
 
     if len(pronunciation) == 0:  # Check to not return anything if the entry is invalid
-        logger.info(f"[ZW] ZH-Character: No results for {character}")
+        logger.info(f"ZH-Character: No results for {character}")
         return (
             f"**There were no results for {character}**. Please check to make sure it is a valid Chinese "
             "character. Alternatively, it may be an uncommon variant that is not in "
@@ -369,7 +369,7 @@ def zh_character(character, zw_useragent: Dict[str, str]):
 
         if tradify(character) == simplify(character):
             logger.debug(
-                f"[ZW] ZH-Character: The two versions of {character} are identical."
+                f"ZH-Character: The two versions of {character} are identical."
             )
             lookup_line_1 = str(
                 "# [{0}](https://en.wiktionary.org/wiki/{0}#Chinese)".format(character)
@@ -381,7 +381,7 @@ def zh_character(character, zw_useragent: Dict[str, str]):
             )
         else:
             logger.debug(
-                f"[ZW] ZH-Character: The two versions of {character} are *not* identical."
+                f"ZH-Character: The two versions of {character} are *not* identical."
             )
             lookup_line_1 = (
                 "# [{0} ({1})](https://en.wiktionary.org/wiki/{0}#Chinese)".format(
@@ -515,7 +515,7 @@ def zh_character(character, zw_useragent: Dict[str, str]):
     lookup_line_2 = lookup_line_2.format(character, tradify(character))
 
     logger.info(
-        f"[ZW] ZH-Character: Received lookup command for {character} in "
+        f"ZH-Character: Received lookup command for {character} in "
         "Chinese. Returned search results."
     )
 
@@ -841,14 +841,14 @@ def zh_word_chengyu(chengyu: str) -> str | None:
         requests.exceptions.ChunkedEncodingError,
     ):
         # There may be an issue with the conversion. Skip if so.
-        logger.error("[ZW] ZH-Chengyu: Unicode encoding error.")
+        logger.error("ZH-Chengyu: Unicode encoding error.")
         chengyu_exists = ["", "找到 0 个成语"]  # Tell it to exit later.
 
     if not chengyu_exists:
         return
 
     if "找到 0 个成语" in chengyu_exists[1]:  # There are no results...
-        logger.info(f"[ZW] ZH-Chengyu: No chengyu results found for {chengyu}.")
+        logger.info(f"ZH-Chengyu: No chengyu results found for {chengyu}.")
         return None
     if r_tree is not None:  # There are results.
         # Look through the results page.
@@ -857,9 +857,7 @@ def zh_word_chengyu(chengyu: str) -> str | None:
             actual_link = link_results[0].attrib["href"]
         except IndexError:
             return None
-        logger.info(
-            f"[ZW] > ZH-Chengyu: Found a chengyu. Actual link at: {actual_link}"
-        )
+        logger.info(f"> ZH-Chengyu: Found a chengyu. Actual link at: {actual_link}")
 
         # Get the data from the actual link
         try:
@@ -886,7 +884,7 @@ def zh_word_chengyu(chengyu: str) -> str | None:
         )
 
         logger.info(
-            f"[ZW] > ZH-Chengyu: Looked up the chengyu {chengyu} in Chinese. Returned search results."
+            f"> ZH-Chengyu: Looked up the chengyu {chengyu} in Chinese. Returned search results."
         )
 
         return cy_to_post
@@ -931,7 +929,7 @@ def zh_word(word: str, zw_useragent: Dict[str, str]) -> str:
             and search_results_cccanto is None
         ):
             logger.info(
-                "[ZW] ZH-Word: No results found. Getting individual characters instead."
+                "ZH-Word: No results found. Getting individual characters instead."
             )
             # This will split the word into character chunks.
             if len(word) < 2:
@@ -955,7 +953,7 @@ def zh_word(word: str, zw_useragent: Dict[str, str]) -> str:
             alternate_pinyin = search_results_cccanto["pinyin"]
             alternate_jyutping = search_results_cccanto["jyutping"]
         logger.info(
-            f"[ZW] ZH-Word: No results for word {word}, but results are in specialty dictionaries."
+            f"ZH-Word: No results for word {word}, but results are in specialty dictionaries."
         )
 
     if len(alternate_meanings) == 0:  # The standard search function for regular words.
@@ -1042,7 +1040,7 @@ def zh_word(word: str, zw_useragent: Dict[str, str]) -> str:
         if len(word) == 4:
             chengyu_data = zh_word_chengyu(word)
             if chengyu_data is not None:
-                logger.info("[ZW] ZH-Word: >> Added additional chengyu data.")
+                logger.info("ZH-Word: >> Added additional chengyu data.")
                 lookup_line_2 += chengyu_data
 
         # We append Buddhist results if we have them.
@@ -1068,6 +1066,6 @@ def zh_word(word: str, zw_useragent: Dict[str, str]) -> str:
     # Combine everything together.
     to_post = lookup_line_1 + lookup_line_2 + "\n\n" + lookup_line_3
     logger.info(
-        f"[ZW] ZH-Word: Received a lookup command for {word} in Chinese. Returned search results."
+        f"ZH-Word: Received a lookup command for {word} in Chinese. Returned search results."
     )
     return to_post

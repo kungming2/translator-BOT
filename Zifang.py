@@ -53,7 +53,7 @@ NUMERICAL_SIMILARITY = 20  # How close we want the numbers to be together.
 ZF_DISCLAIMER = BOT_DISCLAIMER.replace("Ziwen", "Zifang")
 
 # Connecting to the Reddit API via OAuth.
-logger.info(f"[ZF] Startup: Logging in as u/{USERNAME}...")
+logger.info(f"Startup: Logging in as u/{USERNAME}...")
 reddit = praw.Reddit(
     client_id=ZIFANG_APP_ID,
     client_secret=ZIFANG_APP_SECRET,
@@ -63,7 +63,7 @@ reddit = praw.Reddit(
 )
 r = reddit.subreddit(SUBREDDIT)
 logger.info(
-    f"[ZF] Startup: Initializing {BOT_NAME} {VERSION_NUMBER} for r/{SUBREDDIT} with languages module {VERSION_NUMBER_LANGUAGES}."
+    f"Startup: Initializing {BOT_NAME} {VERSION_NUMBER} for r/{SUBREDDIT} with languages module {VERSION_NUMBER_LANGUAGES}."
 )
 
 
@@ -89,7 +89,7 @@ def record_error_log(error_save_entry: str) -> None:
                 f.write(log_template_txt)
             except UnicodeEncodeError:
                 # Occasionally this may fail on Windows thanks to its crap Unicode support.
-                logger.error("[ZF] Error_Log: Encountered a Unicode writing error.")
+                logger.error("Error_Log: Encountered a Unicode writing error.")
 
 
 def is_mod(username: str) -> bool:
@@ -328,14 +328,13 @@ def duplicate_detector(
         # Check if the post is already approved.
         if post.approved:
             logger.info(
-                f"[ZF] > The post `{post.id}` has already been "
-                "approved by a moderator."
+                f"> The post `{post.id}` has already been " "approved by a moderator."
             )
             continue
 
         # Exempt moderators.
         if is_mod(post_author):
-            logger.info(f"[ZF] > The post `{post.id}` was posted by a moderator.")
+            logger.info(f"> The post `{post.id}` was posted by a moderator.")
             continue
 
         author_list[post_author] += 1
@@ -358,7 +357,7 @@ def duplicate_detector(
         numerical_similiarity = numerical_sequence(author_titles)
         if not numerical_similiarity:
             logger.info(
-                f"[ZF] >> Posts  by u/{author} pass the "
+                f">> Posts  by u/{author} pass the "
                 "numerical similarity calculator. Skipped."
             )
             continue
@@ -366,14 +365,14 @@ def duplicate_detector(
         # Calculate how similar these posts are.
         similarity_index = round(calculate_similarity(author_titles), 2)
         logger.info(
-            f"[ZF] > The posts by u/{author} have a similarity index of {similarity_index}."
+            f"> The posts by u/{author} have a similarity index of {similarity_index}."
         )
         if similarity_index >= DUPLICATE_CONFIDENCE:
             author_post_ids = [t[1] for t in author_data]
             author_post_ids.sort()  # Oldest post will be first.
 
             actionable_posts += author_post_ids[1:]
-            logger.info(f"[ZF] >> Added posts `{author_post_ids[1:]} for removal.")
+            logger.info(f">> Added posts `{author_post_ids[1:]} for removal.")
 
     if actionable_posts:
         return actionable_posts
@@ -547,7 +546,7 @@ def zifang_comments(comment_limit: int = 200) -> None:
             )
             comment.reply(author_tag + wp_info + ZF_DISCLAIMER)
             logger.info(
-                "[ZF] >> Replied with Wikipedia page information for "
+                ">> Replied with Wikipedia page information for "
                 f"the OP u/{op} on post `{post_id}`."
             )
             acted_comments.append(comment.id)
@@ -562,11 +561,11 @@ if __name__ == "__main__":
         zifang_posts(fetch_removal_reasons(SUBREDDIT))
         zifang_comments()
     except Exception as e:  # The bot encountered an error/exception.
-        logger.error(f"[ZF] Main: Encounted error {e}.")
+        logger.error(f"Main: Encounted error {e}.")
         # Format the error text.
         error_entry = traceback.format_exc()
         record_error_log(error_entry)  # Save the error to a log.
-        logger.error("[ZF] Main: > Logged this error. Ended run.")
+        logger.error("Main: > Logged this error. Ended run.")
     except KeyboardInterrupt:  # Manual termination of the script with Ctrl-C.
         logger.info("Manual user shutdown.")
         sys.exit()
