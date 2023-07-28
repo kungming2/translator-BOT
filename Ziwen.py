@@ -159,7 +159,7 @@ VERIFYING_KEYWORDS = [
 ]
 # A cache for language multipliers, generated each instance of running.
 # Allows us to access the wiki less and speed up the process.
-CACHED_MULTIPLIERS = {}
+CACHED_MULTIPLIERS: Dict[str, int] = {}
 
 
 """
@@ -269,7 +269,7 @@ def maintenance_most_recent() -> List[str]:
     return most_recent
 
 
-def maintenance_get_verified_thread():
+def maintenance_get_verified_thread() -> str | None:
     """
     Function to quickly get the Reddit ID of the latest verification thread on startup.
     This way, the ID of the thread does not need to be hardcoded into Ziwen.
@@ -286,6 +286,7 @@ def maintenance_get_verified_thread():
     )
 
     # Iterate over the results generator to get the ID.
+    verification_id = None
     for post in search_results:
         verification_id = post.id
 
@@ -341,7 +342,7 @@ Komento-related functions are all prefixed with `komento` in their name.
 """
 
 
-def komento_submission_from_comment(comment_id: str) -> praw.models.Submission:
+def komento_submission_from_comment(comment_id: str) -> praw.reddit.models.Submission:
     """
     Returns the parent submission as an object from a comment ID.
 
@@ -355,7 +356,7 @@ def komento_submission_from_comment(comment_id: str) -> praw.models.Submission:
     return reddit.submission(id=main_submission)
 
 
-def komento_analyzer(reddit_submission):
+def komento_analyzer(reddit_submission: praw.reddit.models.Submission):
     """
     A function that returns a dictionary containing various things that Ziwen checks against. It indexes comments with
     specific keys in the dictionary so that Ziwen can access them directly and easily.
@@ -527,7 +528,7 @@ Points-related functions are all prefixed with `points` in their name.
 """
 
 
-def points_worth_determiner(language_name: str):
+def points_worth_determiner(language_name: str) -> int:
     """
     This function takes a language name and determines the points worth for a translation for it. (the cap is 20)
 
@@ -657,7 +658,13 @@ def points_worth_cacher() -> None:
             conn_cache.commit()
 
 
-def points_tabulator(oid, oauthor: str, oflair_text: str, oflair_css, comment):
+def points_tabulator(
+    oid: str,
+    oauthor: str,
+    oflair_text: str,
+    oflair_css: str,
+    comment: praw.reddit.models.Submission,
+) -> None:
     """
     The main function to save a user's points, given a post submission's content and comment.
     This is intended to be able to assess the points at the point of the comment's writing.
@@ -707,7 +714,7 @@ def points_tabulator(oid, oauthor: str, oflair_text: str, oflair_css, comment):
             language_name = comment_language_data[0]
             # process_this = True
         else:
-            return None
+            return
     else:  # Regular posts here. Let's get the language.
         if "[" in oflair_text:
             language_tag = "[" + oflair_text.split("[")[1]
@@ -908,8 +915,6 @@ def points_tabulator(oid, oauthor: str, oflair_text: str, oflair_css, comment):
             cursor_main.execute(addition_command, addition_tuple)
             conn_main.commit()
 
-    return points_status
-
 
 """
 RECORDING FUNCTIONS
@@ -1021,7 +1026,7 @@ def record_to_wiki(
     oflair_text: str,
     s_or_i: bool,
     oflair_new: str,
-    user=None,
+    user: str | None = None,
 ) -> None:
     """
     A function that saves information to one of two wiki pages on the r/translator subreddit.
@@ -1200,7 +1205,9 @@ def lookup_cjk_matcher(content_text: str) -> List[str]:
     return matches if len(matches) != 0 else []
 
 
-def lookup_matcher(content_text: str, language_name: str):
+def lookup_matcher(
+    content_text: str, language_name: str | None
+) -> List[str] | Dict[str, str]:
     """
     A general-purpose function that evaluates a comment for lookup and returns the detected text in a dictionary keyed
     by the language that's passed to it. This function also tokenizes spaced languages and Chinese/Japanese.
@@ -1218,9 +1225,9 @@ def lookup_matcher(content_text: str, language_name: str):
 
     # If there is an identification command, we should classify this as the identified language.
     # First we check to see if there is another identification command here.
-    if "!identify:" in original_text:
+    if KEYWORDS.identify in original_text:
         # Parse the data from the command.
-        parsed_data = comment_info_parser(original_text, "!identify:")[0]
+        parsed_data = comment_info_parser(original_text, KEYWORDS.identify)[0]
 
         # Code to help make sense of CJK script codes if they're identified.
         language_keys = ["Chinese", "Japanese", "Korean"]
@@ -1538,7 +1545,7 @@ All reference functions are prefixed with `reference` in their name.
 """
 
 
-def reference_search(lookup_term: str):
+def reference_search(lookup_term: str) -> None | str:
     """
     Function to look up reference languages on Ethnologue and Wikipedia.
     This also searches MultiTree (no longer a separate function)
@@ -1547,7 +1554,7 @@ def reference_search(lookup_term: str):
     disabled.
 
     :param lookup_term: The language code or text we're looking for.
-    :return: A formatted string regardless of whether it found an appropriate match.
+    :return: A formatted string regardless of whether it found an appropriate match or None.
     """
 
     # Regex to check if code is in the private use area qaa-qtz
@@ -2066,10 +2073,8 @@ def ziwen_posts() -> None:
                     final_css_text += " (Long)"
                     post.reply(COMMENT_LONG + BOT_DISCLAIMER)
 
-            # This is a boolean. True if the user has posted too much and False if they haven't.
-            user_posted_too_much = notifier_over_frequency_checker(
-                oauthor, MOST_RECENT_OP
-            )
+            # True if the user has posted too much.
+            user_posted_too_much = MOST_RECENT_OP.count(oauthor) > 4
 
             # We don't want to send notifications if we're just testing. We also verify that user is not too extra.
             # A placeholder variable that normally contains a list of users notified.
@@ -2221,7 +2226,7 @@ def ziwen_bot() -> None:
 
         # Calculate points for the person.
         if oflair_text is not None and osaved is not True and oauthor is not None:
-            # We don't want to process it without the oflair text. Or if its vaerified comment
+            # We don't want to process it without the oflair text. Or if its verified comment
             logger.debug(f"[ZW] Bot: Processing points for u/{pauthor}")
             points_tabulator(oid, oauthor, oflair_text, oflair_css, post)
 
@@ -2358,11 +2363,11 @@ def ziwen_bot() -> None:
         """REFERENCE COMMANDS (!identify, !page, !reference, !search, `lookup`)"""
         if KEYWORDS.id in pbody or KEYWORDS.identify in pbody:
             # This is the general !identify command (synonym: !id)
-            determined_data = comment_info_parser(pbody, "!identify:")
+            determined_data = comment_info_parser(pbody, KEYWORDS.identify)
             # This should return what was actually identified. Normally will be a tuple or None.
             if determined_data is None:
                 # The command is problematic. Wrong punctuation, not enough arguments
-                logger.debug("[ZW] Bot: !identify data is invalid.")
+                logger.debug(f"[ZW] Bot: {KEYWORDS.identify} data is invalid.")
                 continue
 
             # Set some defaults just in case. These should be overwritten later.

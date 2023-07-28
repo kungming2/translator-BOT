@@ -581,7 +581,7 @@ def zh_word_decode_pinyin(s: str) -> str:
 
 
 # TODO handle overlap with zh_word_buddhist_dictionary_search
-def zh_word_buddhist_dictionary_search(chinese_word: str):
+def zh_word_buddhist_dictionary_search(chinese_word: str) -> None | Dict[str, str]:
     """
     Function that allows us to consult the Soothill-Hodous 'Dictionary of Chinese Buddhist Terms.'
     For more information, please visit: https://mahajana.net/texts/soothill-hodous.html
@@ -639,7 +639,7 @@ def zh_word_buddhist_dictionary_search(chinese_word: str):
         return general_dictionary
 
 
-def zh_word_cccanto_search(cantonese_word: str):
+def zh_word_cccanto_search(cantonese_word: str) -> None | Dict[str, str]:
     """
     Function that parses and returns data from the CC-Canto database, which uses CC-CEDICT's format.
     More information can be found here: https://cantonese.org/download.html
@@ -701,7 +701,9 @@ def zh_word_cccanto_search(cantonese_word: str):
 
 
 # noinspection PyBroadException
-def zh_word_tea_dictionary_search(chinese_word: str, zw_useragent: Dict[str, str]):
+def zh_word_tea_dictionary_search(
+    chinese_word: str, zw_useragent: Dict[str, str]
+) -> None | Dict[str, str]:
     """
     Function that searches the Babelcarp Chinese Tea Lexicon for Chinese tea terms.
 
@@ -888,7 +890,7 @@ def zh_word_chengyu(chengyu: str) -> str | None:
         return cy_to_post
 
 
-def zh_word(word: str, zw_useragent: Dict[str, str]):
+def zh_word(word: str, zw_useragent: Dict[str, str]) -> str:
     """
     Function to define Chinese words and return their readings and meanings. A Chinese word is one that is longer than
     a single character.

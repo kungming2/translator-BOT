@@ -96,7 +96,7 @@ class Ajo:
     # noinspection PyUnboundLocalVariable
     def __init__(
         self,
-        reddit_submission: Dict[any, any] | praw.models.submission,
+        reddit_submission: Dict[any, any] | praw.reddit.models.Submission,
         post_templates: Dict[str, str],
         user_agent,
     ):

@@ -89,7 +89,7 @@ STATUS_KEYWORDS = {
 }
 
 # These are symbols used to indicate states in defined multiple posts. The last two are currently used.
-DEFINED_MULTIPLE_LEGEND = {
+DEFINED_MULTIPLE_LEGEND: Dict[str, str] = {
     "⍉": KEYWORDS.missing.name,
     "¦": "inprogress",
     "✓": KEYWORDS.doublecheck.name,
@@ -150,7 +150,7 @@ def get_random_useragent() -> Dict[str, str]:
         return {"User-Agent": random_ua, "Accept": accept_string}  # headers
 
 
-def action_counter(messages_number, action_type: str) -> None:
+def action_counter(messages_number: int, action_type: str) -> None:
     """
     Function takes in a number and an action type and writes it to a file.
 
@@ -159,17 +159,12 @@ def action_counter(messages_number, action_type: str) -> None:
     :return: This function does not return anything.
     """
 
-    try:
-        new_messages_number = int(messages_number)  # Make sure it's an integer
-    except ValueError:  # This is not a valid integer
-        return
-
-    if new_messages_number == 0:  # There's nothing to add. Don't do anything.
+    if messages_number == 0:  # There's nothing to add. Don't do anything.
         return
 
     # Convert !id: into its full synonym for consistency.
-    if action_type == "!id:":
-        action_type = "!identify:"
+    if action_type == KEYWORDS.id:
+        action_type = KEYWORDS.identify
 
     # Format the current day as a string.
     current_day = strftime("%Y-%m-%d")
@@ -179,26 +174,12 @@ def action_counter(messages_number, action_type: str) -> None:
         current_actions_dict = json.load(f)
         if current_day in current_actions_dict:  # This day has been recorded.
             if action_type in current_actions_dict[current_day]:
-                current_actions_dict[current_day][action_type] += new_messages_number
+                current_actions_dict[current_day][action_type] += messages_number
             else:
-                current_actions_dict[current_day][action_type] = new_messages_number
+                current_actions_dict[current_day][action_type] = messages_number
         else:  # This day hasn't been recorded.
-            current_actions_dict[current_day] = {action_type: new_messages_number}
+            current_actions_dict[current_day] = {action_type: messages_number}
             json.dump(current_actions_dict, f, sort_keys=True, indent=4)
-
-
-def load_statistics_data(language_code: str):
-    """
-    Function that loads the language statistics dictionary from our saved JSON file.
-
-    :param language_code: Any language code.
-    :return: The language dictionary if it exists. None otherwise.
-    """
-
-    # Open the file
-    with open(FILE_ADDRESS_ALL_STATISTICS, encoding="utf-8") as f:
-        stats_data = json.load(f)
-        return stats_data.get(language_code)
 
 
 def time_convert_to_string(unix_integer) -> str:

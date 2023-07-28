@@ -22,21 +22,20 @@ from _config import logger
 from zh_processing import zh_character_calligraphy_search
 
 
-def ja_character(character, zw_useragent: Dict[str, str]):
+def ja_character(character, zw_useragent: Dict[str, str]) -> str:
     """
     This function looks up a Japanese kanji's pronunciations and meanings
 
     :param character: A kanji or single hiragana. This function will not work with individual katakana.
-    :return to_post: A formatted string with
+    :return to_post: A formatted string
     """
 
     is_kana = False
     multi_mode = False
     multi_character_dict = {}  # Dictionary to store the info we get.
     total_data = ""
-    kana_test = re.search(
-        "[\u3040-\u309f]", character
-    )  # Check to see if it's hiragana. Will return none if kanji.
+    # Check to see if it's hiragana. Will return none if kanji.
+    kana_test = re.search("[\u3040-\u309f]", character)
 
     multi_character_list = list(character)
 
@@ -60,7 +59,7 @@ def ja_character(character, zw_useragent: Dict[str, str]):
         if not multi_mode:
             # Regular old-school one character search.
             eth_page = requests.get(
-                "http://jisho.org/search/" + character + "%20%23kanji",
+                f"http://jisho.org/search/{character}%20%23kanji",
                 headers=zw_useragent,
             )
             tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
@@ -74,8 +73,8 @@ def ja_character(character, zw_useragent: Dict[str, str]):
                 len(meaning) == 0
             ):  # Check to not return anything if the entry is invalid
                 to_post = (
-                    "There were no results for {}. Please check to make sure it is a valid Japanese "
-                    "character or word.".format(character)
+                    f"There were no results for {character}. Please check to make sure it is a valid Japanese "
+                    "character or word."
                 )
                 logger.info(f"[ZW] JA-Character: No results for {character}")
                 return to_post
@@ -358,7 +357,7 @@ def ja_word_surname(name: str, zw_useragent: Dict[str, str]) -> None | str:
     return to_post
 
 
-def ja_word(japanese_word: str, zw_useragent: Dict[str, str]):
+def ja_word(japanese_word: str, zw_useragent: Dict[str, str]) -> str:
     """
     A newer function that uses Jisho's unlisted API in order to return data from Jisho.org for Japanese words.
     See here for more information: https://jisho.org/forum/54fefc1f6e73340b1f160000-is-there-any-kind-of-search-api
@@ -459,7 +458,7 @@ def ja_word(japanese_word: str, zw_useragent: Dict[str, str]):
     return return_comment
 
 
-def ja_word_yojijukugo(yojijukugo, zw_useragent: Dict[str, str]):
+def ja_word_yojijukugo(yojijukugo, zw_useragent: Dict[str, str]) -> str | None:
     """
     A newer rewrite of the yojijukugo function that has been changed to match the zh_word_chengyu function.
     That is, now its role is to grab a Japanese meaning and explanation in order to give some insight.
