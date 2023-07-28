@@ -15,46 +15,44 @@ import csv
 import json
 import random
 import re
-from sqlite3 import Connection, Cursor
 import time
+from datetime import datetime
+from sqlite3 import Connection, Cursor
 from typing import Any, Callable, Dict, List, Tuple
+
 import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 import prawcore
-from Ajo import ajo_loader
-from _responses import (
-    MSG_NSFW_WARNING,
-    MSG_PAGE,
-    MSG_REMOVAL_LINK,
-    MSG_LANGUAGE_FREQUENCY,
-    MSG_CANNOT_PROCESS,
-    MSG_SUBSCRIBE,
-    MSG_SUBSCRIBE_LINK,
-    MSG_UNSUBSCRIBE_ALL,
-    MSG_NO_SUBSCRIPTIONS,
-    MSG_NOTIFY,
-    MSG_NOTIFY_IDENTIFY,
-    MSG_UNSUBSCRIBE_BUTTON,
-    MSG_NO_POINTS,
-)
+
 from _config import (
-    logger,
-    NOTIFICATIONS_LIMIT,
     BOT_DISCLAIMER,
-    FILE_ADDRESS_ERROR,
     FILE_ADDRESS_ACTIVITY,
     FILE_ADDRESS_ALL_STATISTICS,
-    SUBREDDIT,
+    FILE_ADDRESS_ERROR,
     KEYWORDS,
+    NOTIFICATIONS_LIMIT,
+    SUBREDDIT,
     action_counter,
+    logger,
     time_convert_to_string,
 )
 from _language_consts import ISO_LANGUAGE_COUNTRY_ASSOCIATED, MAIN_LANGUAGES
-from _languages import (
-    converter,
-    comment_info_parser,
-    language_list_splitter,
+from _languages import comment_info_parser, converter, language_list_splitter
+from _responses import (
+    MSG_CANNOT_PROCESS,
+    MSG_LANGUAGE_FREQUENCY,
+    MSG_NO_POINTS,
+    MSG_NO_SUBSCRIPTIONS,
+    MSG_NOTIFY,
+    MSG_NOTIFY_IDENTIFY,
+    MSG_NSFW_WARNING,
+    MSG_PAGE,
+    MSG_REMOVAL_LINK,
+    MSG_SUBSCRIBE,
+    MSG_SUBSCRIBE_LINK,
+    MSG_UNSUBSCRIBE_ALL,
+    MSG_UNSUBSCRIBE_BUTTON,
 )
-from datetime import datetime
+from Ajo import ajo_loader
 
 
 def messaging_is_valid_user(username: str, reddit: praw.Reddit) -> bool:

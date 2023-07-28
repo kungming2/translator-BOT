@@ -12,84 +12,77 @@ import os
 import random
 import re
 import sqlite3  # For processing and accessing the databases.
+import sys
 import time
 import traceback  # For documenting errors that are encountered.
-import sys
 from typing import Dict, List
 
-import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
-import prawcore  # The base module praw for error logging.
-
+import googlesearch
 import jieba  # Segmenter for Mandarin Chinese.
 import MeCab  # Advanced segmenter for Japanese.
-import tinysegmenter  # Basic segmenter for Japanese; not used on Windows.
-
-import googlesearch
+import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
+import prawcore  # The base module praw for error logging.
 import psutil
 import requests
-
+import tinysegmenter  # Basic segmenter for Japanese; not used on Windows.
 from korean_romanizer.romanizer import Romanizer
 from lxml import html
 from mafan import simplify
 from wiktionaryparser import WiktionaryParser
 
-from Ajo import Ajo, ajo_defined_multiple_comment_parser, ajo_writer, ajo_loader
-from _languages import (
-    VERSION_NUMBER_LANGUAGES,
-    language_mention_search,
-    converter,
-    bad_title_reformat,
-    comment_info_parser,
-    title_format,
-    lang_code_search,
-    main_posts_filter,
-)
-from _language_consts import (
-    MAIN_LANGUAGES,
-    ISO_MACROLANGUAGES,
-    CJK_LANGUAGES,
-)
-from _login import USERNAME, ZIWEN_APP_ID, ZIWEN_APP_SECRET, PASSWORD
 from _config import (
+    BOT_DISCLAIMER,
+    FILE_ADDRESS_AJO_DB,
     FILE_ADDRESS_CACHE,
-    logger,
+    FILE_ADDRESS_ERROR,
+    FILE_ADDRESS_FILTER,
+    FILE_ADDRESS_MAIN,
+    FILE_ADDRESS_MECAB,
     KEYWORDS,
     SUBREDDIT,
-    FILE_ADDRESS_FILTER,
-    BOT_DISCLAIMER,
-    FILE_ADDRESS_ERROR,
-    FILE_ADDRESS_MAIN,
-    FILE_ADDRESS_AJO_DB,
-    FILE_ADDRESS_MECAB,
     action_counter,
-    time_convert_to_string,
     get_random_useragent,
+    logger,
+    time_convert_to_string,
 )
+from _language_consts import CJK_LANGUAGES, ISO_MACROLANGUAGES, MAIN_LANGUAGES
+from _languages import (
+    VERSION_NUMBER_LANGUAGES,
+    bad_title_reformat,
+    comment_info_parser,
+    converter,
+    lang_code_search,
+    language_mention_search,
+    main_posts_filter,
+    title_format,
+)
+from _login import PASSWORD, USERNAME, ZIWEN_APP_ID, ZIWEN_APP_SECRET
 from _responses import (
     COMMENT_ADVANCED_IDENTIFY_ERROR,
     COMMENT_BAD_TITLE,
     COMMENT_CLAIM,
     COMMENT_CURRENTLY_CLAIMED,
     COMMENT_DEFINED_MULTIPLE,
-    COMMENT_PAGE_DISALLOWED,
-    COMMENT_UNKNOWN,
+    COMMENT_ENGLISH_ONLY,
+    COMMENT_INVALID_CODE,
+    COMMENT_INVALID_REFERENCE,
+    COMMENT_INVALID_SCRIPT,
+    COMMENT_LONG,
     COMMENT_NO_LANGUAGE,
     COMMENT_NO_RESULTS,
-    COMMENT_ENGLISH_ONLY,
-    COMMENT_INVALID_REFERENCE,
-    COMMENT_INVALID_CODE,
-    COMMENT_INVALID_SCRIPT,
+    COMMENT_PAGE_DISALLOWED,
+    COMMENT_UNKNOWN,
     COMMENT_VERIFICATION_RESPONSE,
-    COMMENT_LONG,
-    MSG_RESTORE_TEXT_TEMPLATE,
-    MSG_RESTORE_LINK_FAIL,
-    MSG_RESTORE_TEXT_FAIL,
-    MSG_RESTORE_NOT_ELIGIBLE,
     MSG_MISSING_ASSETS,
-    MSG_WIKIPAGE_FULL,
+    MSG_RESTORE_LINK_FAIL,
+    MSG_RESTORE_NOT_ELIGIBLE,
+    MSG_RESTORE_TEXT_FAIL,
+    MSG_RESTORE_TEXT_TEMPLATE,
     MSG_SHORT_THANKS_TRANSLATED,
     MSG_TRANSLATED,
+    MSG_WIKIPAGE_FULL,
 )
+from Ajo import Ajo, ajo_defined_multiple_comment_parser, ajo_loader, ajo_writer
 from ja_processing import ja_character, ja_word
 from notifier import (
     notifier_over_frequency_checker,

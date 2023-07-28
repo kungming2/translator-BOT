@@ -7,8 +7,8 @@ import json
 import logging
 import os
 import random
-from time import strftime
 from enum import StrEnum
+from time import strftime
 from typing import Dict
 
 # Set up the directories based on the current location of the bots.

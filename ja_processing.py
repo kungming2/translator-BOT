@@ -15,9 +15,11 @@ More general ones are prefixed by `lookup`.
 
 import re
 from typing import Dict
+
 import requests
-from lxml import html
 import romkan  # Needed for automatic Japanese romaji conversion.
+from lxml import html
+
 from _config import logger
 from zh_processing import zh_character_calligraphy_search
 

@@ -3,22 +3,23 @@
 """A collection of database sets and language functions that all r/translator bots use."""
 
 import csv
-import re
-import os
 import itertools
+import os
+import re
 from typing import Dict, List, Tuple
 
 from rapidfuzz import fuzz  # Switched to rapidfuzz
+
+from _config import KEYWORDS
 from _language_consts import (
-    MAIN_LANGUAGES,
     APP_WORDS,
-    FUZZ_IGNORE_WORDS,
     COUNTRY_LIST,
-    ISO_LANGUAGE_COUNTRY_ASSOCIATED,
     ENGLISH_2_WORDS,
     ENGLISH_3_WORDS,
+    FUZZ_IGNORE_WORDS,
+    ISO_LANGUAGE_COUNTRY_ASSOCIATED,
+    MAIN_LANGUAGES,
 )
-from _config import KEYWORDS
 
 VERSION_NUMBER_LANGUAGES = "1.7.22"
 

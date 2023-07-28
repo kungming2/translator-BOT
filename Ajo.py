@@ -15,29 +15,31 @@ External Ajo-specific/related functions are all prefixed with `ajo` in their nam
 class functions.
 """
 
+import csv
+import re
 from sqlite3 import Connection, Cursor
 from typing import Dict, List, Tuple
-from _languages import (
-    language_mention_search,
-    iso639_3_to_iso639_1,
-    converter,
-    country_converter,
-    lang_code_search,
-    title_format,
-    FILE_ADDRESS_ISO_ALL,
-    app_multiple_definer,
-)
-from _login import ZIWEN_APP_ID, ZIWEN_APP_SECRET, PASSWORD, USERNAME
+
+import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
+
 from _config import (
-    INVERSE_MULTIPLE_LEGEND,
     DEFINED_MULTIPLE_LEGEND,
+    INVERSE_MULTIPLE_LEGEND,
     STATUS_KEYWORDS,
     logger,
 )
 from _language_consts import MAIN_LANGUAGES
-import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
-import re
-import csv
+from _languages import (
+    FILE_ADDRESS_ISO_ALL,
+    app_multiple_definer,
+    converter,
+    country_converter,
+    iso639_3_to_iso639_1,
+    lang_code_search,
+    language_mention_search,
+    title_format,
+)
+from _login import PASSWORD, USERNAME, ZIWEN_APP_ID, ZIWEN_APP_SECRET
 
 
 class Ajo:

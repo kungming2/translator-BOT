@@ -20,18 +20,20 @@ import random
 import re
 import time
 from typing import Dict, Tuple
+
+import requests
 from bs4 import BeautifulSoup
+from korean_romanizer.romanizer import Romanizer
+from lxml import html
+from mafan import simplify, tradify
+
 from _config import (
-    logger,
     FILE_ADDRESS_OLD_CHINESE,
     FILE_ADDRESS_ZH_BUDDHIST,
     FILE_ADDRESS_ZH_CCCANTO,
     FILE_ADDRESS_ZH_ROMANIZATION,
+    logger,
 )
-import requests
-from lxml import html
-from mafan import simplify, tradify
-from korean_romanizer.romanizer import Romanizer
 
 
 def zh_character_oc_search(character: str) -> str | None:

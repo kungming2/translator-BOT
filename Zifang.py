@@ -2,12 +2,12 @@
 """
 Zifang is a new addition to help Ziwen with some ancillary tasks.
 """
-from collections import defaultdict
-from itertools import combinations
 import re
 import sys
 import time
 import traceback
+from collections import defaultdict
+from itertools import combinations
 from typing import Dict, List
 
 import praw
@@ -15,18 +15,18 @@ import wikipedia
 import yaml
 from rapidfuzz import fuzz
 
-from _login import ZIFANG_APP_ID, ZIFANG_APP_SECRET, PASSWORD, USERNAME
 from _config import (
-    logger,
     BOT_DISCLAIMER,
     FILE_ADDRESS_ERROR,
     SUBREDDIT,
     action_counter,
+    logger,
 )
 from _languages import VERSION_NUMBER_LANGUAGES, converter
+from _login import PASSWORD, USERNAME, ZIFANG_APP_ID, ZIFANG_APP_SECRET
 from _responses import (
-    ZF_CLOSING_OUT_SUBJECT,
     ZF_CLOSING_OUT_MESSAGE,
+    ZF_CLOSING_OUT_SUBJECT,
     ZF_DUPLICATE_COMMENT,
 )
 
