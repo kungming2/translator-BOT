@@ -759,13 +759,13 @@ def points_tabulator(
     if (
         len(pbody) > 13
         and oauthor != pauthor
-        and "!translated" in pbody
-        or "!doublecheck" in pbody
+        and KEYWORDS.translated in pbody
+        or KEYWORDS.doublecheck in pbody
     ):
         # This is a real translation.
         if (
             len(pbody) < 60
-            and "!translated" in pbody
+            and KEYWORDS.translated in pbody
             and any(keyword in pbody for keyword in VERIFYING_KEYWORDS)
         ):
             # This should be a verification command. Someone's agreeing that another is right.
@@ -786,7 +786,7 @@ def points_tabulator(
             )
             translator_to_add = pauthor
             points += 1 + (1 * language_multiplier)
-    elif len(pbody) < 13 and "!translated" in pbody:
+    elif len(pbody) < 13 and KEYWORDS.translated in pbody:
         # It's marking someone else's translation as translated. We want to get the parent.
         logger.debug(
             f"[ZW] Points tabulator: This is a cleanup !translated comment by u/{pauthor}."
@@ -805,7 +805,7 @@ def points_tabulator(
         except AttributeError:  # Parent is a post.
             logger.debug("[ZW] Points tabulator: Parent of this comment is a post.")
         points += 1  # Give the cleaner-upper a point.
-    elif len(pbody) > 13 and "!translated" in pbody and pauthor == oauthor:
+    elif len(pbody) > 13 and KEYWORDS.translated in pbody and pauthor == oauthor:
         # The OP marked it !translated, but with a longer comment.
         logger.debug(
             f"[ZW] Points tabulator: A !translated comment by the OP u/{pauthor} for someone else?."
@@ -2545,7 +2545,7 @@ def ziwen_bot() -> None:
         if KEYWORDS.page in pbody:  # This is the basic paging !page function.
             logger.info(f"[ZW] Bot: COMMAND: {KEYWORDS.page}, from u/{pauthor}.")
 
-            determined_data = comment_info_parser(pbody, "!page:")
+            determined_data = comment_info_parser(pbody, KEYWORDS.page)
             # This should return what was actually identified. Normally will be a Tuple or None
             if determined_data is None:
                 # The command is problematic. Wrong punctuation, not enough arguments
@@ -2743,7 +2743,7 @@ def ziwen_bot() -> None:
         if KEYWORDS.reference in pbody:
             # the !reference command gets information from Ethnologue, Wikipedia, and other sources
             # to post as a reference
-            determined_data = comment_info_parser(pbody, "!reference:")
+            determined_data = comment_info_parser(pbody, KEYWORDS.reference)
             # This should return what was actually identified. Normally will be a Tuple or None
             if determined_data is None:
                 # The command is problematic. Wrong punctuation, not enough arguments
@@ -3179,7 +3179,7 @@ def ziwen_bot() -> None:
             if not is_mod(pauthor):
                 # Check to see if the person calling this command is a moderator
                 continue
-            match = comment_info_parser(pbody, "!note:")[0]
+            match = comment_info_parser(pbody, KEYWORDS.note)[0]
             language_name = converter(match)[1]
             logger.info(
                 f"[ZW] Bot: COMMAND: {KEYWORDS.note}, from moderator u/{pauthor}."
@@ -3200,7 +3200,7 @@ def ziwen_bot() -> None:
                 # Check to see if the person calling this command is a moderator
                 continue
 
-            set_data = comment_info_parser(pbody, "!set:")
+            set_data = comment_info_parser(pbody, KEYWORDS.set)
 
             if set_data is not None:  # We have data.
                 match = set_data[0]

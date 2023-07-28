@@ -18,6 +18,7 @@ from _language_consts import (
     ENGLISH_2_WORDS,
     ENGLISH_3_WORDS,
 )
+from _config import KEYWORDS
 
 VERSION_NUMBER_LANGUAGES = "1.7.22"
 
@@ -552,8 +553,8 @@ def comment_info_parser(pbody: str, command: str):
     longer_search = False
     match = ""
 
-    if "!id:" in pbody:  # Allows for a synonym
-        pbody = pbody.replace("!id:", "!identify:")
+    if KEYWORDS.id in pbody:  # Allows for a synonym
+        pbody = pbody.replace(KEYWORDS.id, KEYWORDS.identify)
 
     if "\n" in pbody:  # Replace linebreaks
         pbody = pbody.replace("\n", " ")

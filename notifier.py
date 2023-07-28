@@ -44,6 +44,7 @@ from _config import (
     FILE_ADDRESS_ACTIVITY,
     FILE_ADDRESS_ALL_STATISTICS,
     SUBREDDIT,
+    KEYWORDS,
     action_counter,
     time_convert_to_string,
 )
@@ -538,19 +539,19 @@ def notifier_page_multiple_detector(pbody: str) -> List[str]:
     """
 
     # Returns a number of pages detected in a single comment.
-    num_count_pages = pbody.count("!page:")
+    num_count_pages = pbody.count(KEYWORDS.page)
 
     if num_count_pages < 1:
         return None
     # There are one or more page languages.
     new_matches = []
 
-    page_chunks = pbody.split("!page:")[1:]
-    page_chunks = ["!page:" + s for s in page_chunks]
+    page_chunks = pbody.split(KEYWORDS.page)[1:]
+    page_chunks = [KEYWORDS.page + s for s in page_chunks]
 
     for chunk in page_chunks:
         try:
-            new_match = comment_info_parser(chunk, "!page:")[0]
+            new_match = comment_info_parser(chunk, KEYWORDS.page)[0]
             new_matches.append(new_match)
         except TypeError:
             continue
