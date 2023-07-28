@@ -189,7 +189,7 @@ class Ajo:
                 else:
                     self.title = self.title_original = reddit_submission.title
 
-                if "{" and "}" in reddit_submission.title:
+                if "{" in reddit_submission.title and "}" in reddit_submission.title:
                     # likely contains a country name
                     country_suffix_name = re.search(r"{(\D+)}", reddit_submission.title)
                     # Get the Country name only
