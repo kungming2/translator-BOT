@@ -58,6 +58,21 @@ FILE_ADDRESS_PORT = os.path.join(script_directory, "wy_port.json")
 FILE_ADDRESS_NOTIFY_EXCHANGE = os.path.join(script_directory, "hb_exchangelist.db")
 FILE_ADDRESS_HUIBAN_OLDPOSTS = os.path.join(script_directory, "hb_processed.db")
 
+# These are the words that count as a 'short thanks' from the OP.
+# If a message includes them, the bot won't message them asking them to thank the translator.
+THANKS_KEYWORDS = [
+    "thank",
+    "thanks",
+    "tyvm",
+    "tysm",
+    "thx",
+    "danke",
+    "arigato",
+    "gracias",
+    "appreciate",
+    "solved",
+]
+
 # These are the commands on r/translator.
 keywords_dict = {
     "page": "!page:",

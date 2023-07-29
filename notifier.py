@@ -18,7 +18,7 @@ import re
 import time
 from datetime import datetime
 from sqlite3 import Connection, Cursor
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 import prawcore
@@ -30,7 +30,6 @@ from _config import (
     FILE_ADDRESS_ERROR,
     KEYWORDS,
     NOTIFICATIONS_LIMIT,
-    SUBREDDIT,
     action_counter,
     logger,
     time_convert_to_string,
@@ -53,6 +52,7 @@ from _responses import (
     MSG_UNSUBSCRIBE_BUTTON,
 )
 from Ajo import ajo_loader
+from Ziwen_helper import CORRECTED_SUBREDDIT, is_mod
 
 
 def messaging_is_valid_user(username: str, reddit: praw.Reddit) -> bool:
@@ -119,7 +119,7 @@ def messaging_language_frequency(
         language_name = language_name.replace(" ", "_")
 
     # Fetch the wikipage.
-    overall_page = reddit.subreddit(SUBREDDIT).wiki[language_name.lower()]
+    overall_page = reddit.subreddit(CORRECTED_SUBREDDIT).wiki[language_name.lower()]
     try:
         overall_page_content = str(overall_page.content_md)
     except (
@@ -861,7 +861,6 @@ def ziwen_notifier(
     cursor_ajo: Cursor,
     cursor_main: Cursor,
     conn_main: Connection,
-    is_mod: Callable[[str], bool],
 ) -> List[str]:
     """
     This function notifies people about posts they're subscribed to. Unlike ziwen_messages, this is not a top-level
@@ -931,7 +930,8 @@ def ziwen_notifier(
             post_type = "post"  # Since these are technically not language requests
 
             # Here we have code to make sure that only mods and the bot send notifications for meta/community posts.
-            if not is_mod(oauthor):  # This OP is not a mod. Don't send notifications.
+            if not is_mod(reddit, oauthor):
+                # This OP is not a mod. Don't send notifications.
                 return []  # Exit.
     else:  # This is a specific code, we want to add the people only signed up for them.
         # Note, this only gets people who are specifically signed up for them, not
@@ -1026,7 +1026,6 @@ def ziwen_messages(
     reddit: praw.Reddit,
     cursor_main: Cursor,
     conn_main: Connection,
-    is_mod: Callable[[str], bool],
 ) -> None:
     """
     A top-level system to process commands via the messaging system of Reddit. This system acts upon keywords included
@@ -1165,7 +1164,7 @@ def ziwen_messages(
             to_post = "Ziwen is running nominally.\n\n"
 
             # Determine if user is a moderator.
-            if is_mod(mauthor):  # New status check from moderators.
+            if is_mod(reddit, mauthor):  # New status check from moderators.
                 # Get the last two recorded error entries for debugging.
                 to_post += record_retrieve_error_log()
                 if len(to_post) > 10000:  # If the PM is too long, shorten it.
@@ -1237,7 +1236,7 @@ def ziwen_messages(
             action_counter(1, "Status checks")
             message.reply(compilation + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
 
-        elif "add" in msubject and is_mod(mauthor):
+        elif "add" in msubject and is_mod(reddit, mauthor):
             # Mod manually adding people to the notifications database.
             logger.info(
                 f"Messages: New username addition message from moderator u/{mauthor}."
@@ -1266,7 +1265,7 @@ def ziwen_messages(
                 addition_message = f"Added the language codes **{match_codes_print}** for u/{add_username} into the notifications database."
                 message.reply(addition_message)
 
-        elif "remove" in msubject and is_mod(mauthor):
+        elif "remove" in msubject and is_mod(reddit, mauthor):
             # Mod manually removing people from the notifications database.
             logger.info(
                 f"Messages: New username removal message from moderator u/{mauthor}."
