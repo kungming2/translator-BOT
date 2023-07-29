@@ -870,31 +870,25 @@ def ajo_writer(new_ajo: Ajo, cursor_ajo: Cursor, conn_ajo: Connection) -> None:
     :return: Nothing.
     """
 
-    ajo_id = str(new_ajo.id)
     created_time = new_ajo.created_utc
-    cursor_ajo.execute("SELECT * FROM local_database WHERE id = ?", (ajo_id,))
-    stored_ajo = cursor_ajo.fetchone()
+    representation = str(new_ajo.__dict__)
+    ajo_to_store = (new_ajo.id, created_time, representation)
+    cursor_ajo.execute(
+        """
+        INSERT INTO local_database(id, created_time, ajo) VALUES (?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET ajo = excluded.ajo
+    """,
+        ajo_to_store,
+    )
 
-    # TODO we can reduce this code with UPSERT if SQLite is the right version
-    if stored_ajo is not None:  # There's already a stored entry
-        stored_ajo = eval(stored_ajo[2])  # We only want the stored dict here.
-        if new_ajo.__dict__ != stored_ajo:
-            # The dictionary representations are not the same
-            # Convert the dict of the Ajo into a string.
-            representation = str(new_ajo.__dict__)
-            update_command = "UPDATE local_database SET ajo = ? WHERE id = ?"
-            cursor_ajo.execute(update_command, (representation, ajo_id))
-            conn_ajo.commit()
-            logger.debug("ajo_writer: Ajo exists, data updated.")
-        else:
-            logger.debug("ajo_writer: Ajo exists, but no change in data.")
-    else:  # This is a new entry, not in my files.
-        representation = str(new_ajo.__dict__)
-        ajo_to_store = (ajo_id, created_time, representation)
-        cursor_ajo.execute("INSERT INTO local_database VALUES (?, ?, ?)", ajo_to_store)
-        conn_ajo.commit()
-        logger.debug("ajo_writer: New Ajo not found in the database.")
+    conn_ajo.commit()
 
+    if cursor_ajo.rowcount == 1:
+        logger.debug(
+            "ajo_writer: New Ajo added or existing Ajo updated in the database."
+        )
+    else:
+        logger.debug("ajo_writer: Ajo exists, but no change in data.")
     logger.debug("ajo_writer: Wrote Ajo to local database.")
 
 

@@ -6,7 +6,7 @@ Ziwen posts comments and sends messages and also moderates and keeps r/translato
 members with useful reference information and enforces the community's formatting guidelines.
 """
 
-import datetime
+from datetime import datetime
 import os
 import re
 import sqlite3  # For processing and accessing the databases.
@@ -28,6 +28,7 @@ from _config import (
     FILE_ADDRESS_FILTER,
     FILE_ADDRESS_MAIN,
     KEYWORDS,
+    STATUS_KEYWORDS,
     THANKS_KEYWORDS,
     action_counter,
     get_random_useragent,
@@ -56,7 +57,7 @@ from _responses import (
 from Ajo import Ajo, ajo_loader, ajo_writer
 from notifier import record_activity_csv, ziwen_messages, ziwen_notifier
 from zh_processing import zh_character, zh_word
-from Ziwen_command_processor import KeywordInputTuple, ZiwenCommandProcessor
+from Ziwen_command_processor import ZiwenCommandProcessor
 from Ziwen_helper import (
     CORRECTED_SUBREDDIT,
     MESSAGES_OKAY,
@@ -174,7 +175,7 @@ def maintenance_template_retriever() -> Dict[str, str]:
         new_template_ids[css_associated_code] = template["id"]
 
     # Return a dictionary, if there's data, otherwise return an empty dictionary.
-    return new_template_ids if len(new_template_ids.keys()) != 0 else {}
+    return new_template_ids if len(new_template_ids) != 0 else {}
 
 
 def maintenance_most_recent() -> List[str]:
@@ -293,11 +294,9 @@ def points_worth_determiner(language_name: str) -> int:
     :param language_name: The name of the language we want to know the points worth for.
     :return final_point_value: The points value for the language expressed as an integer.
     """
-
-    if " " in language_name:  # Wiki links need underscores instead of spaces.
-        language_name = language_name.replace(" ", "_")
-    elif "-" in language_name:  # The wiki does not support hyphens in urls.
-        language_name = language_name.replace("-", "_")
+    for spacing in " -":  # The wiki does not support dashes or underscores in urls.
+        if spacing in language_name:
+            language_name = language_name.replace(spacing, "_")
 
     if language_name == "Unknown":
         return 4  # The multiplier for Unknown can be hard coded.
@@ -346,7 +345,7 @@ def points_worth_determiner(language_name: str) -> int:
 
     # Write data to the cache so that it can be retrieved later.
     current_zeit = time.time()
-    month_string = datetime.datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
+    month_string = datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
     insert_data = (month_string, language_name, final_point_value)
     cursor_cache.execute("INSERT INTO multiplier_cache VALUES (?, ?, ?)", insert_data)
     conn_cache.commit()
@@ -387,7 +386,7 @@ def points_worth_cacher() -> None:
 
     # Get the year-month string.
     current_zeit = time.time()
-    month_string = datetime.datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
+    month_string = datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
 
     # Select from the database the current months data if it exists.
     multiplier_command = "SELECT * from multiplier_cache WHERE month_year = ?"
@@ -436,7 +435,7 @@ def points_tabulator(
     """
 
     current_time = time.time()
-    month_string = datetime.datetime.fromtimestamp(current_time).strftime("%Y-%m")
+    month_string = datetime.fromtimestamp(current_time).strftime("%Y-%m")
     points_status = []
 
     if oflair_css in ["meta", "art"]:
@@ -470,19 +469,17 @@ def points_tabulator(
         comment_language_data = language_mention_search(comment.body)
         if comment_language_data is not None:  # There is a language mentioned..
             language_name = comment_language_data[0]
-            # process_this = True
         else:
             return
     else:  # Regular posts here. Let's get the language.
-        if "[" in oflair_text:
-            language_tag = "[" + oflair_text.split("[")[1]
-            language_name = converter(language_tag.lower()[1:-1]).language_name
-        elif "{" in oflair_text:  # Contains a bracket. Spanish {Mexico} (Identified)
-            language_name = oflair_text.split("{")[0].strip()
-        elif "(" in oflair_text:  # Contains a parantheses. Spanish (Identified)
-            language_name = oflair_text.split("(")[0].strip()
-        else:
+        split_char = next((ch for ch in "[{(" if ch in oflair_text), None)
+        if split_char is None:
             language_name = oflair_text
+        elif split_char == "[":
+            language_tag = "[" + oflair_text.split("[", 1)[1]
+            language_name = converter(language_tag.lower()[1:-1]).language_name
+        else:  # Contains a bracket or parentheses. Spanish {Mexico} (Identified)
+            language_name = oflair_text.split(split_char, 1)[0].strip()
 
     try:
         language_multiplier = points_worth_determiner(
@@ -697,9 +694,7 @@ def record_filter_log(filtered_title: str, ocreated: float, filter_type: str) ->
     # File address for the filter log, cumulative.
     with open(FILE_ADDRESS_FILTER, "a+", encoding="utf-8") as f:
         # Format the new line.
-        timestamp_utc = str(
-            datetime.datetime.fromtimestamp(ocreated).strftime("%Y-%m-%d")
-        )
+        timestamp_utc = str(datetime.fromtimestamp(ocreated).strftime("%Y-%m-%d"))
         # Write the new line.
         f.write(f"\n{timestamp_utc} | {filtered_title} | {filter_type}")
 
@@ -713,40 +708,29 @@ def record_last_post_comment() -> str:
     :return to_post: A formatted string containing the link of the last post as well as the text of the last comment.
     """
 
-    # Some default values just in case.
-    nowutc = time.time()
-    s_format_time = c_format_time = str(
-        datetime.datetime.fromtimestamp(nowutc).strftime("%Y-%m-%d [%I:%M:%S %p]")
-    )
-    cbody = ""
-    slink = ""
-    cpermalink = ""
-
-    for submission in subredditHelper.new(limit=1):
-        # Get the last posted post in the subreddit.
+    output = ""
+    s_format = "%a, %b %d, %Y [%I:%M:%S %p]"
+    # Get the last posted post in the subreddit.
+    submission = next(subredditHelper.new(limit=1), None)
+    if submission is not None:
         sutc = submission.created_utc
         slink = f"https://www.reddit.com{submission.permalink}"
-        s_format_time = str(
-            datetime.datetime.fromtimestamp(sutc).strftime(
-                "%a, %b %d, %Y [%I:%M:%S %p]"
-            )
-        )
-    for comment in subredditHelper.comments(limit=1):  # Get the last posted comment
+        s_format_time = str(datetime.fromtimestamp(sutc).strftime(s_format))
+        output += f"Last post     |   {s_format_time}:    {slink}\n"
+
+    # Get the last posted comment
+    comment = next(subredditHelper.comments(limit=1), None)
+    if comment is not None:
         cbody = f"              > {comment.body}"
-
+        if "\n" in cbody:
+            # Nicely format each line to fit with our format.
+            cbody = cbody.replace("\n", "\n              > ")
         cutc = comment.created_utc
-        cpermalink = "https://www.reddit.com" + comment.permalink
-        c_format_time = str(
-            datetime.datetime.fromtimestamp(cutc).strftime(
-                "%a, %b %d, %Y [%I:%M:%S %p]"
-            )
-        )
+        cpermalink = f"https://www.reddit.com{comment.permalink}"
+        c_format_time = str(datetime.fromtimestamp(cutc).strftime(s_format))
+        output += f"Last comment  |   {c_format_time}:    {cpermalink}\n{cbody}\n"
 
-    if "\n" in cbody:
-        # Nicely format each line to fit with our format.
-        cbody = cbody.replace("\n", "\n              > ")
-
-    return f"Last post     |   {s_format_time}:    {slink}\nLast comment  |   {c_format_time}:    {cpermalink}\n{cbody}\n"
+    return output
 
 
 def record_error_log(error_save_entry: str) -> None:
@@ -808,7 +792,7 @@ def messaging_user_statistics_writer(body_text: str, username: str) -> None:
     username_commands_data = cursor_main.fetchall()
 
     if len(username_commands_data) == 0:  # Not saved, create a new one
-        commands_dictionary = {}
+        commands_dictionary: Dict[str, int] = {}
         already_saved = False
     else:  # There's data already for this username.
         already_saved = True
@@ -832,15 +816,15 @@ def messaging_user_statistics_writer(body_text: str, username: str) -> None:
                 commands_dictionary[keyword] = keyword_count
 
     # Save to the database if there's stuff.
-    if len(commands_dictionary.keys()) != 0 and not already_saved:
-        # This is a new username.
-        to_store = (username, str(commands_dictionary))
-        cursor_main.execute("INSERT INTO total_commands VALUES (?, ?)", to_store)
-        conn_main.commit()
-    elif len(commands_dictionary.keys()) != 0 and already_saved:
-        # This username exists. Update instead.
-        update_command = "UPDATE total_commands SET commands = ? WHERE username = ?"
-        cursor_main.execute(update_command, (str(commands_dictionary), username))
+    if len(commands_dictionary) != 0:
+        if not already_saved:
+            # This is a new username.
+            to_store = (username, str(commands_dictionary))
+            cursor_main.execute("INSERT INTO total_commands VALUES (?, ?)", to_store)
+        else:
+            # This username exists. Update instead.
+            update_command = "UPDATE total_commands SET commands = ? WHERE username = ?"
+            cursor_main.execute(update_command, (str(commands_dictionary), username))
         conn_main.commit()
     else:
         logger.debug("messaging_user_statistics_writer: No commands to write.")
@@ -1138,12 +1122,7 @@ def ziwen_posts() -> None:
 
             continue  # Then exit.
 
-        if oflair_css in [
-            "translated",
-            "doublecheck",
-            "missing",
-            "inprogress",
-        ]:  # We don't want to mess with these
+        if oflair_css in STATUS_KEYWORDS.values():  # We don't want to mess with these
             continue  # Basically we only want to deal with untranslated posts
 
         # We're going to mark the original post author as someone different if it's a crosspost.
@@ -1532,19 +1511,12 @@ def ziwen_bot() -> None:
         ):
             # This processes simple thanks into translated, but leaves alone if it's an exception.
             # Has to be a short thanks, and not have !translated in the body.
-            if oflair_css in ["meta", "community", "multiple", "app", "generic"]:
-                continue
-
-            if pauthor != oauthor:
-                # Is the author of the comment the author of the post?
-                continue  # If not, continue, we don't care about this.
-
-            # This should only be marked if it's untranslated. So it shouldn't affect
-            if oajo.status != "untranslated":
-                continue
-
-            # This should only be marked if it's not in an identified state, in case people respond to that command.
-            if oajo.is_identified:
+            if (
+                (oflair_css in ["meta", "community", "multiple", "app", "generic"])
+                or pauthor != oauthor  # author of the comment the author of the post?
+                or oajo.status != "untranslated"
+                or oajo.is_identified  # This should only be marked if it's not in an identified state, in case people respond to that command.
+            ):
                 continue
 
             exceptions_list = ["but", "however", "no"]  # Did the OP have reservations?
@@ -1679,11 +1651,9 @@ def progress_checker() -> None:
     """
 
     # Conduct a search on Reddit.
-    search_query = (
-        'flair:"in progress"'  # Get the posts that are still marked as in progress
-    )
+    # Get the posts that are still marked as in progress
     search_results = subredditHelper.search(
-        search_query, time_filter="month", sort="new"
+        'flair:"in progress"', time_filter="month", sort="new"
     )
 
     for post in search_results:
