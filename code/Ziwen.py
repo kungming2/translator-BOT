@@ -1172,15 +1172,15 @@ def ziwen_posts() -> None:
 
             try:
                 title_data = title_format(otitle)  # Get the master list of data.
-                suggested_source = str(title_data[0])
-                suggested_target = str(title_data[1])
-                suggested_css = title_data[2]
-                suggested_css_text = title_data[3]
-                multiple_notifications = title_data[6]
+                suggested_source = str(title_data.source_languages)
+                suggested_target = str(title_data.target_languages)
+                suggested_css = title_data.final_css
+                suggested_css_text = title_data.final_css_text
+                multiple_notifications = title_data.notify_languages
                 # This is something that will return a list if it's a multiple request or two non English languages
                 # that can be split. None if false.
                 # This is a specific code, like ar-LB, unknown-cyrl
-                specific_sublanguage = title_data[7]
+                specific_sublanguage = title_data.language_country
             except Exception as e_title:
                 # The title converter couldn't make sense of it. This should not happen.
                 # Skip! This will result it in getting whatever AM gave it. (which may be nothing)

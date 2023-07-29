@@ -653,19 +653,18 @@ class Ajo:
         :return:
         """
 
-        self.language_name = title_format(original_title)[3]
+        formatted_title = title_format(original_title)
+        self.language_name = formatted_title.final_css_text
         self.status = "untranslated"
         self.time_delta = {}  # Clear this dictionary.
         self.is_identified = False
-
-        is_multiple = title_format(original_title)[2] in ["multiple", "app"]
 
         provisional_data = converter(self.language_name)  # This is a temporary code
         provisional_code = provisional_data.language_code
         self.is_supported = provisional_data.supported
         provisional_country = provisional_data.country_code
 
-        if not is_multiple:
+        if not formatted_title.final_css in ["multiple", "app"]:
             self.type = "single"
             if len(provisional_code) == 2:  # ISO 639-1 language
                 self.language_code_1 = provisional_code
@@ -693,13 +692,10 @@ class Ajo:
                 self.is_script = True
                 self.script_code = provisional_code
                 self.script_name = lang_code_search(provisional_code, True)[0]
-        elif is_multiple:
+        else:
             # Resetting multiples here.
             self.type = "multiple"
-            if title_format(original_title)[2] in {"multiple", "app"}:
-                self.language_code_1 = self.language_code_3 = title_format(
-                    original_title
-                )[2]
+            self.language_code_1 = self.language_code_3 = formatted_title.final_css
 
     # noinspection PyAttributeOutsideInit,PyAttributeOutsideInit
     def update_reddit(self) -> None:
@@ -787,7 +783,7 @@ class Ajo:
                 code_tag = None  # Blank code tag, don't need it.
             else:  # This is a defined multiple post.
                 # Check to see if we should give this an 'app' classification.
-                real_title = title_format(original_submission.title)[4]
+                real_title = title_format(original_submission.title).actual_title
                 app_yes = app_multiple_definer(real_title)
 
                 self.output_oflair_css = "app" if app_yes else "multiple"

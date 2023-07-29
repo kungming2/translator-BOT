@@ -904,7 +904,19 @@ def final_title_salvager(d_source_languages: List[str], d_target_languages: List
         return None
 
 
-def title_format(title: str, display_process: bool = False):
+class TitleTuple(NamedTuple):
+    source_languages: List[str]
+    target_languages: List[str]
+    final_css: str
+    final_css_text: str
+    actual_title: str
+    processed_title: str
+    notify_languages: List[str] | None
+    language_country: str | None
+    direction: str
+
+
+def title_format(title: str, display_process: bool = False) -> TitleTuple:
     """
     This is the main function to help format a title and to determine information from it.
     The creation of Ajos relies on this process, and the flair and flair text that's assigned to an incoming post is
@@ -995,7 +1007,7 @@ def title_format(title: str, display_process: bool = False):
     title = re.sub(r"(\]\s*[>\\-]\s*\[)", " > ", title)
 
     # Code for taking out the country (most likely from cross-posts)
-    if "{" in title and "}" in title and "[" in title:
+    if all(char in title for char in "{}["):
         # Probably has a country name in it.
         has_country = True
         country_suffix_name = re.search(r"{(\D+)}", title)
@@ -1040,7 +1052,7 @@ def title_format(title: str, display_process: bool = False):
                 # No language match found, let's replace the dash with a space.
                 title = title.replace("-", " ")
 
-    for character in ["&", "+", "/", "\\", "|"]:
+    for character in "&+/\\|":
         if character in title:  # Straighten out punctuation.
             title = title.replace(character, f" {character} ")
 
@@ -1067,7 +1079,7 @@ def title_format(title: str, display_process: bool = False):
     # If all people write is [Unknown], account for that, and just send it back right away.
     if "[Unknown]" in title.title():
         actual_title = title.split("]", 1)[1]
-        return (
+        return TitleTuple(
             ["Unknown"],
             ["English"],
             "unknown",
@@ -1080,7 +1092,7 @@ def title_format(title: str, display_process: bool = False):
         )
     if "???" in title[0:5] or "??" in title[0:4] or "?" in title[0:3]:
         # This is if the first few characters are just question marks...
-        return (
+        return TitleTuple(
             ["Unknown"],
             ["English"],
             "unknown",
@@ -1115,9 +1127,8 @@ def title_format(title: str, display_process: bool = False):
         flags=re.VERBOSE,
     )
     source_language = source_language.title()
-    source_language = (
-        source_language_original
-    ) = source_language.split()  # Convert it from a string to a list
+    # Convert it from a string to a list
+    source_language = source_language_original = source_language.split()
 
     # If there are two or three words only in source language, concatenate them to see if there's another that exists...
     # (e.g. American Sign Language)
@@ -1156,9 +1167,8 @@ def title_format(title: str, display_process: bool = False):
         print(d_source_languages)
 
     # Start processing TARGET languages
-    split_chars = [">", " to ", "-", "<"]
     replace_chars = ",/+]).:"
-    for split_char in split_chars:
+    for split_char in [">", " to ", "-", "<"]:
         if split_char in title.lower():
             title = title[title.find(split_char) + len(split_char) :]
             # Split it at the tag boundary and take the first part.
@@ -1180,7 +1190,6 @@ def title_format(title: str, display_process: bool = False):
     )
 
     target_language = target_language.split()  # Divide into words
-
     target_language = [x.title() for x in target_language]
     # Check for a hyphenated word.. like Puyo-Paekche
 
@@ -1473,7 +1482,7 @@ def title_format(title: str, display_process: bool = False):
             final_css = salvaged_data[0]
             final_css_text = salvaged_data[1]
 
-    return (
+    return TitleTuple(
         d_source_languages,
         d_target_languages,
         final_css,
