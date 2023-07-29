@@ -1318,11 +1318,12 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
             if name in d_target_languages:
                 is_multiple_test.remove(name)
 
-        # Check to see if there's a script here
-        for language in is_multiple_test:
-            code = converter(language).language_code
-            if len(code) == 4:  # This is a script
-                is_multiple_test.remove(language)
+        # Check to see if there's a script here (len == 4)
+        is_multiple_test = [
+            language
+            for language in is_multiple_test
+            if len(converter(language).language_code) != 4
+        ]
 
         if len(is_multiple_test) >= 2 and "English" not in d_target_languages:
             # Looks like it really does have more than two non-English target languages.

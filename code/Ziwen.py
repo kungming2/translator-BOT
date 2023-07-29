@@ -1122,7 +1122,8 @@ def ziwen_posts() -> None:
 
             continue  # Then exit.
 
-        if oflair_css in STATUS_KEYWORDS.values():  # We don't want to mess with these
+        if oflair_css in [keyword.name for keyword in STATUS_KEYWORDS.values()]:
+            # We don't want to mess with these
             continue  # Basically we only want to deal with untranslated posts
 
         # We're going to mark the original post author as someone different if it's a crosspost.

@@ -23,8 +23,6 @@ from typing import Dict, List, Tuple
 import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 
 from _config import (
-    DEFINED_MULTIPLE_LEGEND,
-    INVERSE_MULTIPLE_LEGEND,
     STATUS_KEYWORDS,
     logger,
 )
@@ -287,10 +285,10 @@ class Ajo:
                     # Take out the spaces in the tag.
                     actual_list = actual_list.replace(" ", "")
 
-                    # Code to replace the special status characters... Not fully sure how it interfaces with the rest
-                    for character in DEFINED_MULTIPLE_LEGEND.keys():
-                        if character in actual_list:
-                            actual_list = actual_list.replace(character, "")
+                    # Code to replace the special status symbols... Not fully sure how it interfaces with the rest
+                    for keyword in STATUS_KEYWORDS.values():
+                        if keyword.symbol in actual_list:
+                            actual_list = actual_list.replace(keyword.symbol, "")
 
                     new_code_list = actual_list.split(",")  # Convert to a list
 
@@ -333,7 +331,7 @@ class Ajo:
                             self.language_code_1.append(None)
                             self.language_code_3.append(multi_language_code)
 
-            flair_set = {"translated", "doublecheck", "inprogress", "missing"}
+            flair_set = [keyword.name for keyword in STATUS_KEYWORDS]
             if reddit_submission.link_flair_css_class in flair_set:
                 self.status = reddit_submission.link_flair_css_class
             elif reddit_submission.link_flair_css_class in ["app", "multiple"]:
@@ -794,18 +792,11 @@ class Ajo:
 
         if self.type == "single":
             # Code to determine the output flair text.
-            if self.status == "translated":
-                self.output_oflair_css = "translated"
-                self.output_oflair_text = f"Translated {code_tag}"
-            elif self.status == "doublecheck":
-                self.output_oflair_css = "doublecheck"
-                self.output_oflair_text = f"Needs Review {code_tag}"
-            elif self.status == "inprogress":
-                self.output_oflair_css = "inprogress"
-                self.output_oflair_text = f"In Progress {code_tag}"
-            elif self.status == "missing":
-                self.output_oflair_css = "missing"
-                self.output_oflair_text = f"Missing Assets {code_tag}"
+            for status in STATUS_KEYWORDS:
+                if self.status == status.name:
+                    self.output_oflair_css = self.status
+                    self.output_oflair_text = f"{status.description} {code_tag}"
+                    break
             else:  # It's an untranslated language
                 # The default flair text is just the language name.
                 self.output_oflair_text = self.language_name
@@ -932,12 +923,12 @@ def ajo_defined_multiple_flair_assessor(flairtext):
         language_code = " ".join(re.findall("[a-zA-Z]+", language))
 
         if len(language_code) != len(language):
-            # There's a difference - maybe a symbol in DEFINED_MULTIPLE_LEGEND
+            # There's a difference - maybe a symbol
             final_language_codes.update(
                 {
-                    language_code: keyword
-                    for symbol, keyword in DEFINED_MULTIPLE_LEGEND.items()
-                    if symbol in language
+                    language_code: statusKeywordsTuple.name
+                    for statusKeywordsTuple in STATUS_KEYWORDS.values()
+                    if statusKeywordsTuple.symbol in language
                 }
             )
         else:  # No difference, must be untranslated.
@@ -961,9 +952,12 @@ def ajo_defined_multiple_flair_former(flairdict) -> str:
         # Try to get the ISO 639-1 if possible
         language_code = iso639_3_to_iso639_1(language) or language  # No ISO 639-1 code
 
-        symbol = (
-            status in INVERSE_MULTIPLE_LEGEND and INVERSE_MULTIPLE_LEGEND[status] or ""
-        )
+        symbol = ""
+        for statusKeywordsTuple in STATUS_KEYWORDS.values():
+            if statusKeywordsTuple.symbol == status:
+                symbol = statusKeywordsTuple.name
+                break
+
         output_text.append(f"{language_code.upper()}{symbol}")
 
     output_text = ", ".join(sorted(output_text))  # Create a string.
@@ -1004,7 +998,7 @@ def ajo_defined_multiple_comment_parser(pbody, language_names_list):
 
     for keyword, detected_status in STATUS_KEYWORDS.items():
         if keyword in pbody:
-            return detected_languages, detected_status
+            return detected_languages, detected_status.name
 
 
 def ajo_retrieve_script_code(script_name: str) -> Tuple[str, str] | None:

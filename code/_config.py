@@ -9,7 +9,7 @@ import os
 import random
 from enum import StrEnum
 from time import strftime
-from typing import Dict
+from typing import Dict, NamedTuple
 
 # Set up the directories based on the current location of the bots.
 # Fetch the absolute directory the script is in.
@@ -99,21 +99,24 @@ keywords_dict = {
 }
 KEYWORDS = StrEnum("StrEnum", keywords_dict)
 
-STATUS_KEYWORDS = {
-    KEYWORDS.missing: KEYWORDS.missing.name,
-    KEYWORDS.claim: "inprogress",
-    KEYWORDS.doublecheck: KEYWORDS.doublecheck.name,
-    KEYWORDS.translated: KEYWORDS.translated.name,
+
+class StatusKeywordsTuple(NamedTuple):
+    name: str
+    description: str
+    symbol: str
+
+
+statuses = {
+    KEYWORDS.missing: (KEYWORDS.missing.name, "Translated", "⍉"),
+    KEYWORDS.claim: ("inprogress", "In Progress", "¦"),
+    KEYWORDS.doublecheck: (KEYWORDS.doublecheck.name, "Needs Review", "✓"),
+    KEYWORDS.translated: (KEYWORDS.translated.name, "Missing Assets", "✔"),
 }
 
-# These are symbols used to indicate states in defined multiple posts. The last two are currently used.
-DEFINED_MULTIPLE_LEGEND: Dict[str, str] = {
-    "⍉": KEYWORDS.missing.name,
-    "¦": "inprogress",
-    "✓": KEYWORDS.doublecheck.name,
-    "✔": KEYWORDS.translated.name,
+# Convert each tuple in the list to a named tuple
+STATUS_KEYWORDS: Dict[StrEnum:StatusKeywordsTuple] = {
+    key: StatusKeywordsTuple(*status_data) for key, status_data in statuses.items()
 }
-INVERSE_MULTIPLE_LEGEND = {value: key for key, value in DEFINED_MULTIPLE_LEGEND.items()}
 
 # Testing subreddits for the bot. (mostly to test Ziwen Streamer's crossposting function)
 # TESTING_SUBREDDITS = ["testingground4bots", "test", "andom"]
