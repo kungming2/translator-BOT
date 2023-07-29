@@ -891,7 +891,7 @@ def ziwen_notifier(
         # Get just the Reddit ID.
         mid = re.search(r"comments/(.*)/\w", opermalink).group(1)
         # Load the Ajo
-        majo = ajo_loader(mid, cursor_ajo, post_templates, reddit)
+        majo = ajo_loader(mid, cursor_ajo, post_templates)
 
         # Checking the language history and the user history of the particular submission.
         try:

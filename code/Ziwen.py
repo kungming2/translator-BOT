@@ -655,7 +655,7 @@ def points_tabulator(
     points_status = [x for x in points_status if x[1] != 0]
 
     if translator_to_add is not None:  # We can record this information in the Ajo.
-        cajo = ajo_loader(oid, cursor_ajo, POST_TEMPLATES, reddit)
+        cajo = ajo_loader(oid, cursor_ajo, POST_TEMPLATES)
         if cajo is not None:
             cajo.add_translators(translator_to_add)  # Add the name to the Ajo.
             ajo_writer(cajo, cursor_ajo, conn_ajo)
@@ -1324,7 +1324,7 @@ def ziwen_posts() -> None:
             # Finally, create an Ajo object and save it locally.
             if final_css_class not in ["meta", "community"]:
                 # Create an Ajo object, reload the post.
-                pajo = Ajo(reddit.submission(id=post.id), POST_TEMPLATES, USER_AGENT)
+                pajo = Ajo(reddit.submission(id=post.id), POST_TEMPLATES)
                 if len(contacted) != 0:  # We have a list of notified users.
                     pajo.add_notified(contacted)
                 # Save it to the local database
@@ -1412,12 +1412,12 @@ def ziwen_bot() -> None:
         # Create an Ajo object.
         if css_check(oflair_css):
             # Check the database for the Ajo.
-            oajo = ajo_loader(oid, cursor_ajo, POST_TEMPLATES, reddit)
+            oajo = ajo_loader(oid, cursor_ajo, POST_TEMPLATES)
 
             if oajo is None:
                 # We couldn't find a stored dict, so we will generate it from the submission.
                 logger.debug("Bot: Couldn't find an AJO in the local database.")
-                oajo = Ajo(osubmission, POST_TEMPLATES, USER_AGENT)
+                oajo = Ajo(osubmission, POST_TEMPLATES)
 
             if oajo.is_bot_crosspost:
                 komento_data = komento_analyzer(
@@ -1543,7 +1543,7 @@ def ziwen_bot() -> None:
         # Push the FINAL UPDATE TO REDDIT
         if oflair_css not in ["community", "meta"]:
             # There's nothing to change for these
-            oajo.update_reddit()  # Push all changes to the server
+            oajo.update_reddit(reddit)  # Push all changes to the server
             # Write the Ajo to the local database
             ajo_writer(oajo, cursor_ajo, conn_ajo)
             logger.info(f"Bot: Ajo for {oid} updated and saved to the local database.")
@@ -1670,13 +1670,13 @@ def progress_checker() -> None:
 
         # Load its Ajo.
         # First check the local database for the Ajo.
-        oajo = ajo_loader(oid, cursor_ajo, POST_TEMPLATES, reddit)
+        oajo = ajo_loader(oid, cursor_ajo, POST_TEMPLATES)
         if oajo is None:
             # We couldn't find a stored dict, so we will generate it from the submission.
             logger.debug(
                 "progress_checker: Couldn't find an Ajo in the local database. Loading from Reddit."
             )
-            oajo = Ajo(post, POST_TEMPLATES, USER_AGENT)
+            oajo = Ajo(post, POST_TEMPLATES)
 
         # Process the post and get some data out of it.
         komento_data = komento_analyzer(reddit, post)
@@ -1694,7 +1694,7 @@ def progress_checker() -> None:
 
                 # Update the Ajo.
                 oajo.set_status("untranslated")
-                oajo.update_reddit()  # Push all changes to the server
+                oajo.update_reddit(reddit)  # Push all changes to the server
                 # Write the Ajo to the local database
                 ajo_writer(oajo, cursor_ajo, conn_ajo)
 

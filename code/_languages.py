@@ -187,10 +187,14 @@ def lang_code_search(search_term: str, script_search: bool):
     master_dict = {}
     is_script = len(search_term) == 4
 
-    csv_file = csv.reader(open(FILE_ADDRESS_ISO_ALL, encoding="utf-8"), delimiter=",")
-    for row in csv_file:
-        # We have a master dictionary. Index by code. Tuple has: (language name, language name (lower), alt names lower)
-        master_dict[row[0]] = (row[2:][0], row[2:][0].lower(), row[3:][0].lower())
+    with open(FILE_ADDRESS_ISO_ALL, encoding="utf-8") as csv_file:
+        csv_reader = csv.DictReader(csv_file, delimiter=",")
+        for row in csv_reader:
+            master_dict[row["ISO 639-3"]] = (
+                row["Language Name"],
+                row["Language Name"].lower(),
+                row["Alternate Names"].lower(),
+            )
 
     if len(search_term) == 3:  # This is a ISO 639-3 code
         if search_term.lower() in master_dict:

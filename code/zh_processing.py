@@ -50,12 +50,12 @@ def zh_character_oc_search(character: str) -> str | None:
 
     # Iterate over the CSV
     with open(FILE_ADDRESS_OLD_CHINESE, encoding="utf-8") as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=",")
+        csv_reader = csv.DictReader(csv_file, delimiter=",")
         for row in csv_reader:
-            my_character = row[0]
+            my_character = row["zi"]
             # It is normally returned as a list, so we need to convert into a string.
-            mc_reading = row[2:][0]
-            oc_reading = row[4:][0]
+            mc_reading = row["MC"]
+            oc_reading = row["OC"]
             if "(" in oc_reading:
                 oc_reading = oc_reading.split("(", 1)[0]
 

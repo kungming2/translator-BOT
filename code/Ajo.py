@@ -98,7 +98,6 @@ class Ajo:
         self,
         reddit_submission: Dict[any, any] | praw.reddit.models.Submission,
         post_templates: Dict[str, str],
-        user_agent,
     ):
         # This takes a Reddit Submission object and generates info from it.
         if isinstance(reddit_submission, dict):  # Loaded from a file?
@@ -116,7 +115,6 @@ class Ajo:
             self.time_delta = {}
             self.author_messaged = False
             self.post_templates = post_templates
-            self.user_agent = user_agent
 
             # try:
             title_data = title_format(reddit_submission.title)
@@ -149,7 +147,7 @@ class Ajo:
                         self.script_name = (
                             oflair_text
                         ) = reddit_submission.link_flair_text.split("(")[0].strip()
-                        self.script_code = ajo_retrieve_script_code(self.script_name)[0]
+                        self.script_code = ajo_retrieve_script_code(self.script_name)
                     else:
                         self.is_script = False
                         self.script_name = self.script_code = None
@@ -696,7 +694,7 @@ class Ajo:
             self.language_code_1 = self.language_code_3 = formatted_title.final_css
 
     # noinspection PyAttributeOutsideInit,PyAttributeOutsideInit
-    def update_reddit(self) -> None:
+    def update_reddit(self, reddit: praw.Reddit) -> None:
         """
         Sets the flair properly on Reddit. No arguments taken.
         It collates all the attributes and decides what flair
@@ -706,13 +704,6 @@ class Ajo:
         """
 
         # Get the original submission object.
-        reddit = praw.Reddit(
-            client_id=ZIWEN_APP_ID,
-            client_secret=ZIWEN_APP_SECRET,
-            password=PASSWORD,
-            user_agent=self.user_agent,
-            username=USERNAME,
-        )
         original_submission = reddit.submission(self.id)
         code_tag = "[--]"  # Default, this should be changed by the functions below.
         self.output_oflair_css = None  # Reset this
@@ -880,7 +871,7 @@ def ajo_writer(new_ajo: Ajo, cursor_ajo: Cursor, conn_ajo: Connection) -> None:
 
 
 def ajo_loader(
-    ajo_id, cursor_ajo: Cursor, post_templates: Dict[str, str], reddit: praw.Reddit
+    ajo_id, cursor_ajo: Cursor, post_templates: Dict[str, str]
 ) -> Ajo | None:
     """
     This function takes an ID string and returns an Ajo object from a local database that matches that string.
@@ -899,7 +890,7 @@ def ajo_loader(
         return None
     # We do have stored data.
     new_ajo_dict = eval(new_ajo[2])  # We only want the stored dict here.
-    new_ajo = Ajo(new_ajo_dict, post_templates, reddit)
+    new_ajo = Ajo(new_ajo_dict, post_templates)
     logger.debug("ajo_loader: Loaded Ajo from local database.")
     return new_ajo  # Note: the Ajo class can build itself from this dict.
 
@@ -1001,27 +992,10 @@ def ajo_defined_multiple_comment_parser(pbody, language_names_list):
             return detected_languages, detected_status.name
 
 
-def ajo_retrieve_script_code(script_name: str) -> Tuple[str, str] | None:
-    """
-    This function takes the name of a script, outputs its ISO 15925 code and the name as a tuple if valid.
-
-    :param script_name: The *name* of a script (e.g. Siddham, Nastaliq, etc).
-    :return: None if the script name is invalid, otherwise a tuple with the ISO 15925 code and the script's name.
-    """
-
-    codes_list = []
-    names_list = []
-
+def ajo_retrieve_script_code(script_name: str) -> str | None:
     with open(FILE_ADDRESS_ISO_ALL, encoding="utf-8") as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=",")
+        csv_reader = csv.DictReader(csv_file, delimiter=",")
         for row in csv_reader:
-            if len(row[0]) == 4:
-                # This is a script code. (the others are 3 characters. )
-                codes_list.append(row[0])
-                # It is normally returned as a list, so we need to convert into a string.
-                names_list.append(row[2:][0])
-
-    if script_name in names_list:  # The name is in the code list
-        item_index = names_list.index(script_name)
-        item_code = str(codes_list[item_index])
-        return item_code, script_name
+            # This is a script code (the others are 3 characters).
+            if len(row["ISO 639-3"]) == 4 and script_name == row["Language Name"]:
+                return row["ISO 639-3"]
