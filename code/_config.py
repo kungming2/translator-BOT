@@ -13,7 +13,10 @@ from typing import Dict
 
 # Set up the directories based on the current location of the bots.
 # Fetch the absolute directory the script is in.
-script_directory = os.path.dirname(os.path.realpath(__file__))
+code_directory = os.path.dirname(os.path.realpath(__file__))
+
+# Get the parent directory of the "code" folder (i.e., the previous script_directory)
+script_directory = os.path.dirname(code_directory)
 script_directory += "/Data/"  # Where the main files are kept.
 
 # A number that defines the soft number of notifications an individual will get in a month *per language*.
