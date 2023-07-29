@@ -266,36 +266,35 @@ def country_converter(text_input: str, abbreviations_okay: bool = True):
     elif len(text_input) == 2 and abbreviations_okay:
         text_input = text_input.upper()  # Convert to upper case
         for country in COUNTRY_LIST:
-            if text_input == country[1]:  # Matches exactly
+            if text_input == country.code2:  # Matches exactly
                 country_code = text_input
-                country_name = country[0]
+                country_name = country.name
     elif len(text_input) == 3 and abbreviations_okay:  # three letters long code
         text_input = text_input.upper()  # Convert to upper case
         for country in COUNTRY_LIST:
-            if text_input == country[2]:  # Matches exactly
-                country_code = country[1]
-                country_name = country[0]
+            if text_input == country.code3:  # Matches exactly
+                country_code = country.code2
+                country_name = country.name
     else:  # It's longer than three, probably a name. Or abbreviations are disabled.
         text_input = text_input.title()
         for country in COUNTRY_LIST:
-            if text_input == country[0]:  # It's an exact match
-                country_code = country[1]
-                country_name = country[0]
+            if text_input == country.name:  # It's an exact match
+                country_code = country.code2
+                country_name = country.name
                 return country_code, country_name  # Exit the loop, we're done.
-            if text_input in country[0] and len(text_input) >= 3:
-                country_code = country[1]
-                country_name = country[0]
+            if text_input in country.name and len(text_input) >= 3:
+                country_code = country.code2
+                country_name = country.name
 
         if country_code == "" and country_name == "":  # Still nothing
             # Now we check against a list of associated words per country.
             for country in COUNTRY_LIST:
                 try:
                     # These are keywords associated with it.
-                    country_keywords = country[4]
-                    for keyword in country_keywords:
+                    for keyword in country.aliases:
                         if text_input.title() == keyword:  # A Match!
-                            country_code = country[1]
-                            country_name = country[0]
+                            country_code = country.code2
+                            country_name = country.name
                 except IndexError:
                     # No keywords associated with this country.
                     pass
@@ -314,7 +313,7 @@ class ConverterTuple(NamedTuple):
     country_code: str | None
 
 
-def converter(input_text: str):
+def converter(input_text: str) -> ConverterTuple:
     """
     A function that can convert between language names and codes, and also parse additional data.
     This is one of the most crucial components of Ziwen and is very commonly used.
@@ -938,18 +937,16 @@ def title_format(title: str, display_process: bool = False):
     if "(x-post" in title:
         title = title.split("(x-post")[0].strip()
 
-    for spelling in MAIN_LANGUAGES["en"][
-        "alternate_names"
-    ]:  # Replace typos or misspellings in the title for English.
+    for spelling in MAIN_LANGUAGES["en"]["alternate_names"]:
+        # Replace typos or misspellings in the title for English.
         if spelling in title.title():  # Misspelling is in the title.
             title = title.replace(spelling, "English")
 
     if "english" in title:
         title = title.replace("english", "English")
 
-    if (
-        "Old English" in title
-    ):  # Small tweak to ensure Old English works properly. We convert it to "Anglo-Saxon"
+    if "Old English" in title:
+        # Small tweak to ensure Old English works properly. We convert it to "Anglo-Saxon"
         title = title.replace("Old English", "Anglosaxon")
     elif "Anglo-Saxon" in title:
         title = title.replace("Anglo-Saxon", "Anglosaxon")
@@ -957,19 +954,16 @@ def title_format(title: str, display_process: bool = False):
         title = title.replace("Scots Gaelic", "Scottish Gaelic")
 
     # Let's replace any problematic characters or formatting early. Especially those that are important to splitting.
-    if any(
-        keyword in title for keyword in WRONG_DIRECTIONS
-    ):  # Fix for some Unicode arrow-looking thingies
+    if any(keyword in title for keyword in WRONG_DIRECTIONS):
+        # Fix for some Unicode arrow-looking thingies
         for keyword in WRONG_DIRECTIONS:
             title = title.replace(keyword, " > ")
-    if any(
-        keyword in title for keyword in WRONG_BRACKETS_LEFT
-    ):  # Fix for some Unicode left bracket-looking thingies
+    if any(keyword in title for keyword in WRONG_BRACKETS_LEFT):
+        # Fix for some Unicode left bracket-looking thingies
         for keyword in WRONG_BRACKETS_LEFT:
             title = title.replace(keyword, " [")
-    if any(
-        keyword in title for keyword in WRONG_BRACKETS_RIGHT
-    ):  # Fix for some Unicode right bracket-looking thingies
+    if any(keyword in title for keyword in WRONG_BRACKETS_RIGHT):
+        # Fix for some Unicode right bracket-looking thingies
         for keyword in WRONG_BRACKETS_RIGHT:
             title = title.replace(keyword, "] ")
 
@@ -991,9 +985,8 @@ def title_format(title: str, display_process: bool = False):
         title = title.replace("{", "[", 1)
         title = title.replace("}", "]", 1)
 
-    if (
-        "]" not in title and "[" not in title
-    ):  # Otherwise try to salvage it and reformat it.
+    if "]" not in title and "[" not in title:
+        # Otherwise try to salvage it and reformat it.
         reformat_example = detect_languages_reformat(title)
         if reformat_example is not None:
             title = reformat_example
@@ -1002,9 +995,8 @@ def title_format(title: str, display_process: bool = False):
     title = re.sub(r"(\]\s*[>\\-]\s*\[)", " > ", title)
 
     # Code for taking out the country (most likely from cross-posts)
-    if (
-        "{" in title and "}" in title and "[" in title
-    ):  # Probably has a country name in it.
+    if "{" in title and "}" in title and "[" in title:
+        # Probably has a country name in it.
         has_country = True
         country_suffix_name = re.search(r"{(\D+)}", title)
         country_suffix_name = country_suffix_name.group(1)  # Get the Country name only

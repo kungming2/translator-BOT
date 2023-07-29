@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 
 # This is our main dictionary for languages.
+
+from typing import List, NamedTuple
+
+
 MAIN_LANGUAGES = {
     "aa": {
         "supported": False,
@@ -2527,8 +2531,17 @@ CJK_LANGUAGES = {
     "Korean": ["Korean", "Middle Korean", "Old Korean", "Jejueo", "Hang", "Kore"],
 }
 
+
 # An ISO 3166 list of countries and their equivalent codes and words. Used for determining regional dialects.
-COUNTRY_LIST = [
+class CountryTuple(NamedTuple):
+    name: str
+    code2: str
+    code3: str
+    numeric: str
+    aliases: List[str]
+
+
+countries = [
     ("Afghanistan", "AF", "AFG", "004", ["Afghan", "Afghani"]),
     ("Albania", "AL", "ALB", "008"),
     ("Algeria", "DZ", "DZA", "012", ["Algerian", "Algerien"]),
@@ -2739,6 +2752,9 @@ COUNTRY_LIST = [
     ("Zambia", "ZM", "ZMB", "894", ["Zambian"]),
     ("Zimbabwe", "ZW", "ZWE", "716"),
 ]
+
+# Convert each tuple in the list to a named tuple
+COUNTRY_LIST = [CountryTuple(*country_data) for country_data in countries]
 
 # A dictionary with languages as keys and country codes as values.
 ISO_LANGUAGE_COUNTRY_ASSOCIATED = {
