@@ -17,27 +17,21 @@ class functions.
 
 import csv
 import re
-from sqlite3 import Connection, Cursor
-from typing import Dict, List
-
-import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
-
-from _config import (
-    STATUS_KEYWORDS,
-    logger,
-)
-from _language_consts import MAIN_LANGUAGES
-from _languages import (
+from code._config import STATUS_KEYWORDS, logger
+from code._language_consts import MAIN_LANGUAGES
+from code._languages import (
     FILE_ADDRESS_ISO_ALL,
     app_multiple_definer,
     converter,
     country_converter,
-    iso639_3_to_iso639_1,
     lang_code_search,
     language_mention_search,
     title_format,
 )
-from _login import PASSWORD, USERNAME, ZIWEN_APP_ID, ZIWEN_APP_SECRET
+from code.Ziwen_helper import ZiwenConfig
+from typing import Dict, List
+
+import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 
 
 class Ajo:
@@ -840,7 +834,7 @@ class Ajo:
             )
 
 
-def ajo_writer(new_ajo: Ajo, cursor_ajo: Cursor, conn_ajo: Connection) -> None:
+def ajo_writer(new_ajo: Ajo, config: ZiwenConfig) -> None:
     """
     Function takes an Ajo object and saves it to a local database.
 
@@ -851,7 +845,7 @@ def ajo_writer(new_ajo: Ajo, cursor_ajo: Cursor, conn_ajo: Connection) -> None:
     created_time = new_ajo.created_utc
     representation = str(new_ajo.__dict__)
     ajo_to_store = (new_ajo.id, created_time, representation)
-    cursor_ajo.execute(
+    config.cursor_ajo.execute(
         """
         INSERT INTO local_database(id, created_time, ajo) VALUES (?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET ajo = excluded.ajo
@@ -859,9 +853,9 @@ def ajo_writer(new_ajo: Ajo, cursor_ajo: Cursor, conn_ajo: Connection) -> None:
         ajo_to_store,
     )
 
-    conn_ajo.commit()
+    config.conn_ajo.commit()
 
-    if cursor_ajo.rowcount == 1:
+    if config.cursor_ajo.rowcount == 1:
         logger.debug(
             "ajo_writer: New Ajo added or existing Ajo updated in the database."
         )
@@ -870,9 +864,7 @@ def ajo_writer(new_ajo: Ajo, cursor_ajo: Cursor, conn_ajo: Connection) -> None:
     logger.debug("ajo_writer: Wrote Ajo to local database.")
 
 
-def ajo_loader(
-    ajo_id, cursor_ajo: Cursor, post_templates: Dict[str, str]
-) -> Ajo | None:
+def ajo_loader(ajo_id, config: ZiwenConfig) -> Ajo | None:
     """
     This function takes an ID string and returns an Ajo object from a local database that matches that string.
     This ID is the same as the ID of the Reddit post it's associated with.
@@ -882,15 +874,15 @@ def ajo_loader(
     """
 
     # Checks the database
-    cursor_ajo.execute("SELECT * FROM local_database WHERE id = ?", (ajo_id,))
-    new_ajo = cursor_ajo.fetchone()
+    config.cursor_ajo.execute("SELECT * FROM local_database WHERE id = ?", (ajo_id,))
+    new_ajo = config.cursor_ajo.fetchone()
 
     if new_ajo is None:  # We couldn't find a stored dict for it.
         logger.debug("ajo_loader: No local Ajo stored.")
         return None
     # We do have stored data.
     new_ajo_dict = eval(new_ajo[2])  # We only want the stored dict here.
-    new_ajo = Ajo(new_ajo_dict, post_templates)
+    new_ajo = Ajo(new_ajo_dict, config.post_templates)
     logger.debug("ajo_loader: Loaded Ajo from local database.")
     return new_ajo  # Note: the Ajo class can build itself from this dict.
 
@@ -926,6 +918,20 @@ def ajo_defined_multiple_flair_assessor(flairtext):
             final_language_codes[language_code] = "untranslated"
 
     return final_language_codes
+
+
+def iso639_3_to_iso639_1(specific_code: str) -> None | str:
+    """
+    Function to get the equivalent ISO 639-1 code from an ISO 639-3 code if it exists.
+
+    :param specific_code: An ISO 639-3 code.
+    :return:
+    """
+
+    for key, value in MAIN_LANGUAGES.items():
+        module_iso3 = value["language_code_3"]
+        if specific_code == module_iso3:
+            return key
 
 
 def ajo_defined_multiple_flair_former(flairdict) -> str:

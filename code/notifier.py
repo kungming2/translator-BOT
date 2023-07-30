@@ -16,14 +16,7 @@ import json
 import random
 import re
 import time
-from datetime import datetime
-from sqlite3 import Connection, Cursor
-from typing import Any, Dict, List, Tuple
-
-import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
-import prawcore
-
-from _config import (
+from code._config import (
     BOT_DISCLAIMER,
     FILE_ADDRESS_ACTIVITY,
     FILE_ADDRESS_ALL_STATISTICS,
@@ -34,9 +27,9 @@ from _config import (
     logger,
     time_convert_to_string,
 )
-from _language_consts import ISO_LANGUAGE_COUNTRY_ASSOCIATED, MAIN_LANGUAGES
-from _languages import comment_info_parser, converter, language_list_splitter
-from _responses import (
+from code._language_consts import ISO_LANGUAGE_COUNTRY_ASSOCIATED, MAIN_LANGUAGES
+from code._languages import comment_info_parser, converter, language_list_splitter
+from code._responses import (
     MSG_CANNOT_PROCESS,
     MSG_LANGUAGE_FREQUENCY,
     MSG_NO_POINTS,
@@ -51,8 +44,14 @@ from _responses import (
     MSG_UNSUBSCRIBE_ALL,
     MSG_UNSUBSCRIBE_BUTTON,
 )
-from Ajo import ajo_loader
-from Ziwen_helper import CORRECTED_SUBREDDIT, is_mod
+from code.Ajo import ajo_loader
+from code.Ziwen_helper import CORRECTED_SUBREDDIT, ZiwenConfig
+from datetime import datetime
+from sqlite3 import Connection, Cursor
+from typing import Any, Dict, List, Tuple
+
+import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
+import prawcore
 
 
 def messaging_is_valid_user(username: str, reddit: praw.Reddit) -> bool:
@@ -567,8 +566,7 @@ def notifier_page_multiple_detector(pbody: str) -> List[str]:
 def notifier_language_list_editer(
     language_list: List[str],
     username: str,
-    cursor_main: Cursor,
-    conn_main: Connection,
+    config: ZiwenConfig,
     mode: str = "insert",
 ) -> None:
     """
@@ -582,8 +580,10 @@ def notifier_language_list_editer(
 
     # If there's nothing in the list, exit.
     if mode == "purge":  # We want to delete everything for this user.
-        cursor_main.execute("DELETE FROM notify_users WHERE username = ?", (username,))
-        conn_main.commit()
+        config.cursor_main.execute(
+            "DELETE FROM notify_users WHERE username = ?", (username,)
+        )
+        config.conn_main.commit()
     elif len(language_list) == 0:
         return
     else:  # We have codes to process.
@@ -595,21 +595,21 @@ def notifier_language_list_editer(
                 continue
 
             # Check to see if user is already in our database.
-            is_there = notifier_duplicate_checker(code, username, cursor_main)
+            is_there = notifier_duplicate_checker(code, username, config.cursor_main)
 
             sql_package = (code, username)
             if not is_there and mode == "insert":  # No entry, and we want to insert.
-                cursor_main.execute(
+                config.cursor_main.execute(
                     "INSERT INTO notify_users VALUES (? , ?)", sql_package
                 )
-                conn_main.commit()
+                config.conn_main.commit()
             elif is_there and mode == "delete":
                 # There is an entry, and we want to delete.
-                cursor_main.execute(
+                config.cursor_main.execute(
                     "DELETE FROM notify_users WHERE language_code = ? and username = ?",
                     sql_package,
                 )
-                conn_main.commit()
+                config.conn_main.commit()
             else:
                 continue
 
@@ -856,11 +856,7 @@ def ziwen_notifier(
     opermalink: str,
     oauthor: str,
     is_identify: bool,
-    post_templates: Dict[str, str],
-    reddit: praw.Reddit,
-    cursor_ajo: Cursor,
-    cursor_main: Cursor,
-    conn_main: Connection,
+    config: ZiwenConfig,
 ) -> List[str]:
     """
     This function notifies people about posts they're subscribed to. Unlike ziwen_messages, this is not a top-level
@@ -891,7 +887,7 @@ def ziwen_notifier(
         # Get just the Reddit ID.
         mid = re.search(r"comments/(.*)/\w", opermalink).group(1)
         # Load the Ajo
-        majo = ajo_loader(mid, cursor_ajo, post_templates)
+        majo = ajo_loader(mid, config)
 
         # Checking the language history and the user history of the particular submission.
         try:
@@ -930,7 +926,7 @@ def ziwen_notifier(
             post_type = "post"  # Since these are technically not language requests
 
             # Here we have code to make sure that only mods and the bot send notifications for meta/community posts.
-            if not is_mod(reddit, oauthor):
+            if not config.is_mod(oauthor):
                 # This OP is not a mod. Don't send notifications.
                 return []  # Exit.
     else:  # This is a specific code, we want to add the people only signed up for them.
@@ -941,15 +937,15 @@ def ziwen_notifier(
         if language_code == "unknown":  # Add a new script phrase
             language_name += " (Script)"  # This is to distinguish script notifications
         regional_data = notifier_regional_language_fetcher(
-            suggested_css_text, cursor_main
+            suggested_css_text, config.cursor_main
         )
         if len(regional_data) != 0:
             # add the additional people to the notifications list.
             notify_users_list += regional_data
 
     sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
-    cursor_main.execute(sql_lc, (language_code,))
-    notify_targets = cursor_main.fetchall()
+    config.cursor_main.execute(sql_lc, (language_code,))
+    notify_targets = config.cursor_main.fetchall()
 
     if len(notify_targets) == 0 and len(notify_users_list) == 0:
         # If there's no one on the list, just continue
@@ -965,7 +961,9 @@ def ziwen_notifier(
     notify_users_list = [x for x in notify_users_list if x not in contacted]
 
     # Code here to equalize data (see function above)
-    notify_users_list = notifier_equalizer(notify_users_list, language_name, reddit)
+    notify_users_list = notifier_equalizer(
+        notify_users_list, language_name, config.reddit
+    )
 
     # Write to the counter log how many we send
     action_counter(len(notify_users_list), "Notifications")
@@ -990,18 +988,21 @@ def ziwen_notifier(
         )
         try:
             message_subject = f"[Notification] New {language_name} post on r/translator"
-            reddit.redditor(username).message(
+            config.reddit.redditor(username).message(
                 message_subject, message + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON
             )
             # Record that they have been messaged
-            notifier_limit_writer(username, language_code, cursor_main, conn_main)
+            notifier_limit_writer(
+                username, language_code, config.cursor_main, config.conn_main
+            )
         except praw.exceptions.APIException:  # If the user deleted their account...
             logger.info(
                 f"Notifier: An error occured while sending a message to u/{username}. Removing..."
             )
+            # Remove the username from our database.
             notifier_list_pruner(
-                username, reddit, cursor_main, conn_main
-            )  # Remove the username from our database.
+                username, config.reddit, config.cursor_main, config.conn_main
+            )
 
     # Record to a log how long it took.
     messaging_mins = (time.time() - messaging_start) / 60
@@ -1022,11 +1023,7 @@ def ziwen_notifier(
     return notify_users_list
 
 
-def ziwen_messages(
-    reddit: praw.Reddit,
-    cursor_main: Cursor,
-    conn_main: Connection,
-) -> None:
+def ziwen_messages(config: ZiwenConfig) -> None:
     """
     A top-level system to process commands via the messaging system of Reddit. This system acts upon keywords included
     in the message's subject field, including the following.
@@ -1048,7 +1045,7 @@ def ziwen_messages(
 
     # Fetch just the last five unread messages. Ziwen cycles every 30 seconds so this should be sufficient.
     messages = []
-    messages += list(reddit.inbox.unread(limit=5))
+    messages += list(config.reddit.inbox.unread(limit=5))
 
     for message in messages:
         mauthor = str(message.author)
@@ -1074,7 +1071,7 @@ def ziwen_messages(
 
                 # Insert the relevant codes.
                 notifier_language_list_editer(
-                    language_matches, mauthor, cursor_main, conn_main, "insert"
+                    language_matches, mauthor, config, "insert"
                 )
 
                 # Get the language names of those codes.
@@ -1115,7 +1112,7 @@ def ziwen_messages(
                 )
 
                 # Forward the message to my creator.
-                reddit.redditor("kungming2").message(
+                config.reddit.redditor("kungming2").message(
                     subject=f"Unsubscribe Attempt: u/{mauthor}",
                     message=f"Forwarded message:\n\n---\n\n{mbody}",
                 )
@@ -1126,7 +1123,7 @@ def ziwen_messages(
                 # User wants to unsubscribe from everything.
                 # Delete the user from the database.
                 notifier_language_list_editer(
-                    language_matches, mauthor, cursor_main, conn_main, "purge"
+                    language_matches, mauthor, config, "purge"
                 )
 
                 # Send the reply.
@@ -1138,7 +1135,7 @@ def ziwen_messages(
             else:  # Should return a list of specific languages the person doesn't want.
                 # Delete the relevant codes.
                 notifier_language_list_editer(
-                    language_matches, mauthor, cursor_main, conn_main, "delete"
+                    language_matches, mauthor, config, "delete"
                 )
                 # Get the language names of those codes.
                 final_match_names = [
@@ -1164,7 +1161,7 @@ def ziwen_messages(
             to_post = "Ziwen is running nominally.\n\n"
 
             # Determine if user is a moderator.
-            if is_mod(reddit, mauthor):  # New status check from moderators.
+            if config.is_mod(mauthor):  # New status check from moderators.
                 # Get the last two recorded error entries for debugging.
                 to_post += record_retrieve_error_log()
                 if len(to_post) > 10000:  # If the PM is too long, shorten it.
@@ -1180,9 +1177,9 @@ def ziwen_messages(
 
             # We try to retrieve the languages the user is subscribed to.
             sql_stat = "SELECT * FROM notify_users WHERE username = ?"
-            cursor_main.execute(sql_stat, (mauthor,))
+            config.cursor_main.execute(sql_stat, (mauthor,))
             # Returns a list of lists w/ the language code & the username
-            all_subscriptions = cursor_main.fetchall()
+            all_subscriptions = config.cursor_main.fetchall()
             for subscription in all_subscriptions:
                 # We only want the language codes (don't need the username).
                 final_match_codes.append(subscription[0])
@@ -1218,7 +1215,7 @@ def ziwen_messages(
 
             # Get the commands the user may have used before.
             user_commands_statistics_data = messaging_user_statistics_loader(
-                mauthor, cursor_main
+                mauthor, config.cursor_main
             )
             if user_commands_statistics_data is not None:
                 commands_component = (
@@ -1236,7 +1233,7 @@ def ziwen_messages(
             action_counter(1, "Status checks")
             message.reply(compilation + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
 
-        elif "add" in msubject and is_mod(reddit, mauthor):
+        elif "add" in msubject and config.is_mod(mauthor):
             # Mod manually adding people to the notifications database.
             logger.info(
                 f"Messages: New username addition message from moderator u/{mauthor}."
@@ -1257,7 +1254,7 @@ def ziwen_messages(
                 # In case the moderators' addition string is incomprehensible.
                 # Insert the relevant codes.
                 notifier_language_list_editer(
-                    language_matches, add_username, cursor_main, conn_main, "insert"
+                    language_matches, add_username, config, "insert"
                 )
 
                 # Reply to moderator.
@@ -1265,7 +1262,7 @@ def ziwen_messages(
                 addition_message = f"Added the language codes **{match_codes_print}** for u/{add_username} into the notifications database."
                 message.reply(addition_message)
 
-        elif "remove" in msubject and is_mod(reddit, mauthor):
+        elif "remove" in msubject and config.is_mod(mauthor):
             # Mod manually removing people from the notifications database.
             logger.info(
                 f"Messages: New username removal message from moderator u/{mauthor}."
@@ -1277,19 +1274,17 @@ def ziwen_messages(
             remove_username = mbody.split("USERNAME:", 1)[1].strip()
 
             # We try to retrieve the languages the user is subscribed to.
-            cursor_main.execute(
+            config.cursor_main.execute(
                 "SELECT * FROM notify_users WHERE username = ?", (remove_username,)
             )
             # Returns a list of lists with both the code and the username.
-            all_subscriptions = cursor_main.fetchall()
+            all_subscriptions = config.cursor_main.fetchall()
             for subscription in all_subscriptions:
                 # We only want the language codes (no need the username).
                 subscribed_codes.append(subscription[0])
 
             # Actually delete the username from database.
-            notifier_language_list_editer(
-                [], remove_username, cursor_main, conn_main, "purge"
-            )
+            notifier_language_list_editer([], remove_username, config, "purge")
 
             # Send a message back to the moderator confirming this.
             final_match_codes_print = ", ".join(subscribed_codes)
@@ -1301,12 +1296,12 @@ def ziwen_messages(
 
             # Get the user's points
             user_points_output = "### Points on r/translator\n\n" + points_retreiver(
-                mauthor, cursor_main
+                mauthor, config.cursor_main
             )
 
             # Get the commands the user may have used before.
             user_commands_statistics_data = messaging_user_statistics_loader(
-                mauthor, cursor_main
+                mauthor, config.cursor_main
             )
             commands_component = (
                 ""

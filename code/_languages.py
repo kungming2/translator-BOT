@@ -6,12 +6,8 @@ import csv
 import itertools
 import os
 import re
-from typing import Dict, List, NamedTuple, Tuple
-
-from rapidfuzz import fuzz  # Switched to rapidfuzz
-
-from _config import KEYWORDS, SCRIPT_DIRECTORY
-from _language_consts import (
+from code._config import KEYWORDS, SCRIPT_DIRECTORY
+from code._language_consts import (
     APP_WORDS,
     COUNTRY_LIST,
     ENGLISH_2_WORDS,
@@ -20,6 +16,9 @@ from _language_consts import (
     ISO_LANGUAGE_COUNTRY_ASSOCIATED,
     MAIN_LANGUAGES,
 )
+from typing import Dict, List, NamedTuple, Tuple
+
+from rapidfuzz import fuzz  # Switched to rapidfuzz
 
 VERSION_NUMBER_LANGUAGES = "1.7.22"
 
@@ -55,62 +54,46 @@ WRONG_DIRECTIONS = ["<", "〉", "›", "》", "»", "⟶", "\udcfe", "&gt;", "�
 WRONG_BRACKETS_LEFT = ["［", "〚", "【 ", "〔", "〖", "⟦", "｟", "《"]
 WRONG_BRACKETS_RIGHT = ["］", "〛", "】", "〕", "〗", "⟧", "｠", "》"]
 
+SUPPORTED_CODES = []
+SUPPORTED_LANGUAGES = []
+ISO_DEFAULT_ASSOCIATED = []
+ISO_639_1 = []
+ISO_639_2B = {}
+ISO_639_3 = []
+ISO_NAMES = []
+MISTAKE_ABBREVIATIONS = {}
+LANGUAGE_COUNTRY_ASSOCIATED = {}
 
-def language_lists_generator() -> None:
-    """
-    A routine that creates a bunch of the old lists that used to power `converter()`
+for language_code, language_module in MAIN_LANGUAGES.items():
+    ISO_639_1.append(language_code)
+    ISO_639_3.append(language_module["language_code_3"])
+    ISO_NAMES.append(language_module["name"])
+    if (
+        "alternate_names" in language_module
+        and language_module["alternate_names"] is not None
+    ):
+        for name in language_module["alternate_names"]:
+            ISO_NAMES.append(name)
 
-    :return: Nothing, but it declares a bunch of global variables.
-    """
+    if language_module["supported"]:
+        SUPPORTED_CODES.append(language_code)
+        SUPPORTED_LANGUAGES.append(language_module["name"])
 
-    global SUPPORTED_CODES, SUPPORTED_LANGUAGES, ISO_DEFAULT_ASSOCIATED, ISO_639_1, ISO_639_2B, ISO_639_3, ISO_NAMES, MISTAKE_ABBREVIATIONS, LANGUAGE_COUNTRY_ASSOCIATED
+    if "countries_default" in language_module:
+        ISO_DEFAULT_ASSOCIATED.append(
+            f"{language_code}-{language_module['countries_default']}"
+        )
 
-    SUPPORTED_CODES = []
-    SUPPORTED_LANGUAGES = []
-    ISO_DEFAULT_ASSOCIATED = []
-    ISO_639_1 = []
-    ISO_639_2B = {}
-    ISO_639_3 = []
-    ISO_NAMES = []
-    MISTAKE_ABBREVIATIONS = {}
-    LANGUAGE_COUNTRY_ASSOCIATED = {}
+    if "countries_associated" in language_module:
+        LANGUAGE_COUNTRY_ASSOCIATED[language_code] = language_module[
+            "countries_associated"
+        ]
 
-    for language_code, language_module in MAIN_LANGUAGES.items():
-        ISO_639_1.append(language_code)
-        ISO_639_3.append(language_module["language_code_3"])
-        ISO_NAMES.append(language_module["name"])
-        if (
-            "alternate_names" in language_module
-            and language_module["alternate_names"] is not None
-        ):
-            for item in language_module["alternate_names"]:
-                ISO_NAMES.append(item)
+    if "mistake_abbreviation" in language_module:
+        MISTAKE_ABBREVIATIONS[language_module["mistake_abbreviation"]] = language_code
 
-        if language_module["supported"]:
-            SUPPORTED_CODES.append(language_code)
-            SUPPORTED_LANGUAGES.append(language_module["name"])
-
-        if "countries_default" in language_module:
-            ISO_DEFAULT_ASSOCIATED.append(
-                f"{language_code}-{language_module['countries_default']}"
-            )
-
-        if "countries_associated" in language_module:
-            LANGUAGE_COUNTRY_ASSOCIATED[language_code] = language_module[
-                "countries_associated"
-            ]
-
-        if "mistake_abbreviation" in language_module:
-            MISTAKE_ABBREVIATIONS[
-                language_module["mistake_abbreviation"]
-            ] = language_code
-
-        if "language_code_2b" in language_module:
-            ISO_639_2B[language_module["language_code_2b"]] = language_code
-
-
-# Form the lists from the dictionary that are needed for compatibility.
-language_lists_generator()
+    if "language_code_2b" in language_module:
+        ISO_639_2B[language_module["language_code_2b"]] = language_code
 
 
 def fuzzy_text(word: str) -> str | None:
@@ -237,20 +220,6 @@ def lang_code_search(search_term: str, script_search: bool):
     return "", False
 
 
-def iso639_3_to_iso639_1(specific_code: str) -> None | str:
-    """
-    Function to get the equivalent ISO 639-1 code from an ISO 639-3 code if it exists.
-
-    :param specific_code: An ISO 639-3 code.
-    :return:
-    """
-
-    for key, value in MAIN_LANGUAGES.items():
-        module_iso3 = value["language_code_3"]
-        if specific_code == module_iso3:
-            return key
-
-
 def country_converter(text_input: str, abbreviations_okay: bool = True):
     """
     Function that detects a country name in a given word.
@@ -299,12 +268,12 @@ def country_converter(text_input: str, abbreviations_okay: bool = True):
                         if text_input.title() == keyword:  # A Match!
                             country_code = country.code2
                             country_name = country.name
-                except IndexError:
+                except TypeError:
                     # No keywords associated with this country.
                     pass
 
     if "," in country_name:  # There's a comma.
-        country_name = country_name.split(",")[0].strip()
+        country_name = country_name.split(",", maxsplit=1)[0].strip()
         # Take first part if there's a comma (Taiwan, Province of China)
 
     return country_code, country_name
@@ -369,9 +338,8 @@ def converter(input_text: str) -> ConverterTuple:
                 regional_case = False
                 country_code = None
                 # We don't want to mark the default countries as too granular ones.
-            if (
-                len(country_name) == 0
-            ):  # There's no valid country from the converter. Reset it.
+            if len(country_name) == 0:
+                # There's no valid country from the converter. Reset it.
                 input_text = targeted_language  # Redefine the language as the original (pre-split)
                 regional_case = False
                 country_code = None
@@ -1582,8 +1550,8 @@ def main_posts_filter_required_keywords() -> Dict[str, List[str]]:
     for word in words_for_english:
         for connector in words_connection:
             temporary_list = [
-                f" {connector} {word}",
-                f"{word} {connector} ",
+                f"{connector}{word}",
+                f"{word}{connector}",
             ]
 
             if connector != "to":
@@ -1598,8 +1566,8 @@ def main_posts_filter_required_keywords() -> Dict[str, List[str]]:
         language_lower = language.lower()
         for connector in words_connection:
             temporary_list = [
-                f" {connector} {language_lower}",
-                f"{language_lower} {connector} ",
+                f"{connector}{language_lower}",
+                f"{language_lower}{connector}",
             ]
 
             if connector != "to":

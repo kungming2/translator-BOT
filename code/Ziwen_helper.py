@@ -1,8 +1,21 @@
 import calendar
-import datetime
 import re
 import sys
 import time
+from code._config import (
+    FILE_ADDRESS_MECAB,
+    KEYWORDS,
+    SUBREDDIT,
+    THANKS_KEYWORDS,
+    get_random_useragent,
+    logger,
+)
+from code._language_consts import CJK_LANGUAGES
+from code._languages import comment_info_parser, converter, language_mention_search
+from code._login import USERNAME
+from code._responses import MSG_WIKIPAGE_FULL
+from datetime import datetime
+from sqlite3 import Connection, Cursor
 from typing import Dict, List
 
 import jieba  # Segmenter for Mandarin Chinese.
@@ -12,16 +25,15 @@ import prawcore  # The base module praw for error logging.
 import tinysegmenter  # Basic segmenter for Japanese; not used on Windows.
 from mafan import simplify
 
-from _config import FILE_ADDRESS_MECAB, KEYWORDS, SUBREDDIT, THANKS_KEYWORDS, logger
-from _language_consts import CJK_LANGUAGES
-from _languages import comment_info_parser, converter, language_mention_search
-from _login import USERNAME
-from _responses import MSG_WIKIPAGE_FULL
-
 CORRECTED_SUBREDDIT = SUBREDDIT
 TESTING_MODE = False
 # A boolean that enables the bot to send messages. Used for testing.
 MESSAGES_OKAY = True
+# This is how many posts Ziwen will retrieve all at once. PRAW can download 100 at a time.
+MAXPOSTS = 100
+# How long do we allow people to `!claim` a post? This is defined in seconds.
+CLAIM_PERIOD = 28800
+
 if len(sys.argv) > 1:  # This is a new startup with additional parameters for modes.
     specific_mode = sys.argv[1].lower()
     if specific_mode == "test":
@@ -31,6 +43,355 @@ if len(sys.argv) > 1:  # This is a new startup with additional parameters for mo
         logger.info(
             f"Startup: Starting up in TESTING MODE for r/{CORRECTED_SUBREDDIT}..."
         )
+
+
+# for stateful variables used outside this module for easy access
+class ZiwenConfig:
+    def __init__(
+        self,
+        conn_cache: Connection,
+        cursor_cache: Cursor,
+        conn_main: Connection,
+        cursor_main: Cursor,
+        conn_ajo: Connection,
+        cursor_ajo: Cursor,
+        reddit: praw.Reddit,
+        subreddit_helper: praw.reddit.models.SubredditHelper,
+    ):
+        self.conn_cache = conn_cache
+        self.cursor_cache = cursor_cache
+        self.conn_main = conn_main
+        self.cursor_main = cursor_main
+        self.conn_ajo = conn_ajo
+        self.cursor_ajo = cursor_ajo
+        self.reddit = reddit
+        self.subreddit_helper = subreddit_helper
+        self.post_templates = {}
+        self.verified_post_id = None
+        self.zw_useragent = {}
+        self.global_blacklist = []
+        self.most_recent_op = []
+        # A cache for language multipliers, generated each instance of running.
+        # Allows us to access the wiki less and speed up the process.
+        self.cached_multipliers: Dict[str, int] = {}
+
+    def is_mod(self, user: str) -> bool:
+        """
+        A function that can tell us if a user is a moderator of the operating subreddit (r/translator) or not.
+
+        :param user: The Reddit username of an individual.
+        :return: True if the user is a moderator, False otherwise.
+        """
+        # Get list of subreddit mods from r/translator.
+        moderators = [
+            moderator.name.lower() for moderator in self.subreddit_helper.moderator()
+        ]
+        return user.lower() in moderators
+
+    """
+    MAINTENANCE FUNCTIONS
+
+    These functions are run at Ziwen's startup and also occasionally in order to refresh their information. Most of them
+    fetch data from r/translator itself or r/translatorBOT for internal variables.
+
+    Maintenance functions are all prefixed with `maintenance` in their name.
+    """
+
+    def maintenance_template_retriever(self) -> Dict[str, str]:
+        """
+        Function that retrieves the current flairs available on the subreddit and returns a dictionary.
+        Dictionary is keyed by the old css_class, with the long-form template ID as a value per key.
+        Example: 'cs': XXXXXXXX
+
+        :return new_template_ids: A dictionary containing all the templates on r/translator.
+        :return: An empty dictionary if it cannot find the templates for some reason.
+        """
+
+        new_template_ids = {}
+
+        # Access the templates on the subreddit.
+        for template in self.subreddit_helper.flair.link_templates:
+            css_associated_code = template["css_class"]
+            new_template_ids[css_associated_code] = template["id"]
+
+        # Return a dictionary, if there's data, otherwise return an empty dictionary.
+        return new_template_ids if len(new_template_ids) != 0 else {}
+
+    def maintenance_most_recent(self) -> List[str]:
+        """
+        A function that grabs the usernames of people who have submitted to r/translator in the last 24 hours.
+        Another function can check against this to make sure people aren't submitting too many.
+
+        :return most_recent: A list of usernames that have recently submitted to r/translator. Duplicates will be on there.
+        """
+
+        # Define the time parameters (24 hours earlier from present)
+        most_recent = []
+        current_vaqt = int(time.time())
+        current_vaqt_day_ago = current_vaqt - 86400
+
+        # 100 should be sufficient for the last day, assuming a monthly total of 3000 posts.
+        posts = list(self.subreddit_helper.new(limit=100))
+
+        # Process through them - we really only care about the username and the time.
+        for post in posts:
+            ocreated = int(post.created_utc)  # Unix time when this post was created.
+
+            try:
+                oauthor = post.author.name
+            except AttributeError:
+                # Author is deleted. We don't care about this post.
+                continue
+
+            # If the time of the post is after our limit, add it to our list.
+            if ocreated > current_vaqt_day_ago and oauthor != "translator-BOT":
+                most_recent.append(oauthor)
+
+        # Return the list
+        return most_recent
+
+    def maintenance_get_verified_thread(self) -> str | None:
+        """
+        Function to quickly get the Reddit ID of the latest verification thread on startup.
+        This way, the ID of the thread does not need to be hardcoded into Ziwen.
+
+        :return verification_id: The Reddit ID of the newest verification thread as a string.
+        """
+
+        # Search for the latest verification thread.
+        search_term = "title:verified AND flair:meta"
+
+        # Note that even in testing ('trntest') we will still search r/translator for the thread.
+        search_results = self.reddit.subreddit("translator").search(
+            search_term, time_filter="year", sort="new", limit=1
+        )
+
+        # Iterate over the results generator to get the ID.
+        verification_id = None
+        for post in search_results:
+            verification_id = post.id
+
+        return verification_id
+
+    def maintenance_blacklist_checker(self) -> List[str]:
+        """
+        A start-up function that runs once and gets blacklisted usernames from the wiki of r/translatorBOT.
+        Blacklisted users are those who have abused the subreddit functions on r/translator but are not banned.
+        This is an anti-abuse system, and it also disallows them from crossposting with Ziwen Streamer.
+
+        :return blacklist_usernames: A list of usernames on the blacklist, all in lowercase.
+        """
+
+        # Retrieve the page.
+        blacklist_page = self.reddit.subreddit("translatorBOT").wiki["blacklist"]
+        overall_page_content = str(blacklist_page.content_md)  # Get the page's content.
+        usernames_raw = overall_page_content.split("####")[1]
+        usernames_raw = usernames_raw.split("\n")[2].strip()  # Get just the usernames.
+
+        # Convert the usernames into a list.
+        blacklist_usernames = usernames_raw.split(", ")
+
+        # Convert the usernames to lowercase.
+        blacklist_usernames = [item.lower() for item in blacklist_usernames]
+
+        # Exclude AutoModerator from the blacklist.
+        blacklist_usernames.remove("automoderator")
+
+        return blacklist_usernames
+
+    def maintenance_database_processed_cleaner(self) -> None:
+        """
+        Function that cleans up the database of processed comments, but not posts (yet).
+
+        :return: Nothing.
+        """
+
+        pruning_command = "DELETE FROM oldcomments WHERE id NOT IN (SELECT id FROM oldcomments ORDER BY id DESC LIMIT ?)"
+        self.cursor_main.execute(pruning_command, [MAXPOSTS * 10])
+        self.conn_main.commit()
+
+    """
+    POINTS TABULATING SYSTEM
+
+    Ziwen has a live points system (meaning it calculates users' points as they make their comments) to help users keep
+    track of their contributions to the community. The points system is not as public as some other communities that have
+    points bots, but is instead meant to be more private. A summary table to the months' contributors is posted by Wenyuan
+    at the start of every month.
+
+    Points-related functions are all prefixed with `points` in their name. 
+    """
+
+    def points_worth_determiner(self, language_name: str) -> int:
+        """
+        This function takes a language name and determines the points worth for a translation for it. (the cap is 20)
+
+        :param language_name: The name of the language we want to know the points worth for.
+        :return final_point_value: The points value for the language expressed as an integer.
+        """
+        for spacing in " -":  # The wiki does not support dashes or underscores in urls.
+            if spacing in language_name:
+                language_name = language_name.replace(spacing, "_")
+
+        if language_name == "Unknown":
+            return 4  # The multiplier for Unknown can be hard coded.
+
+        # Code to check the cache first to see if we have a value already.
+        # Look for the dictionary key of the language name.
+        final_point_value = self.cached_multipliers.get(language_name)
+
+        if final_point_value is not None:  # It's cached.
+            logger.debug(
+                f"Points determiner: {language_name} value in the cache: {final_point_value}"
+            )
+            return (
+                final_point_value  # Return the multipler - no need to go to the wiki.
+            )
+        # Not found in the cache. Get from the wiki.
+        # Fetch the wikipage.
+        overall_page = self.reddit.subreddit(CORRECTED_SUBREDDIT).wiki[
+            language_name.lower()
+        ]
+        try:  # First see if this page actually exists
+            overall_page_content = str(overall_page.content_md)
+            last_month_data = overall_page_content.rsplit("\n", maxsplit=1)[-1]
+        except prawcore.exceptions.NotFound:  # There is no such wikipage.
+            logger.debug("Points determiner: The wiki page does not exist.")
+            last_month_data = "2017 | 08 | [Example Link] | 1%"
+            # Feed it dummy data if there's nothing... this language probably hasn't been done in a while.
+        try:  # Try to get the percentage from the page
+            total_percent = str(last_month_data.split(" | ")[3])[:-1]
+            total_percent = float(total_percent)
+        except IndexError:
+            # There's a page but there is something wrong with data entered.
+            logger.debug("Points determiner: There was a second error.")
+            total_percent = float(1)
+
+        # Calculate the point multiplier.
+        # The precise formula here is: (1/percentage)*35
+        try:
+            raw_point_value = 35 * (1 / total_percent)
+            final_point_value = int(round(raw_point_value))
+        except ZeroDivisionError:  # In case the total_percent is 0 for whatever reason.
+            final_point_value = 20
+        final_point_value = min(final_point_value, 20)
+        logger.debug(
+            f"Points determiner: Multiplier for {language_name} is {final_point_value}"
+        )
+
+        # Add to the cached values, so we don't have to do this next time.
+        self.cached_multipliers.update({language_name: final_point_value})
+
+        # Write data to the cache so that it can be retrieved later.
+        current_zeit = time.time()
+        month_string = datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
+        insert_data = (month_string, language_name, final_point_value)
+        self.cursor_cache.execute(
+            "INSERT INTO multiplier_cache VALUES (?, ?, ?)", insert_data
+        )
+        self.conn_cache.commit()
+
+        return final_point_value
+
+    def points_worth_cacher(self) -> None:
+        """
+        Simple routine that caches the most frequently used languages' points worth in a local database.
+
+        :param: Nothing.
+        :return: Nothing.
+        """
+
+        # These are the most common languages on the subreddit. Also in our sidebar.
+        check_languages = [
+            "Arabic",
+            "Chinese",
+            "French",
+            "German",
+            "Hebrew",
+            "Hindi",
+            "Italian",
+            "Japanese",
+            "Korean",
+            "Latin",
+            "Polish",
+            "Portuguese",
+            "Russian",
+            "Spanish",
+            "Thai",
+            "Vietnamese",
+        ]
+
+        # Code to check the database file to see if the values are current.
+        # It will transform the database info into a dictionary.
+
+        # Get the year-month string.
+        current_zeit = time.time()
+        month_string = datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
+
+        # Select from the database the current months data if it exists.
+        multiplier_command = "SELECT * from multiplier_cache WHERE month_year = ?"
+        self.cursor_cache.execute(multiplier_command, (month_string,))
+        multiplier_entries = self.cursor_cache.fetchall()
+        # If not current, fetch new data and save it.
+
+        if len(multiplier_entries) != 0:  # We actually have cached data for this month.
+            # Populate the dictionary format from our data
+            for entry in multiplier_entries:
+                multiplier_name = entry[1]
+                multiplier_worth = int(entry[2])
+                self.cached_multipliers[multiplier_name] = multiplier_worth
+        else:  # We don't have cached data so we will retrieve it from the wiki.
+            # Delete everything from the cache (clearing out previous months' data as well)
+            command = "DELETE FROM multiplier_cache"
+            self.cursor_cache.execute(command)
+            self.conn_cache.commit()
+
+            # Get the data for the common languages
+            for language in check_languages:
+                # Fetch the number of points it's worth.
+                self.points_worth_determiner(language)
+
+                # Write the data to the cache.
+                self.conn_cache.commit()
+
+    def ziwen_maintenance(self) -> None:
+        """
+        A simple top-level function to group together common activities that need to be run on an occasional basis.
+        This is usually activated after almost a hundred cycles to update information.
+
+        :return: Nothing.
+        """
+
+        self.post_templates = self.maintenance_template_retriever()
+        logger.debug(
+            f"# Current post templates retrieved: {len(self.post_templates.keys())} templates"
+        )
+
+        # Get the last verification thread's ID and store it.
+        self.verified_post_id = self.maintenance_get_verified_thread()
+        if len(self.verified_post_id):
+            logger.info(
+                f"# Current verification post found: https://redd.it/{self.verified_post_id}\n\n"
+            )
+        else:
+            logger.error("# No current verification post found!")
+
+        self.zw_useragent = (
+            get_random_useragent()
+        )  # Pick a random useragent from our list.
+        logger.debug(f"# Current user agent: {self.zw_useragent}")
+
+        # We download the blacklist of users.
+        self.global_blacklist = self.maintenance_blacklist_checker()
+        logger.debug(
+            f"# Current global blacklist retrieved: {len(self.global_blacklist)} users"
+        )
+
+        self.most_recent_op = self.maintenance_most_recent()
+
+        self.points_worth_cacher()  # Update the points cache
+        logger.debug("# Points cache updated.")
+
+        self.maintenance_database_processed_cleaner()  # Clean the comments that have been processed.
 
 
 def css_check(css_class: str) -> bool:
@@ -70,7 +431,7 @@ def record_to_wiki(
     :return: Does not return anything.
     """
 
-    oformat_date = datetime.datetime.fromtimestamp(int(odate)).strftime("%Y-%m-%d")
+    oformat_date = datetime.fromtimestamp(int(odate)).strftime("%Y-%m-%d")
 
     if s_or_i:  # Means we should write to the 'saved' page:
         page_content = reddit.subreddit(subreddit).wiki["saved"]
@@ -269,7 +630,7 @@ def komento_analyzer(
                 num_min = int(claimed_time.split(":")[1])
                 num_sec = int(claimed_time.split(":")[2])
 
-                comment_datetime = datetime.datetime(
+                comment_datetime = datetime(
                     num_year, num_month, num_day, num_hour, num_min, num_sec
                 )
                 # Returns the time in UTC.
@@ -479,16 +840,3 @@ def lookup_matcher(
         ]
 
     return master_dictionary
-
-
-def is_mod(reddit: praw.reddit, user: str) -> bool:
-    """
-    A function that can tell us if a user is a moderator of the operating subreddit (r/translator) or not.
-
-    :param user: The Reddit username of an individual.
-    :return: True if the user is a moderator, False otherwise.
-    """
-    # Get list of subreddit mods from r/translator.
-    r = reddit.subreddit(CORRECTED_SUBREDDIT)
-    moderators = [moderator.name.lower() for moderator in r.moderator()]
-    return user.lower() in moderators

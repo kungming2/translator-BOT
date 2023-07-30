@@ -2,20 +2,11 @@ import datetime
 import random
 import re
 import time
-from sqlite3 import Connection, Cursor
-from typing import Dict
-
-import googlesearch
-import praw
-import requests
-from lxml import html
-from wiktionaryparser import WiktionaryParser
-
-from _config import BOT_DISCLAIMER, KEYWORDS, logger
-from _language_consts import CJK_LANGUAGES, ISO_MACROLANGUAGES, MAIN_LANGUAGES
-from _languages import comment_info_parser, converter, lang_code_search
-from _login import USERNAME
-from _responses import (
+from code._config import BOT_DISCLAIMER, KEYWORDS, logger
+from code._language_consts import CJK_LANGUAGES, ISO_MACROLANGUAGES, MAIN_LANGUAGES
+from code._languages import comment_info_parser, converter, lang_code_search
+from code._login import USERNAME
+from code._responses import (
     COMMENT_ADVANCED_IDENTIFY_ERROR,
     COMMENT_CLAIM,
     COMMENT_CURRENTLY_CLAIMED,
@@ -32,35 +23,37 @@ from _responses import (
     MSG_RESTORE_TEXT_TEMPLATE,
     MSG_TRANSLATED,
 )
-from Ajo import Ajo, ajo_defined_multiple_comment_parser
-from ja_processing import ja_character, ja_word
-from notifier import (
+from code.Ajo import Ajo, ajo_defined_multiple_comment_parser
+from code.ja_processing import ja_character, ja_word
+from code.notifier import (
     notifier_page_multiple_detector,
     notifier_page_translators,
     ziwen_notifier,
 )
-from zh_processing import zh_character, zh_word
-from Ziwen_helper import (
+from code.zh_processing import zh_character, zh_word
+from code.Ziwen_helper import (
     CORRECTED_SUBREDDIT,
     MESSAGES_OKAY,
+    ZiwenConfig,
     css_check,
-    is_mod,
     komento_analyzer,
     komento_submission_from_comment,
     lookup_matcher,
     record_to_wiki,
 )
+from sqlite3 import Connection, Cursor
+from typing import Dict
+
+import googlesearch
+import praw
+import requests
+from lxml import html
+from wiktionaryparser import WiktionaryParser
 
 
 class ZiwenCommandProcessor:
     def __init__(
         self,
-        zw_useragent: Dict[str, str],
-        reddit: praw.Reddit,
-        cursor_main: Cursor,
-        cursor_ajo: Cursor,
-        conn_main: Connection,
-        post_templates: Dict[str, str],
         pbody: str,
         pauthor: str,
         comment: praw.reddit.models.Comment,
@@ -75,13 +68,8 @@ class ZiwenCommandProcessor:
         pid: str,
         pbody_original: str,
         requester: str,
+        config: ZiwenConfig,
     ) -> None:
-        self.zw_useragent = zw_useragent
-        self.reddit = reddit
-        self.cursor_main = cursor_main
-        self.cursor_ajo = cursor_ajo
-        self.conn_main = conn_main
-        self.post_templates = post_templates
         self.pbody = pbody
         self.pauthor = pauthor
         self.comment = comment
@@ -96,6 +84,14 @@ class ZiwenCommandProcessor:
         self.pid = pid
         self.pbody_original = pbody_original
         self.requester = requester
+        # from config
+        self.config = config
+        self.zw_useragent = config.zw_useragent
+        self.reddit = config.reddit
+        self.cursor_main = config.cursor_main
+        self.cursor_ajo = config.cursor_ajo
+        self.conn_main = config.conn_main
+        self.post_templates = config.post_templates
 
     def lookup_wiktionary_search(
         self, search_term: str, language_name: str
@@ -416,9 +412,7 @@ class ZiwenCommandProcessor:
             return
 
         # The person asking for a restore isn't eligible for it.
-        if self.pauthor not in eligible_people and not is_mod(
-            self.reddit, self.pauthor
-        ):
+        if self.pauthor not in eligible_people and not self.config.is_mod(self.pauthor):
             # mods should be able to call it.
             logger.info(
                 f"Bot: u/{self.pauthor} is not eligible to make a !restore request for this."
@@ -607,11 +601,7 @@ class ZiwenCommandProcessor:
                     self.opermalink,
                     self.oauthor,
                     True,
-                    self.post_templates,
-                    self.reddit,
-                    self.cursor_ajo,
-                    self.cursor_main,
-                    self.conn_main,
+                    self.config,
                 )
                 # Notify people on the list if the post hasn't already been marked as translated
                 # no use asking people to see something that's translated
@@ -624,7 +614,7 @@ class ZiwenCommandProcessor:
             and not match_script
         ):
             komento_data = komento_analyzer(
-                self.reddit, komento_submission_from_comment(self.oid)
+                self.reddit, komento_submission_from_comment(self.reddit, self.oid)
             )
 
             if "bot_unknown" in komento_data:
@@ -1117,14 +1107,14 @@ class ZiwenCommandProcessor:
         if (
             self.pauthor == self.oauthor
             or self.pauthor == self.requester
-            or is_mod(self.reddit, self.pauthor)
+            or self.config.is_mod(self.pauthor)
         ):
             self.osubmission.mod.remove()  # We'll use remove for now -- can switch to delete() later.
             logger.info("Bot: >> Removed crosspost.")
 
     def process_reset(self):
         # !reset command, to revert a post back to as if it were freshly processed
-        if is_mod(self.reddit, self.pauthor) or self.pauthor == self.oauthor:
+        if self.config.is_mod(self.pauthor) or self.pauthor == self.oauthor:
             # Check if user is a mod or the OP.
             self.oajo.reset(self.otitle)
             logger.info("Bot: > Reset everything for the designated post.")
@@ -1133,7 +1123,7 @@ class ZiwenCommandProcessor:
 
     # !long command, for mods to mark a post as long for translators.
     def process_long(self):
-        if not is_mod(self.reddit, self.pauthor):
+        if not self.config.is_mod(self.pauthor):
             return
         # This command works as a flip switch. It changes the state to the opposite.
         current_status = self.oajo.is_long
@@ -1155,7 +1145,7 @@ class ZiwenCommandProcessor:
     # the !note command saves posts which are not CSS/template supported so they can be used as reference.
     # This is now rarely used.
     def process_note(self):
-        if not is_mod(self.reddit, self.pauthor):
+        if not self.config.is_mod(self.pauthor):
             # Check to see if the person calling this command is a moderator
             return
         match = comment_info_parser(self.pbody, KEYWORDS.note)[0]
@@ -1175,7 +1165,7 @@ class ZiwenCommandProcessor:
     def process_set(self):
         # !set is a mod-accessible means of setting the post flair.
         # It removes the comment (through AM) so it looks like nothing happened.
-        if not is_mod(self.reddit, self.pauthor):
+        if not self.config.is_mod(self.pauthor):
             # Check to see if the person calling this command is a moderator
             return
 

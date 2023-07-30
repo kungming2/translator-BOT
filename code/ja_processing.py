@@ -14,14 +14,13 @@ More general ones are prefixed by `lookup`.
 """
 
 import re
+from code._config import logger
+from code.zh_processing import zh_character_calligraphy_search
 from typing import Dict
 
 import requests
 import romkan  # Needed for automatic Japanese romaji conversion.
 from lxml import html
-
-from _config import logger
-from zh_processing import zh_character_calligraphy_search
 
 
 def ja_character(character, zw_useragent: Dict[str, str]) -> str:
@@ -202,9 +201,7 @@ def ja_character(character, zw_useragent: Dict[str, str]) -> str:
 
     to_post = total_data + lookup_line_3
     logger.info(
-        "JA-Character: Received lookup command for "
-        + character
-        + " in Japanese. Returned results."
+        f"JA-Character: Received lookup command for {character} in Japanese. Returned results."
     )
 
     return to_post

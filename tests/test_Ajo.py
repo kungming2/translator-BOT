@@ -1,4 +1,4 @@
-import Ajo
+from code.Ajo import Ajo
 from unittest.mock import MagicMock
 import praw
 
@@ -10,4 +10,4 @@ def test_init():
     reddit_submission.title = "hello"
     reddit_submission.link_flair_css_class = ""
     reddit_submission.link_flair_text = ""
-    Ajo.Ajo(reddit_submission, {})
+    Ajo(reddit_submission, {})

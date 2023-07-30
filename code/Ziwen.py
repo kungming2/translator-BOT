@@ -6,21 +6,13 @@ Ziwen posts comments and sends messages and also moderates and keeps r/translato
 members with useful reference information and enforces the community's formatting guidelines.
 """
 
-from datetime import datetime
 import os
 import re
 import sqlite3  # For processing and accessing the databases.
 import sys
 import time
 import traceback  # For documenting errors that are encountered.
-from typing import Dict, List
-
-import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
-import prawcore  # The base module praw for error logging.
-import psutil
-from mafan import simplify
-
-from _config import (
+from code._config import (
     BOT_DISCLAIMER,
     FILE_ADDRESS_AJO_DB,
     FILE_ADDRESS_CACHE,
@@ -31,12 +23,11 @@ from _config import (
     STATUS_KEYWORDS,
     THANKS_KEYWORDS,
     action_counter,
-    get_random_useragent,
     logger,
     time_convert_to_string,
 )
-from _language_consts import MAIN_LANGUAGES
-from _languages import (
+from code._language_consts import MAIN_LANGUAGES
+from code._languages import (
     VERSION_NUMBER_LANGUAGES,
     bad_title_reformat,
     converter,
@@ -44,8 +35,8 @@ from _languages import (
     main_posts_filter,
     title_format,
 )
-from _login import PASSWORD, USERNAME, ZIWEN_APP_ID, ZIWEN_APP_SECRET
-from _responses import (
+from code._login import PASSWORD, USERNAME, ZIWEN_APP_ID, ZIWEN_APP_SECRET
+from code._responses import (
     COMMENT_BAD_TITLE,
     COMMENT_DEFINED_MULTIPLE,
     COMMENT_ENGLISH_ONLY,
@@ -54,14 +45,17 @@ from _responses import (
     COMMENT_VERIFICATION_RESPONSE,
     MSG_SHORT_THANKS_TRANSLATED,
 )
-from Ajo import Ajo, ajo_loader, ajo_writer
-from notifier import record_activity_csv, ziwen_messages, ziwen_notifier
-from zh_processing import zh_character, zh_word
-from Ziwen_command_processor import ZiwenCommandProcessor
-from Ziwen_helper import (
+from code.Ajo import Ajo, ajo_loader, ajo_writer
+from code.notifier import record_activity_csv, ziwen_messages, ziwen_notifier
+from code.zh_processing import zh_character, zh_word
+from code.Ziwen_command_processor import ZiwenCommandProcessor
+from code.Ziwen_helper import (
+    CLAIM_PERIOD,
     CORRECTED_SUBREDDIT,
+    MAXPOSTS,
     MESSAGES_OKAY,
     TESTING_MODE,
+    ZiwenConfig,
     css_check,
     komento_analyzer,
     komento_submission_from_comment,
@@ -69,6 +63,13 @@ from Ziwen_helper import (
     lookup_zhja_tokenizer,
     record_to_wiki,
 )
+from datetime import datetime
+from typing import Dict, List
+
+import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
+import prawcore  # The base module praw for error logging.
+import psutil
+from mafan import simplify
 
 """
 UNIVERSAL VARIABLES
@@ -83,15 +84,6 @@ USER_AGENT = (
     f"{BOT_NAME} {VERSION_NUMBER}, a notifications messenger, general commands monitor, and moderator for r/translator. "
     "Written and maintained by u/kungming2."
 )
-
-# This is how many posts Ziwen will retrieve all at once. PRAW can download 100 at a time.
-MAXPOSTS = 100
-# This is how many seconds Ziwen will wait between cycles. The bot is completely inactive during this time.
-WAIT = 30
-# After this many cycles, the bot will clean its database, keeping only the latest (CLEANCYCLES * MAXPOSTS) items.
-CLEANCYCLES = 90
-# How long do we allow people to `!claim` a post? This is defined in seconds.
-CLAIM_PERIOD = 28800
 
 # These are keywords that if included with `!translated` will give credit to the parent commentator.
 VERIFYING_KEYWORDS = [
@@ -108,9 +100,6 @@ VERIFYING_KEYWORDS = [
     "marking",
     "good work",
 ]
-# A cache for language multipliers, generated each instance of running.
-# Allows us to access the wiki less and speed up the process.
-CACHED_MULTIPLIERS: Dict[str, int] = {}
 
 
 """
@@ -142,277 +131,22 @@ reddit = praw.Reddit(
     user_agent=USER_AGENT,
     username=USERNAME,
 )
-subredditHelper = reddit.subreddit(CORRECTED_SUBREDDIT)
+subreddit_helper = reddit.subreddit(CORRECTED_SUBREDDIT)
 logger.info(
     f"Startup: Initializing {BOT_NAME} {VERSION_NUMBER} for r/{CORRECTED_SUBREDDIT} with languages module {VERSION_NUMBER_LANGUAGES}."
 )
 
-"""
-MAINTENANCE FUNCTIONS
-
-These functions are run at Ziwen's startup and also occasionally in order to refresh their information. Most of them
-fetch data from r/translator itself or r/translatorBOT for internal variables.
-
-Maintenance functions are all prefixed with `maintenance` in their name.
-"""
-
-
-def maintenance_template_retriever() -> Dict[str, str]:
-    """
-    Function that retrieves the current flairs available on the subreddit and returns a dictionary.
-    Dictionary is keyed by the old css_class, with the long-form template ID as a value per key.
-    Example: 'cs': XXXXXXXX
-
-    :return new_template_ids: A dictionary containing all the templates on r/translator.
-    :return: An empty dictionary if it cannot find the templates for some reason.
-    """
-
-    new_template_ids = {}
-
-    # Access the templates on the subreddit.
-    for template in subredditHelper.flair.link_templates:
-        css_associated_code = template["css_class"]
-        new_template_ids[css_associated_code] = template["id"]
-
-    # Return a dictionary, if there's data, otherwise return an empty dictionary.
-    return new_template_ids if len(new_template_ids) != 0 else {}
-
-
-def maintenance_most_recent() -> List[str]:
-    """
-    A function that grabs the usernames of people who have submitted to r/translator in the last 24 hours.
-    Another function can check against this to make sure people aren't submitting too many.
-
-    :return most_recent: A list of usernames that have recently submitted to r/translator. Duplicates will be on there.
-    """
-
-    # Define the time parameters (24 hours earlier from present)
-    most_recent = []
-    current_vaqt = int(time.time())
-    current_vaqt_day_ago = current_vaqt - 86400
-
-    # 100 should be sufficient for the last day, assuming a monthly total of 3000 posts.
-    posts = list(subredditHelper.new(limit=100))
-
-    # Process through them - we really only care about the username and the time.
-    for post in posts:
-        ocreated = int(post.created_utc)  # Unix time when this post was created.
-
-        try:
-            oauthor = post.author.name
-        except AttributeError:
-            # Author is deleted. We don't care about this post.
-            continue
-
-        # If the time of the post is after our limit, add it to our list.
-        if ocreated > current_vaqt_day_ago and oauthor != "translator-BOT":
-            most_recent.append(oauthor)
-
-    # Return the list
-    return most_recent
-
-
-def maintenance_get_verified_thread() -> str | None:
-    """
-    Function to quickly get the Reddit ID of the latest verification thread on startup.
-    This way, the ID of the thread does not need to be hardcoded into Ziwen.
-
-    :return verification_id: The Reddit ID of the newest verification thread as a string.
-    """
-
-    # Search for the latest verification thread.
-    search_term = "title:verified AND flair:meta"
-
-    # Note that even in testing ('trntest') we will still search r/translator for the thread.
-    search_results = reddit.subreddit("translator").search(
-        search_term, time_filter="year", sort="new", limit=1
-    )
-
-    # Iterate over the results generator to get the ID.
-    verification_id = None
-    for post in search_results:
-        verification_id = post.id
-
-    return verification_id
-
-
-def maintenance_blacklist_checker() -> List[str]:
-    """
-    A start-up function that runs once and gets blacklisted usernames from the wiki of r/translatorBOT.
-    Blacklisted users are those who have abused the subreddit functions on r/translator but are not banned.
-    This is an anti-abuse system, and it also disallows them from crossposting with Ziwen Streamer.
-
-    :return blacklist_usernames: A list of usernames on the blacklist, all in lowercase.
-    """
-
-    # Retrieve the page.
-    blacklist_page = reddit.subreddit("translatorBOT").wiki["blacklist"]
-    overall_page_content = str(blacklist_page.content_md)  # Get the page's content.
-    usernames_raw = overall_page_content.split("####")[1]
-    usernames_raw = usernames_raw.split("\n")[2].strip()  # Get just the usernames.
-
-    # Convert the usernames into a list.
-    blacklist_usernames = usernames_raw.split(", ")
-
-    # Convert the usernames to lowercase.
-    blacklist_usernames = [item.lower() for item in blacklist_usernames]
-
-    # Exclude AutoModerator from the blacklist.
-    blacklist_usernames.remove("automoderator")
-
-    return blacklist_usernames
-
-
-def maintenance_database_processed_cleaner() -> None:
-    """
-    Function that cleans up the database of processed comments, but not posts (yet).
-
-    :return: Nothing.
-    """
-
-    pruning_command = "DELETE FROM oldcomments WHERE id NOT IN (SELECT id FROM oldcomments ORDER BY id DESC LIMIT ?)"
-    cursor_main.execute(pruning_command, [MAXPOSTS * 10])
-    conn_main.commit()
-
-
-"""
-POINTS TABULATING SYSTEM
-
-Ziwen has a live points system (meaning it calculates users' points as they make their comments) to help users keep
-track of their contributions to the community. The points system is not as public as some other communities that have
-points bots, but is instead meant to be more private. A summary table to the months' contributors is posted by Wenyuan
-at the start of every month.
-
-Points-related functions are all prefixed with `points` in their name. 
-"""
-
-
-def points_worth_determiner(language_name: str) -> int:
-    """
-    This function takes a language name and determines the points worth for a translation for it. (the cap is 20)
-
-    :param language_name: The name of the language we want to know the points worth for.
-    :return final_point_value: The points value for the language expressed as an integer.
-    """
-    for spacing in " -":  # The wiki does not support dashes or underscores in urls.
-        if spacing in language_name:
-            language_name = language_name.replace(spacing, "_")
-
-    if language_name == "Unknown":
-        return 4  # The multiplier for Unknown can be hard coded.
-
-    # Code to check the cache first to see if we have a value already.
-    # Look for the dictionary key of the language name.
-    final_point_value = CACHED_MULTIPLIERS.get(language_name)
-
-    if final_point_value is not None:  # It's cached.
-        logger.debug(
-            f"Points determiner: {language_name} value in the cache: {final_point_value}"
-        )
-        return final_point_value  # Return the multipler - no need to go to the wiki.
-    # Not found in the cache. Get from the wiki.
-    # Fetch the wikipage.
-    overall_page = reddit.subreddit(CORRECTED_SUBREDDIT).wiki[language_name.lower()]
-    try:  # First see if this page actually exists
-        overall_page_content = str(overall_page.content_md)
-        last_month_data = overall_page_content.rsplit("\n", maxsplit=1)[-1]
-    except prawcore.exceptions.NotFound:  # There is no such wikipage.
-        logger.debug("Points determiner: The wiki page does not exist.")
-        last_month_data = "2017 | 08 | [Example Link] | 1%"
-        # Feed it dummy data if there's nothing... this language probably hasn't been done in a while.
-    try:  # Try to get the percentage from the page
-        total_percent = str(last_month_data.split(" | ")[3])[:-1]
-        total_percent = float(total_percent)
-    except IndexError:
-        # There's a page but there is something wrong with data entered.
-        logger.debug("Points determiner: There was a second error.")
-        total_percent = float(1)
-
-    # Calculate the point multiplier.
-    # The precise formula here is: (1/percentage)*35
-    try:
-        raw_point_value = 35 * (1 / total_percent)
-        final_point_value = int(round(raw_point_value))
-    except ZeroDivisionError:  # In case the total_percent is 0 for whatever reason.
-        final_point_value = 20
-    final_point_value = min(final_point_value, 20)
-    logger.debug(
-        f"Points determiner: Multiplier for {language_name} is {final_point_value}"
-    )
-
-    # Add to the cached values, so we don't have to do this next time.
-    CACHED_MULTIPLIERS.update({language_name: final_point_value})
-
-    # Write data to the cache so that it can be retrieved later.
-    current_zeit = time.time()
-    month_string = datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
-    insert_data = (month_string, language_name, final_point_value)
-    cursor_cache.execute("INSERT INTO multiplier_cache VALUES (?, ?, ?)", insert_data)
-    conn_cache.commit()
-
-    return final_point_value
-
-
-def points_worth_cacher() -> None:
-    """
-    Simple routine that caches the most frequently used languages' points worth in a local database.
-
-    :param: Nothing.
-    :return: Nothing.
-    """
-
-    # These are the most common languages on the subreddit. Also in our sidebar.
-    check_languages = [
-        "Arabic",
-        "Chinese",
-        "French",
-        "German",
-        "Hebrew",
-        "Hindi",
-        "Italian",
-        "Japanese",
-        "Korean",
-        "Latin",
-        "Polish",
-        "Portuguese",
-        "Russian",
-        "Spanish",
-        "Thai",
-        "Vietnamese",
-    ]
-
-    # Code to check the database file to see if the values are current.
-    # It will transform the database info into a dictionary.
-
-    # Get the year-month string.
-    current_zeit = time.time()
-    month_string = datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
-
-    # Select from the database the current months data if it exists.
-    multiplier_command = "SELECT * from multiplier_cache WHERE month_year = ?"
-    cursor_cache.execute(multiplier_command, (month_string,))
-    multiplier_entries = cursor_cache.fetchall()
-    # If not current, fetch new data and save it.
-
-    if len(multiplier_entries) != 0:  # We actually have cached data for this month.
-        # Populate the dictionary format from our data
-        for entry in multiplier_entries:
-            multiplier_name = entry[1]
-            multiplier_worth = int(entry[2])
-            CACHED_MULTIPLIERS[multiplier_name] = multiplier_worth
-    else:  # We don't have cached data so we will retrieve it from the wiki.
-        # Delete everything from the cache (clearing out previous months' data as well)
-        command = "DELETE FROM multiplier_cache"
-        cursor_cache.execute(command)
-        conn_cache.commit()
-
-        # Get the data for the common languages
-        for language in check_languages:
-            # Fetch the number of points it's worth.
-            points_worth_determiner(language)
-
-            # Write the data to the cache.
-            conn_cache.commit()
+# Holds all the stateful variables used outside this module
+config = ZiwenConfig(
+    conn_cache,
+    cursor_cache,
+    conn_main,
+    cursor_main,
+    conn_ajo,
+    cursor_ajo,
+    reddit,
+    subreddit_helper,
+)
 
 
 def points_tabulator(
@@ -482,7 +216,7 @@ def points_tabulator(
             language_name = oflair_text.split(split_char, 1)[0].strip()
 
     try:
-        language_multiplier = points_worth_determiner(
+        language_multiplier = config.points_worth_determiner(
             converter(language_name).language_name
         )
         # How much is this language worth? Obtain it from our wiki.
@@ -655,10 +389,10 @@ def points_tabulator(
     points_status = [x for x in points_status if x[1] != 0]
 
     if translator_to_add is not None:  # We can record this information in the Ajo.
-        cajo = ajo_loader(oid, cursor_ajo, POST_TEMPLATES)
+        cajo = ajo_loader(oid, config)
         if cajo is not None:
             cajo.add_translators(translator_to_add)  # Add the name to the Ajo.
-            ajo_writer(cajo, cursor_ajo, conn_ajo)
+            ajo_writer(cajo, config)
 
     for entry in points_status:
         logger.debug(f"Points tabulator: Saved: {entry}")
@@ -711,7 +445,7 @@ def record_last_post_comment() -> str:
     output = ""
     s_format = "%a, %b %d, %Y [%I:%M:%S %p]"
     # Get the last posted post in the subreddit.
-    submission = next(subredditHelper.new(limit=1), None)
+    submission = next(subreddit_helper.new(limit=1), None)
     if submission is not None:
         sutc = submission.created_utc
         slink = f"https://www.reddit.com{submission.permalink}"
@@ -719,7 +453,7 @@ def record_last_post_comment() -> str:
         output += f"Last post     |   {s_format_time}:    {slink}\n"
 
     # Get the last posted comment
-    comment = next(subredditHelper.comments(limit=1), None)
+    comment = next(subreddit_helper.comments(limit=1), None)
     if comment is not None:
         cbody = f"              > {comment.body}"
         if "\n" in cbody:
@@ -883,7 +617,7 @@ def edit_finder() -> None:
     # Fetch the comments from Reddit.
     try:
         # Only get the last `comment_limit` comments.
-        comments = list(subredditHelper.comments(limit=comment_limit))
+        comments = list(subreddit_helper.comments(limit=comment_limit))
     except prawcore.exceptions.ServerError:  # Server issues.
         return
     cleanup_database = False
@@ -1060,7 +794,7 @@ def ziwen_posts() -> None:
 
     # We get the last 80 new posts. Changed from the deprecated `submissions` method.
     # This should allow us to retrieve stuff from up to a day in case of power outages or moving.
-    posts = list(subredditHelper.new(limit=80))
+    posts = list(subreddit_helper.new(limit=80))
     posts.reverse()  # Reverse it so that we start processing the older ones first. Newest ones last.
 
     for post in posts:
@@ -1101,23 +835,14 @@ def ziwen_posts() -> None:
             logger.info(f"Posts: New {suggested_css_text.title()} post.")
 
             # Assign it a specific template that exists.
-            if oflair_css in POST_TEMPLATES.keys():
-                output_template = POST_TEMPLATES[oflair_css]
+            if oflair_css in config.post_templates.keys():
+                output_template = config.post_templates[oflair_css]
                 post.flair.select(output_template, suggested_css_text.title())
 
             # We want to exclude the Identification Threads
             if "Identification Thread" not in otitle:
                 ziwen_notifier(
-                    suggested_css_text,
-                    otitle,
-                    opermalink,
-                    oauthor,
-                    False,
-                    POST_TEMPLATES,
-                    reddit,
-                    cursor_ajo,
-                    cursor_main,
-                    conn_main,
+                    suggested_css_text, otitle, opermalink, oauthor, False, config
                 )
 
             continue  # Then exit.
@@ -1133,7 +858,7 @@ def ziwen_posts() -> None:
                 op_match = komento_data["bot_xp_op"]
                 oauthor = op_match
 
-        if oauthor.lower() in GLOBAL_BLACKLIST:
+        if oauthor.lower() in config.global_blacklist:
             # This user is on our blacklist. (not used much, more precautionary)
             post.mod.remove()
             action_counter(1, "Blacklisted posts")  # Write to the counter log
@@ -1255,7 +980,7 @@ def ziwen_posts() -> None:
                     post.reply(COMMENT_LONG + BOT_DISCLAIMER)
 
             # True if the user has posted too much.
-            user_posted_too_much = MOST_RECENT_OP.count(oauthor) > 4
+            user_posted_too_much = config.most_recent_op.count(oauthor) > 4
 
             # We don't want to send notifications if we're just testing. We also verify that user is not too extra.
             # A placeholder variable that normally contains a list of users notified.
@@ -1275,11 +1000,7 @@ def ziwen_posts() -> None:
                             opermalink,
                             oauthor,
                             False,
-                            POST_TEMPLATES,
-                            reddit,
-                            cursor_ajo,
-                            cursor_main,
-                            conn_main,
+                            config,
                         )
                     if final_css_class == "multiple":
                         # We wanna leave an advisory comment if it's a defined multiple
@@ -1297,11 +1018,7 @@ def ziwen_posts() -> None:
                         opermalink,
                         oauthor,
                         False,
-                        POST_TEMPLATES,
-                        reddit,
-                        cursor_ajo,
-                        cursor_main,
-                        conn_main,
+                        config,
                     )
 
             # If it's an unknown post, add an informative comment.
@@ -1316,19 +1033,19 @@ def ziwen_posts() -> None:
 
             # New Redesign Version to update flair
             # Check the global template dictionary
-            if final_css_class in POST_TEMPLATES.keys():
-                output_template = POST_TEMPLATES[final_css_class]
+            if final_css_class in config.post_templates.keys():
+                output_template = config.post_templates[final_css_class]
                 post.flair.select(output_template, final_css_text)
                 logger.debug("Posts: Flair template selected for post.")
 
             # Finally, create an Ajo object and save it locally.
             if final_css_class not in ["meta", "community"]:
                 # Create an Ajo object, reload the post.
-                pajo = Ajo(reddit.submission(id=post.id), POST_TEMPLATES)
+                pajo = Ajo(reddit.submission(id=post.id), config.post_templates)
                 if len(contacted) != 0:  # We have a list of notified users.
                     pajo.add_notified(contacted)
                 # Save it to the local database
-                ajo_writer(pajo, cursor_ajo, conn_ajo)
+                ajo_writer(pajo, config)
                 logger.debug(
                     "Posts: Created Ajo for new post and saved to local database."
                 )
@@ -1351,7 +1068,7 @@ def ziwen_bot() -> None:
     logger.debug(f"Fetching new r/{CORRECTED_SUBREDDIT} comments...")
     comments = []
     try:
-        comments += list(subredditHelper.comments(limit=MAXPOSTS))
+        comments += list(subreddit_helper.comments(limit=MAXPOSTS))
     except prawcore.exceptions.ServerError:  # Server issues.
         return
 
@@ -1393,7 +1110,7 @@ def ziwen_bot() -> None:
         except AttributeError:  # No submission author found.
             oauthor = None
 
-        if oid != VERIFIED_POST_ID:
+        if oid != config.verified_post_id:
             # Enter it into the processed comments database
             cursor_main.execute("INSERT INTO oldcomments VALUES(?)", [pid])
             conn_main.commit()
@@ -1412,12 +1129,12 @@ def ziwen_bot() -> None:
         # Create an Ajo object.
         if css_check(oflair_css):
             # Check the database for the Ajo.
-            oajo = ajo_loader(oid, cursor_ajo, POST_TEMPLATES)
+            oajo = ajo_loader(oid, config)
 
             if oajo is None:
                 # We couldn't find a stored dict, so we will generate it from the submission.
                 logger.debug("Bot: Couldn't find an AJO in the local database.")
-                oajo = Ajo(osubmission, POST_TEMPLATES)
+                oajo = Ajo(osubmission, config.post_templates)
 
             if oajo.is_bot_crosspost:
                 komento_data = komento_analyzer(
@@ -1454,12 +1171,6 @@ def ziwen_bot() -> None:
             oauthor = "deleted"
 
         processor = ZiwenCommandProcessor(
-            ZW_USERAGENT,
-            reddit,
-            cursor_main,
-            cursor_ajo,
-            conn_main,
-            POST_TEMPLATES,
             pbody,
             pauthor,
             comment,
@@ -1474,6 +1185,7 @@ def ziwen_bot() -> None:
             pid,
             pbody_original,
             requester,
+            config,
         )
 
         relevant_keywords = {
@@ -1545,7 +1257,7 @@ def ziwen_bot() -> None:
             # There's nothing to change for these
             oajo.update_reddit(reddit)  # Push all changes to the server
             # Write the Ajo to the local database
-            ajo_writer(oajo, cursor_ajo, conn_ajo)
+            ajo_writer(oajo, config)
             logger.info(f"Bot: Ajo for {oid} updated and saved to the local database.")
             # Record data on user commands.
             messaging_user_statistics_writer(pbody, pauthor)
@@ -1559,10 +1271,10 @@ def verification_parser() -> None:
 
     :return: Nothing.
     """
-    if len(VERIFIED_POST_ID) == 0:
+    if len(config.verified_post_id) == 0:
         return
 
-    submission = reddit.submission(id=VERIFIED_POST_ID)
+    submission = reddit.submission(id=config.verified_post_id)
     try:
         submission.comments.replace_more(limit=None)
     except ValueError:
@@ -1653,7 +1365,7 @@ def progress_checker() -> None:
 
     # Conduct a search on Reddit.
     # Get the posts that are still marked as in progress
-    search_results = subredditHelper.search(
+    search_results = subreddit_helper.search(
         'flair:"in progress"', time_filter="month", sort="new"
     )
 
@@ -1670,13 +1382,13 @@ def progress_checker() -> None:
 
         # Load its Ajo.
         # First check the local database for the Ajo.
-        oajo = ajo_loader(oid, cursor_ajo, POST_TEMPLATES)
+        oajo = ajo_loader(oid, config)
         if oajo is None:
             # We couldn't find a stored dict, so we will generate it from the submission.
             logger.debug(
                 "progress_checker: Couldn't find an Ajo in the local database. Loading from Reddit."
             )
-            oajo = Ajo(post, POST_TEMPLATES)
+            oajo = Ajo(post, config.post_templates)
 
         # Process the post and get some data out of it.
         komento_data = komento_analyzer(reddit, post)
@@ -1696,7 +1408,7 @@ def progress_checker() -> None:
                 oajo.set_status("untranslated")
                 oajo.update_reddit(reddit)  # Push all changes to the server
                 # Write the Ajo to the local database
-                ajo_writer(oajo, cursor_ajo, conn_ajo)
+                ajo_writer(oajo, config)
 
 
 """LESSER RUNTIMES"""
@@ -1749,11 +1461,11 @@ def cc_ref() -> None:
             for match in tokenized_list:
                 match_length = len(str(match))
                 if match_length == 1:
-                    to_post = zh_character(match, ZW_USERAGENT)
+                    to_post = zh_character(match, config.zw_useragent)
                     post_content.append(to_post)
                 elif match_length >= 2:
                     find_word = str(match)
-                    post_content.append(zh_word(find_word, ZW_USERAGENT))
+                    post_content.append(zh_word(find_word, config.zw_useragent))
 
             post_content = "\n\n".join(post_content)
             if len(post_content) > 10000:  # Truncate only if absolutely necessary.
@@ -1771,52 +1483,10 @@ def cc_ref() -> None:
                 )
 
 
-def ziwen_maintenance() -> None:
-    """
-    A simple top-level function to group together common activities that need to be run on an occasional basis.
-    This is usually activated after almost a hundred cycles to update information.
-
-    :return: Nothing.
-    """
-
-    global POST_TEMPLATES
-    POST_TEMPLATES = maintenance_template_retriever()
-    logger.debug(
-        f"# Current post templates retrieved: {len(POST_TEMPLATES.keys())} templates"
-    )
-
-    global VERIFIED_POST_ID
-    # Get the last verification thread's ID and store it.
-    VERIFIED_POST_ID = maintenance_get_verified_thread()
-    if len(VERIFIED_POST_ID):
-        logger.info(
-            f"# Current verification post found: https://redd.it/{VERIFIED_POST_ID}\n\n"
-        )
-    else:
-        logger.error("# No current verification post found!")
-
-    global ZW_USERAGENT
-    ZW_USERAGENT = get_random_useragent()  # Pick a random useragent from our list.
-    logger.debug(f"# Current user agent: {ZW_USERAGENT}")
-
-    global GLOBAL_BLACKLIST
-    # We download the blacklist of users.
-    GLOBAL_BLACKLIST = maintenance_blacklist_checker()
-    logger.debug(f"# Current global blacklist retrieved: {len(GLOBAL_BLACKLIST)} users")
-
-    global MOST_RECENT_OP
-    MOST_RECENT_OP = maintenance_most_recent()
-
-    points_worth_cacher()  # Update the points cache
-    logger.debug("# Points cache updated.")
-
-    maintenance_database_processed_cleaner()  # Clean the comments that have been processed.
-
-
 """INITIAL VARIABLE SET-UP"""
 
 # We start the bot with a couple of routines to populate the data from our wiki.
-ziwen_maintenance()
+config.ziwen_maintenance()
 logger.info("Bot routine starting up...")
 
 
@@ -1839,7 +1509,7 @@ if __name__ == "__main__":
             # Next the bot runs all sub-functions on its main subreddit, r/translator.
             ziwen_bot()
             # Then it checks its messages (generally for new subscription lookups).
-            ziwen_messages(reddit, cursor_main, conn_main)
+            ziwen_messages(config)
             # Finally checks for posts that are still claimed and 'in progress.'
             progress_checker()
 

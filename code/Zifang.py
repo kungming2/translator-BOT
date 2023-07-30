@@ -6,6 +6,20 @@ import re
 import sys
 import time
 import traceback
+from code._config import (
+    BOT_DISCLAIMER,
+    FILE_ADDRESS_ERROR,
+    SUBREDDIT,
+    action_counter,
+    logger,
+)
+from code._languages import VERSION_NUMBER_LANGUAGES, converter
+from code._login import PASSWORD, USERNAME, ZIFANG_APP_ID, ZIFANG_APP_SECRET
+from code._responses import (
+    ZF_CLOSING_OUT_MESSAGE,
+    ZF_CLOSING_OUT_SUBJECT,
+    ZF_DUPLICATE_COMMENT,
+)
 from collections import defaultdict
 from itertools import combinations
 from typing import Dict, List
@@ -14,21 +28,6 @@ import praw
 import wikipedia
 import yaml
 from rapidfuzz import fuzz
-
-from _config import (
-    BOT_DISCLAIMER,
-    FILE_ADDRESS_ERROR,
-    SUBREDDIT,
-    action_counter,
-    logger,
-)
-from _languages import VERSION_NUMBER_LANGUAGES, converter
-from _login import PASSWORD, USERNAME, ZIFANG_APP_ID, ZIFANG_APP_SECRET
-from _responses import (
-    ZF_CLOSING_OUT_MESSAGE,
-    ZF_CLOSING_OUT_SUBJECT,
-    ZF_DUPLICATE_COMMENT,
-)
 
 """
 UNIVERSAL VARIABLES
