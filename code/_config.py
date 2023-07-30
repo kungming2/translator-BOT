@@ -15,51 +15,51 @@ from typing import Dict, NamedTuple
 # Fetch the absolute directory the script is in.
 code_directory = os.path.dirname(os.path.realpath(__file__))
 
-# Get the parent directory of the "code" folder (i.e., the previous script_directory)
-script_directory = os.path.dirname(code_directory)
-script_directory += "/Data/"  # Where the main files are kept.
+# Get the parent directory of the "code" folder (i.e., the previous SCRIPT_DIRECTORY)
+SCRIPT_DIRECTORY = os.path.dirname(code_directory)
+SCRIPT_DIRECTORY += "/Data/"  # Where the main files are kept.
 
 # A number that defines the soft number of notifications an individual will get in a month *per language*.
 NOTIFICATIONS_LIMIT = 100
 SUBREDDIT = "translator"
 
 # Ziwen main database files (either static files or files that will be written to).
-FILE_ADDRESS_UA = os.path.join(script_directory, "_ua.json")
-FILE_ADDRESS_ALL_STATISTICS = os.path.join(script_directory, "_statistics.json")
-FILE_ADDRESS_AJO_DB = os.path.join(script_directory, "_database_ajo.db")
-FILE_ADDRESS_MAIN = os.path.join(script_directory, "_database_main.db")
+FILE_ADDRESS_UA = os.path.join(SCRIPT_DIRECTORY, "_ua.json")
+FILE_ADDRESS_ALL_STATISTICS = os.path.join(SCRIPT_DIRECTORY, "_statistics.json")
+FILE_ADDRESS_AJO_DB = os.path.join(SCRIPT_DIRECTORY, "_database_ajo.db")
+FILE_ADDRESS_MAIN = os.path.join(SCRIPT_DIRECTORY, "_database_main.db")
 
 # Ziwen SQLite3 cache file (cache file data is generated as the bot runs and is volatile).
-FILE_ADDRESS_CACHE = os.path.join(script_directory, "_cache_main.db")
+FILE_ADDRESS_CACHE = os.path.join(SCRIPT_DIRECTORY, "_cache_main.db")
 
 # Ziwen language database files (reference files for language-related functions).
-FILE_ADDRESS_OLD_CHINESE = os.path.join(script_directory, "_database_old_chinese.csv")
+FILE_ADDRESS_OLD_CHINESE = os.path.join(SCRIPT_DIRECTORY, "_database_old_chinese.csv")
 FILE_ADDRESS_ZH_ROMANIZATION = os.path.join(
-    script_directory, "_database_romanization_chinese.csv"
+    SCRIPT_DIRECTORY, "_database_romanization_chinese.csv"
 )
 FILE_ADDRESS_ZH_BUDDHIST = os.path.join(
-    script_directory, "_database_buddhist_chinese.md"
+    SCRIPT_DIRECTORY, "_database_buddhist_chinese.md"
 )
-FILE_ADDRESS_ZH_CCCANTO = os.path.join(script_directory, "_database_cccanto.md")
+FILE_ADDRESS_ZH_CCCANTO = os.path.join(SCRIPT_DIRECTORY, "_database_cccanto.md")
 # Folder where MeCab dict files are
-FILE_ADDRESS_MECAB = os.path.join(script_directory, "mecab-ipadic-neologd")
+FILE_ADDRESS_MECAB = os.path.join(SCRIPT_DIRECTORY, "mecab-ipadic-neologd")
 
 # Ziwen output files (text files for saving information).
-FILE_ADDRESS_ERROR = os.path.join(script_directory, "_log_error.md")
-FILE_ADDRESS_COUNTER = os.path.join(script_directory, "_log_counter.json")
-FILE_ADDRESS_FILTER = os.path.join(script_directory, "_log_filter.md")
-FILE_ADDRESS_EVENTS = os.path.join(script_directory, "_log_events.md")
-FILE_ADDRESS_ACTIVITY = os.path.join(script_directory, "_log_activity.csv")
+FILE_ADDRESS_ERROR = os.path.join(SCRIPT_DIRECTORY, "_log_error.md")
+FILE_ADDRESS_COUNTER = os.path.join(SCRIPT_DIRECTORY, "_log_counter.json")
+FILE_ADDRESS_FILTER = os.path.join(SCRIPT_DIRECTORY, "_log_filter.md")
+FILE_ADDRESS_EVENTS = os.path.join(SCRIPT_DIRECTORY, "_log_events.md")
+FILE_ADDRESS_ACTIVITY = os.path.join(SCRIPT_DIRECTORY, "_log_activity.csv")
 
 # Wenyuan Markdown output files (text files for saving information).
-FILE_ADDRESS_STATISTICS = os.path.join(script_directory, "wy_statistics_output.md")
-FILE_ADDRESS_TITLE_LOG = os.path.join(script_directory, "wy_title_test_output.md")
-FILE_ADDRESS_WEEKLY_CHALLENGE = os.path.join(script_directory, "wy_weekly_challenge.md")
-FILE_ADDRESS_PORT = os.path.join(script_directory, "wy_port.json")
+FILE_ADDRESS_STATISTICS = os.path.join(SCRIPT_DIRECTORY, "wy_statistics_output.md")
+FILE_ADDRESS_TITLE_LOG = os.path.join(SCRIPT_DIRECTORY, "wy_title_test_output.md")
+FILE_ADDRESS_WEEKLY_CHALLENGE = os.path.join(SCRIPT_DIRECTORY, "wy_weekly_challenge.md")
+FILE_ADDRESS_PORT = os.path.join(SCRIPT_DIRECTORY, "wy_port.json")
 
 # Huiban database files (unused for now).
-FILE_ADDRESS_NOTIFY_EXCHANGE = os.path.join(script_directory, "hb_exchangelist.db")
-FILE_ADDRESS_HUIBAN_OLDPOSTS = os.path.join(script_directory, "hb_processed.db")
+FILE_ADDRESS_NOTIFY_EXCHANGE = os.path.join(SCRIPT_DIRECTORY, "hb_exchangelist.db")
+FILE_ADDRESS_HUIBAN_OLDPOSTS = os.path.join(SCRIPT_DIRECTORY, "hb_processed.db")
 
 # These are the words that count as a 'short thanks' from the OP.
 # If a message includes them, the bot won't message them asking them to thank the translator.
@@ -114,7 +114,7 @@ statuses = {
 }
 
 # Convert each tuple in the list to a named tuple
-STATUS_KEYWORDS: Dict[StrEnum:StatusKeywordsTuple] = {
+STATUS_KEYWORDS: Dict[StrEnum, StatusKeywordsTuple] = {
     key: StatusKeywordsTuple(*status_data) for key, status_data in statuses.items()
 }
 

@@ -679,16 +679,13 @@ class ZiwenCommandProcessor:
 
     def process_backquote(self):
         # This function returns data for character lookups with `character`.
-        post_content = []
-
-        if self.pauthor == USERNAME:  # Don't respond to !search results from myself.
+        if (
+            self.pauthor == USERNAME  # Don't respond to !search results from myself.
+            or self.oflair_css in ["meta", "community", "missing"]
+            or self.oajo.language_name is None
+        ):
             return
 
-        if self.oflair_css in ["meta", "community", "missing"]:
-            return
-
-        if self.oajo.language_name is None:
-            return
         if not isinstance(self.oajo.language_name, str):
             # Multiple post?
             search_language = self.oajo.language_name[0]
@@ -697,6 +694,15 @@ class ZiwenCommandProcessor:
 
         # A dictionary keyed by language and search terms. Built in tokenizers.
         total_matches = lookup_matcher(self.pbody, search_language)
+
+        if len(total_matches.keys()) == 0:
+            # Checks to see if there's actually anything in between those two graves.
+            # If there's nothing, it skips it.
+            logger.debug(
+                "Bot: > Received a word lookup command, but found nothing. Skipping..."
+            )
+            # We are just not going to reply if there is literally nothing found.
+            return
 
         # This section allows for the deletion of previous responses if the content changes.
         komento_data = komento_analyzer(
@@ -720,17 +726,9 @@ class ZiwenCommandProcessor:
                         logger.debug("Bot: >>> Previous response deleted")
                         # We delete the earlier versions.
 
-        if len(total_matches.keys()) == 0:
-            # Checks to see if there's actually anything in between those two graves.
-            # If there's nothing, it skips it.
-            logger.debug(
-                "Bot: > Received a word lookup command, but found nothing. Skipping..."
-            )
-            # We are just not going to reply if there is literally nothing found.
-            return
-
         limit_num_matches = 5
         logger.info(f"Bot: >> Determined Lookup Dictionary: {total_matches}")
+        post_content = []
 
         for key in total_matches.keys():
             process_func = self.other_matches
@@ -1174,9 +1172,7 @@ class ZiwenCommandProcessor:
             subreddit=CORRECTED_SUBREDDIT,
         )
 
-    def process_set(
-        self,
-    ):
+    def process_set(self):
         # !set is a mod-accessible means of setting the post flair.
         # It removes the comment (through AM) so it looks like nothing happened.
         if not is_mod(self.reddit, self.pauthor):

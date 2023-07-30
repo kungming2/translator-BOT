@@ -2,7 +2,7 @@
 
 # This is our main dictionary for languages.
 
-from typing import List, NamedTuple
+from typing import List, NamedTuple, Optional
 
 
 MAIN_LANGUAGES = {
@@ -2538,7 +2538,7 @@ class CountryTuple(NamedTuple):
     code2: str
     code3: str
     numeric: str
-    aliases: List[str]
+    aliases: Optional[List[str]] = None
 
 
 countries = [

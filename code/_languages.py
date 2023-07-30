@@ -10,7 +10,7 @@ from typing import Dict, List, NamedTuple, Tuple
 
 from rapidfuzz import fuzz  # Switched to rapidfuzz
 
-from _config import KEYWORDS
+from _config import KEYWORDS, SCRIPT_DIRECTORY
 from _language_consts import (
     APP_WORDS,
     COUNTRY_LIST,
@@ -24,9 +24,7 @@ from _language_consts import (
 VERSION_NUMBER_LANGUAGES = "1.7.22"
 
 # Access the CSV with ISO 639-3 and ISO 15924 data.
-lang_script_directory = os.path.dirname(__file__)  # <-- absolute dir the script is in
-lang_script_directory += "/Data/"  # Where the main files are kept.
-FILE_ADDRESS_ISO_ALL = os.path.join(lang_script_directory, "_database_iso_codes.csv")
+FILE_ADDRESS_ISO_ALL = os.path.join(SCRIPT_DIRECTORY, "_database_iso_codes.csv")
 
 """LANGUAGE CODE LISTS"""
 
@@ -190,28 +188,28 @@ def lang_code_search(search_term: str, script_search: bool):
     with open(FILE_ADDRESS_ISO_ALL, encoding="utf-8") as csv_file:
         csv_reader = csv.DictReader(csv_file, delimiter=",")
         for row in csv_reader:
-            master_dict[row["ISO 639-3"]] = (
-                row["Language Name"],
-                row["Language Name"].lower(),
-                row["Alternate Names"].lower(),
-            )
+            master_dict[row["\ufeffISO 639-3"]] = {
+                "name": row["Language Name"],
+                "name_lower": row["Language Name"].lower(),
+                "alt_name": row["Alternate Names"].lower(),
+            }
 
     if len(search_term) == 3:  # This is a ISO 639-3 code
         if search_term.lower() in master_dict:
-            item_name = master_dict[search_term.lower()][0]
+            item_name = master_dict[search_term.lower()]["name"]
             # Since the first two rows are the language code and 639-1 code, we take it from the third.
             return item_name, is_script
         return "", False
     if len(search_term) == 4 and script_search:  # This is a script
         if search_term.lower() in master_dict:
             # Since the first two rows are the language code and 639-1 code, we take it from the third row.
-            item_name = master_dict[search_term.lower()][0]
+            item_name = master_dict[search_term.lower()]["name"]
             is_script = True
             return item_name, is_script
     elif len(search_term) > 3:  # Probably a name, so let's get the code
         item_code = ""
         for key, value in master_dict.items():
-            if search_term.lower() == value[1]:
+            if search_term.lower() == value["name_lower"]:
                 if len(key) == 3 and not script_search:  # This is a language code
                     item_code = key
                 elif len(key) == 4:
@@ -222,7 +220,11 @@ def lang_code_search(search_term: str, script_search: bool):
         # No name was found, let's check alternates.
         for key, value in master_dict.items():
             # There may be multiple alternate names here
-            sorted_alternate = value[2].split("; ") if ";" in value[2] else [value[2]]
+            sorted_alternate = (
+                value["alt_name"].split("; ")
+                if ";" in value["alt_name"]
+                else [value["alt_name"]]
+            )
 
             if search_term.lower() in sorted_alternate:
                 if len(key) == 3:  # This is a language code
@@ -247,8 +249,6 @@ def iso639_3_to_iso639_1(specific_code: str) -> None | str:
         module_iso3 = value["language_code_3"]
         if specific_code == module_iso3:
             return key
-
-    return None
 
 
 def country_converter(text_input: str, abbreviations_okay: bool = True):

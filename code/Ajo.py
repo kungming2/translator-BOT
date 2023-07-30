@@ -18,7 +18,7 @@ class functions.
 import csv
 import re
 from sqlite3 import Connection, Cursor
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 

@@ -823,9 +823,10 @@ def zh_word_chengyu(chengyu: str) -> str | None:
     chengyu_gb = chengyu_gb.replace("\\x", "%").upper()[2:-1]
 
     # Format the search link.
-    search_link = "http://cy.51bc.net/serach.php?f_type=chengyu&f_type2=&f_key={}"
+    search_link = (
+        f"http://cy.51bc.net/serach.php?f_type=chengyu&f_type2=&f_key={chengyu_gb}"
+    )
     # Note: 'serach' is intentional.
-    search_link = search_link.format(chengyu_gb)
     logger.debug(search_link)
 
     try:
@@ -877,11 +878,8 @@ def zh_word_chengyu(chengyu: str) -> str | None:
         chengyu_source = zh_data[2]
 
         # Format the data nicely to add to the zh_word output.
-        cy_to_post = "\n\n**Chinese Meaning**: {}\n\n**Literary Source**: {}"
-        cy_to_post = cy_to_post.format(chengyu_meaning, chengyu_source)
-        cy_to_post += " ([5156edu]({}), [18Dao](https://tw.18dao.net/成語詞典/{}))".format(
-            actual_link, tradify(chengyu)
-        )
+        cy_to_post = f"\n\n**Chinese Meaning**: {chengyu_meaning}\n\n**Literary Source**: {chengyu_source}"
+        cy_to_post += f" ([5156edu]({actual_link}), [18Dao](https://tw.18dao.net/成語詞典/{tradify(chengyu)}))"
 
         logger.info(
             f"> ZH-Chengyu: Looked up the chengyu {chengyu} in Chinese. Returned search results."
