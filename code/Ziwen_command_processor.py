@@ -24,7 +24,7 @@ from code._responses import (
     MSG_TRANSLATED,
 )
 from code.Ajo import Ajo, ajo_defined_multiple_comment_parser
-from code.ja_processing import ja_character, ja_word
+from code.ja_processing import JapaneseProcessor
 from code.notifier import (
     notifier_page_multiple_detector,
     notifier_page_translators,
@@ -647,12 +647,13 @@ class ZiwenCommandProcessor:
 
     def japanese_matches(self, match, post_content, _key):
         match_length = len(str(match))
+        processor = JapaneseProcessor(self.zw_useragent)
         if match_length == 1:
-            to_post = ja_character(match, self.zw_useragent)
+            to_post = processor.ja_character(match)
             post_content.append(to_post)
         elif match_length > 1:
             find_word = str(match)
-            post_content.append(ja_word(find_word, self.zw_useragent))
+            post_content.append(processor.ja_word(find_word))
 
     def korean_matches(self, match, post_content, _key):
         find_word = str(match)
