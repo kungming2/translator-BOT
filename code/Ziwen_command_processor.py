@@ -4,7 +4,7 @@ import re
 import time
 from code._config import BOT_DISCLAIMER, KEYWORDS, logger
 from code._language_consts import CJK_LANGUAGES, ISO_MACROLANGUAGES, MAIN_LANGUAGES
-from code._languages import comment_info_parser, converter, lang_code_search
+from code._languages import comment_info_parser, convert, lang_code_search
 from code._login import USERNAME
 from code._responses import (
     COMMENT_ADVANCED_IDENTIFY_ERROR,
@@ -32,7 +32,6 @@ from code.notifier import (
 )
 from code.zh_processing import zh_character, zh_word
 from code.Ziwen_helper import (
-    CORRECTED_SUBREDDIT,
     MESSAGES_OKAY,
     ZiwenConfig,
     css_check,
@@ -91,7 +90,7 @@ class ZiwenCommandProcessor:
         self.conn_main = config.conn_main
         self.post_templates = config.post_templates
 
-    def lookup_wiktionary_search(
+    def __lookup_wiktionary_search(
         self, search_term: str, language_name: str
     ) -> str | None:
         """
@@ -238,7 +237,7 @@ class ZiwenCommandProcessor:
 
         return post_template
 
-    def messaging_translated_message(self) -> None:
+    def __messaging_translated_message(self) -> None:
         """
         Function to message requesters (OPs) that their post has been translated.
 
@@ -263,11 +262,11 @@ class ZiwenCommandProcessor:
                 pass
 
         logger.info(
-            f"messaging_translated_message: >> Messaged the OP u/{self.oauthor} "
+            f"__messaging_translated_message: >> Messaged the OP u/{self.oauthor} "
             "about their translated post."
         )
 
-    def reference_search(self, lookup_term: str) -> None | str:
+    def __reference_search(self, lookup_term: str) -> None | str:
         """
         Function to look up reference languages on Ethnologue and Wikipedia.
         This also searches MultiTree (no longer a separate function)
@@ -286,7 +285,7 @@ class ZiwenCommandProcessor:
             return None  # Just exit.
 
         # Get the language code (specifically the ISO 639-3 one)
-        language_code = converter(lookup_term).language_code
+        language_code = convert(lookup_term).language_code
         language_lookup_code = str(language_code)
         if len(language_code) == 2:  # This appears to be an ISO 639-1 code.
             # Get the ISO 639-3 version.
@@ -301,7 +300,7 @@ class ZiwenCommandProcessor:
 
         # Now we check the database to see if it has data.
         if len(language_code) != 0:  # There's a valid code here.
-            logger.info(f"reference_search Code: {language_lookup_code}")
+            logger.info(f"__reference_search Code: {language_lookup_code}")
             self.cursor_main.execute(
                 "SELECT language_data FROM language_cache WHERE language_code = ?",
                 (language_lookup_code,),
@@ -361,7 +360,7 @@ class ZiwenCommandProcessor:
         else:  # There were results. Let's loop through them.
             for result in page_results:
                 language_code = result
-                language_name = converter(language_code).language_name
+                language_name = convert(language_code).language_name
 
                 is_nsfw = bool(self.comment.submission.over_18)
 
@@ -488,7 +487,7 @@ class ZiwenCommandProcessor:
 
         if "+" not in match:  # This is just a regular single !identify command.
             if not advanced_mode:  # This is the regular results conversion
-                language_converter = converter(match)
+                language_converter = convert(match)
                 language_code = language_converter.language_code
                 language_name = language_converter.language_name
                 # The country code for the language. Regularly none.
@@ -566,7 +565,7 @@ class ZiwenCommandProcessor:
             if (
                 not match_script
                 and o_language_name != self.oajo.language_name
-                or not converter(self.oajo.language_name).supported
+                or not convert(self.oajo.language_name).supported
             ):
                 # Definitively a language. Let's archive this to the wiki.
                 # We've also made sure that it's not just a change of state, and write to the `identified` page.
@@ -657,11 +656,11 @@ class ZiwenCommandProcessor:
 
     def korean_matches(self, match, post_content, _key):
         find_word = str(match)
-        post_content.append(self.lookup_wiktionary_search(find_word, "Korean"))
+        post_content.append(self.__lookup_wiktionary_search(find_word, "Korean"))
 
     def other_matches(self, match, post_content, key):
         find_word = str(match)
-        wiktionary_results = self.lookup_wiktionary_search(find_word, key)
+        wiktionary_results = self.__lookup_wiktionary_search(find_word, key)
         if wiktionary_results is not None:
             post_content.append(wiktionary_results)
 
@@ -770,7 +769,7 @@ class ZiwenCommandProcessor:
             return
 
         language_match = determined_data[0]
-        post_content = self.reference_search(language_match)
+        post_content = self.__reference_search(language_match)
         if post_content is None:
             # There was no good data. We return the invalid comment.
             post_content = COMMENT_INVALID_REFERENCE
@@ -881,7 +880,7 @@ class ZiwenCommandProcessor:
                 if comment_check is not None:
                     # Start setting the flairs, from a list.
                     for language in comment_check[0]:
-                        language_code = converter(language).language_code
+                        language_code = convert(language).language_code
                         self.oajo.set_status_multiple(language_code, "doublecheck")
                         logger.info(
                             f"Bot: > {language} in defined multiple post for doublechecking"
@@ -1032,7 +1031,7 @@ class ZiwenCommandProcessor:
                 if comment_check is not None:
                     # Start setting the flairs, from a list.
                     for language in comment_check[0]:
-                        language_code = converter(language).language_code
+                        language_code = convert(language).language_code
                         self.oajo.set_status_multiple(language_code, "translated")
                         logger.info(
                             f"Bot: > Marked {language} in this defined multiple post as done."
@@ -1094,7 +1093,7 @@ class ZiwenCommandProcessor:
             # If the commentor is not the author of the post and they have not been messaged, we can tell them.
             if self.pauthor != self.oauthor and not messaged_already:
                 # Sends them notification msg
-                self.messaging_translated_message()
+                self.__messaging_translated_message()
                 self.oajo.set_author_messaged(True)
 
     def process_delete(self):
@@ -1147,7 +1146,7 @@ class ZiwenCommandProcessor:
             # Check to see if the person calling this command is a moderator
             return
         match = comment_info_parser(self.pbody, KEYWORDS.note)[0]
-        language_name = converter(match).language_name
+        language_name = convert(match).language_name
         # Write to the saved page
         record_to_wiki(
             odate=int(self.oid),
@@ -1174,7 +1173,7 @@ class ZiwenCommandProcessor:
         else:  # Invalid command (likely did not include a language)
             return
 
-        language_converter = converter(match)
+        language_converter = convert(match)
         language_code = language_converter.language_code
         language_name = language_converter.language_name
         language_country = language_converter.country_code

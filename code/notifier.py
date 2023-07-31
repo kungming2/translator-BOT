@@ -28,7 +28,7 @@ from code._config import (
     time_convert_to_string,
 )
 from code._language_consts import ISO_LANGUAGE_COUNTRY_ASSOCIATED, MAIN_LANGUAGES
-from code._languages import comment_info_parser, converter, language_list_splitter
+from code._languages import comment_info_parser, convert, language_list_splitter
 from code._responses import (
     MSG_CANNOT_PROCESS,
     MSG_LANGUAGE_FREQUENCY,
@@ -47,7 +47,7 @@ from code._responses import (
 from code.Ajo import ajo_loader
 from code.Ziwen_helper import CORRECTED_SUBREDDIT, ZiwenConfig
 from datetime import datetime
-from sqlite3 import Connection, Cursor
+from sqlite3 import Cursor
 from typing import Any, Dict, List, Tuple
 
 import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
@@ -548,7 +548,7 @@ def notifier_page_multiple_detector(pbody: str) -> List[str]:
 
     initial_matches = []
     for match in new_matches:
-        match_code = converter(match).language_code
+        match_code = convert(match).language_code
         if len(match_code) != 0:  # This is a valid language code.
             initial_matches.append(match_code)
 
@@ -632,7 +632,7 @@ def messaging_language_frequency_table(language_list: List[str]) -> str:
 
     # Iterate over the language codes.
     for code in language_list:
-        language_name = converter(code).language_name
+        language_name = convert(code).language_name
 
         # Retrieve stored data.
         language_data = load_statistics_data(code)
@@ -898,7 +898,7 @@ def ziwen_notifier(
             contacted = majo.notified  # Load the people who have been contacted before.
             logger.debug(f"Ziwen Notifier: Already contacted {contacted}")
 
-            language_name = converter(suggested_css_text).language_name
+            language_name = convert(suggested_css_text).language_name
 
             # We allow it to send if it's the last (and only) item in this history.
             permission_to_proceed = not (
@@ -914,7 +914,7 @@ def ziwen_notifier(
 
     # First we need to do a test to see if it's a specific code or not.
     if "-" not in suggested_css_text:  # This is a regular notification.
-        converted_language = converter(suggested_css_text)
+        converted_language = convert(suggested_css_text)
         language_code = converted_language.language_code
         language_name = converted_language.language_name
         if suggested_css_text == "Multiple Languages":
@@ -935,7 +935,7 @@ def ziwen_notifier(
         # Note, this only gets people who are specifically signed up for them, not
         # We get the broader category here. (ar, unknown)
         language_code = suggested_css_text.split("-", 1)[0]
-        language_name = converter(suggested_css_text).language_name
+        language_name = convert(suggested_css_text).language_name
         if language_code == "unknown":  # Add a new script phrase
             language_name += " (Script)"  # This is to distinguish script notifications
         regional_data = notifier_regional_language_fetcher(
@@ -1074,7 +1074,7 @@ def ziwen_messages(config: ZiwenConfig) -> None:
 
                 # Get the language names of those codes.
                 for code in language_matches:
-                    final_match_names.append(converter(code).language_name)
+                    final_match_names.append(convert(code).language_name)
 
                 # Add the various components of the reply.
                 thanks_phrase = MAIN_LANGUAGES.get(language_matches[0], {}).get(
@@ -1137,7 +1137,7 @@ def ziwen_messages(config: ZiwenConfig) -> None:
                 )
                 # Get the language names of those codes.
                 final_match_names = [
-                    converter(code).language_name for code in language_matches
+                    convert(code).language_name for code in language_matches
                 ]
 
                 # Join the list into a string that is bulleted.
@@ -1188,7 +1188,7 @@ def ziwen_messages(config: ZiwenConfig) -> None:
             else:
                 final_match_names = []
                 for code in final_match_codes:  # Convert the codes into names
-                    converted_result = converter(code)  # This will return a tuple.
+                    converted_result = convert(code)  # This will return a tuple.
                     # Should get the name from each
                     match_name = converted_result.language_name
                     if code == "meta":

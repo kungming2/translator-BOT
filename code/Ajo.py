@@ -22,7 +22,7 @@ from code._language_consts import MAIN_LANGUAGES
 from code._languages import (
     FILE_ADDRESS_ISO_ALL,
     app_multiple_definer,
-    converter,
+    convert,
     country_converter,
     lang_code_search,
     language_mention_search,
@@ -206,7 +206,7 @@ class Ajo:
                         title_second = oflair_text.split("}", 1)[1]
                         oflair_text = title_first + title_second
 
-                    converter_data = converter(oflair_text)
+                    converter_data = convert(oflair_text)
                     self.language_history = []  # Create an empty list.
 
                     if reddit_submission.link_flair_css_class != "unknown":
@@ -238,7 +238,7 @@ class Ajo:
 
                     if language_tag not in ["?", "--"]:
                         # Non-generic versions
-                        converter_data = converter(language_tag)
+                        converter_data = convert(language_tag)
                         self.language_name = converter_data.language_name
                         self.is_supported = converter_data.supported
                         if len(language_tag) == 2:
@@ -288,7 +288,7 @@ class Ajo:
                         code = code.lower()  # Convert to lowercase.
                         code = "".join(re.findall("[a-zA-Z]+", code))
                         multiple_languages.append(
-                            converter(code).language_name
+                            convert(code).language_name
                         )  # Append the names of the languages.
                 else:
                     # Get the languages that this is for. Will be a list or None.
@@ -311,11 +311,11 @@ class Ajo:
                     self.language_history.append("Multiple Languages")
                     for language in multiple_languages:  # Start creating the lists.
                         self.language_name.append(language)
-                        multi_language_code = converter(language).language_code
+                        multi_language_code = convert(language).language_code
                         if len(multi_language_code) == 2:
                             self.language_code_1.append(multi_language_code)
                             self.language_code_3.append(
-                                MAIN_LANGUAGES[converter(language).language_code][
+                                MAIN_LANGUAGES[convert(language).language_code][
                                     "language_code_3"
                                 ]
                             )
@@ -439,14 +439,14 @@ class Ajo:
             # This is just a single type of language.
             self.type = "single"
             if len(new_language_code) == 2:
-                self.language_name = converter(new_language_code).language_name
+                self.language_name = convert(new_language_code).language_name
                 self.language_code_1 = new_language_code
                 self.language_code_3 = MAIN_LANGUAGES[new_language_code][
                     "language_code_3"
                 ]
-                self.is_supported = converter(new_language_code).supported
+                self.is_supported = convert(new_language_code).supported
             elif len(new_language_code) == 3:
-                self.language_name = converter(new_language_code).language_name
+                self.language_name = convert(new_language_code).language_name
                 self.language_code_1 = None
                 self.language_code_3 = new_language_code
 
@@ -533,7 +533,7 @@ class Ajo:
 
         # Iterate through to get a master list.
         for language in set_languages_raw:
-            converted_language = converter(language)
+            converted_language = convert(language)
             code = converted_language.language_code
             name = converted_language.language_name
             if len(code) != 0 and len(name) != 0:
@@ -649,7 +649,7 @@ class Ajo:
         self.time_delta = {}  # Clear this dictionary.
         self.is_identified = False
 
-        provisional_data = converter(self.language_name)  # This is a temporary code
+        provisional_data = convert(self.language_name)  # This is a temporary code
         provisional_code = provisional_data.language_code
         self.is_supported = provisional_data.supported
         provisional_country = provisional_data.country_code
@@ -805,9 +805,7 @@ class Ajo:
                     self.output_oflair_text = self.script_name + " (Script)"
         else:  # Flair text for multiple posts
             if code_tag is None:
-                self.output_oflair_text = converter(
-                    self.output_oflair_css
-                ).language_name
+                self.output_oflair_text = convert(self.output_oflair_css).language_name
             else:
                 self.output_oflair_text = (
                     f"App {code_tag}"

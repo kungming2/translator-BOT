@@ -30,7 +30,7 @@ from code._language_consts import MAIN_LANGUAGES
 from code._languages import (
     VERSION_NUMBER_LANGUAGES,
     bad_title_reformat,
-    converter,
+    convert,
     language_mention_search,
     main_posts_filter,
     title_format,
@@ -214,13 +214,13 @@ def points_tabulator(
             language_name = oflair_text
         elif split_char == "[":
             language_tag = "[" + oflair_text.split("[", 1)[1]
-            language_name = converter(language_tag.lower()[1:-1]).language_name
+            language_name = convert(language_tag.lower()[1:-1]).language_name
         else:  # Contains a bracket or parentheses. Spanish {Mexico} (Identified)
             language_name = oflair_text.split(split_char, 1)[0].strip()
 
     try:
         language_multiplier = config.points_worth_determiner(
-            converter(language_name).language_name
+            convert(language_name).language_name
         )
         # How much is this language worth? Obtain it from our wiki.
     except prawcore.exceptions.Redirect:  # The wiki doesn't have this.
@@ -998,7 +998,7 @@ def ziwen_posts() -> None:
                     # This part of the function also sends notifications if both languages are non-English
                     for notification in multiple_notifications:
                         # This is the language name for consistency
-                        multiple_language_text = converter(notification).language_name
+                        multiple_language_text = convert(notification).language_name
                         contacted = ziwen_notifier(
                             multiple_language_text,
                             otitle,
@@ -1334,7 +1334,7 @@ def verification_parser() -> None:
             notes = ""
 
         # Try and get a native language thank-you from our main language dictionary.
-        language_code = converter(language_name).language_code
+        language_code = convert(language_name).language_code
         thanks_phrase = MAIN_LANGUAGES.get(language_code, {}).get("thanks", "Thank you")
 
         # Form the entry for the verification log.

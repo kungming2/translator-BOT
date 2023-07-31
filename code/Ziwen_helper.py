@@ -11,12 +11,12 @@ from code._config import (
     logger,
 )
 from code._language_consts import CJK_LANGUAGES
-from code._languages import comment_info_parser, converter, language_mention_search
+from code._languages import comment_info_parser, convert, language_mention_search
 from code._login import USERNAME
 from code._responses import MSG_WIKIPAGE_FULL
 from datetime import datetime
 from sqlite3 import Connection, Cursor
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import jieba  # Segmenter for Mandarin Chinese.
 import MeCab  # Advanced segmenter for Japanese.
@@ -373,10 +373,8 @@ class ZiwenConfig:
             )
         else:
             logger.error("# No current verification post found!")
-
-        self.zw_useragent = (
-            get_random_useragent()
-        )  # Pick a random useragent from our list.
+        # Pick a random useragent from our list.
+        self.zw_useragent = get_random_useragent()
         logger.debug(f"# Current user agent: {self.zw_useragent}")
 
         # We download the blacklist of users.
@@ -493,7 +491,7 @@ Komento-related functions are all prefixed with `komento` in their name.
 
 def komento_analyzer(
     reddit: praw.Reddit, reddit_submission: praw.reddit.models.Submission
-):
+) -> dict[str, Any]:
     """
     A function that returns a dictionary containing various things that Ziwen checks against. It indexes comments with
     specific keys in the dictionary so that Ziwen can access them directly and easily.
@@ -634,7 +632,7 @@ def komento_analyzer(
                     num_year, num_month, num_day, num_hour, num_min, num_sec
                 )
                 # Returns the time in UTC.
-                utc_timestamp = calendar.timegm(comment_datetimetuple())
+                utc_timestamp = calendar.timegm(comment_datetime())
                 time_difference = int(current_c_time - utc_timestamp)
                 # How long the thing has been claimed for.
                 results["claim_time_diff"] = time_difference
@@ -742,7 +740,7 @@ def lookup_matcher(
                 parsed_data = key
 
         # Set the language name to the identified language.
-        language_name = converter(parsed_data).language_name
+        language_name = convert(parsed_data).language_name
     # Secondly we see if there's a language mentioned.
     elif (
         language_mention_search(content_text) is not None

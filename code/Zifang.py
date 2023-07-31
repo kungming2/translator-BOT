@@ -13,7 +13,7 @@ from code._config import (
     action_counter,
     logger,
 )
-from code._languages import VERSION_NUMBER_LANGUAGES, converter
+from code._languages import VERSION_NUMBER_LANGUAGES, convert
 from code._login import PASSWORD, USERNAME, ZIFANG_APP_ID, ZIFANG_APP_SECRET
 from code._responses import (
     ZF_CLOSING_OUT_MESSAGE,
@@ -399,7 +399,7 @@ def wikipedia_lookup(terms: List[str], language: str = "English") -> str | None:
 
     # Code for searching non-English Wikipedia, currently not needed.
     if language != "English":
-        lang_code = converter(language).language_code
+        lang_code = convert(language).language_code
         wikipedia.set_lang(lang_code)
 
     # Look up the terms and format them appropriately.

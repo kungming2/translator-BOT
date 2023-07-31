@@ -67,7 +67,7 @@ LANGUAGE_COUNTRY_ASSOCIATED = {}
 
 def language_lists_generator() -> None:
     """
-    A routine that creates a bunch of the old lists that used to power `converter()`
+    A routine that creates a bunch of the old lists that used to power `convert()`
 
     :return: Nothing, but it declares a bunch of global variables.
     """
@@ -109,42 +109,17 @@ def language_lists_generator() -> None:
 language_lists_generator()
 
 
-def fuzzy_text(word: str) -> str | None:
+def english_fuzz(word: str) -> bool:
     """
-    A quick function that assesses misspellings of supported languages. For example, 'Chinnsse' will be returned as
-    'Chinese." The closeness ratio can be adjusted to make this more or less sensitive.
-    A higher ratio means stricter, and a lower ratio means less strict.
+    A quick function that detects if a word is likely to be "English." Used in replace_bad_english_typing below.
 
     :param word: Any word.
-    :return: If the word seems to be close to a supported language, return the likely match.
+    :return: A boolean. True if it's likely to be a misspelling of the word 'English', false otherwise.
     """
 
-    for language in SUPPORTED_LANGUAGES:
-        closeness = fuzz.ratio(language, word)
-
-        if closeness > 75 and language != "Javanese":
-            return str(language)
-
-
-def language_name_search(search_term: str) -> str:
-    """
-    Function that searches for a language name or its mispellings/alternate names. It will only return the code if it's
-    an *exact* match. There's a separate module in `fuzzy_text` above and in `converter` that will take care of
-    misspellings or other issues for the main supported languages.
-
-    :param search_term: The term we're looking to check, most likely a language name.
-    :return: The equivalent language code if found, a blank string otherwise.
-    """
-
-    for key, language_info in MAIN_LANGUAGES.items():
-        if search_term == language_info["name"]:
-            return key
-        if language_info["alternate_names"] is not None:
-            for alternate_name in language_info["alternate_names"]:
-                if search_term == alternate_name:
-                    return key
-
-    return ""
+    word = word.title()
+    closeness = fuzz.ratio("English", word)
+    return closeness > 70  # Very likely
 
 
 def transbrackets_new(title: str) -> str:
@@ -299,165 +274,213 @@ class ConverterTuple(NamedTuple):
     country_code: str | None
 
 
-def converter(input_text: str) -> ConverterTuple:
-    """
-    A function that can convert between language names and codes, and also parse additional data.
-    This is one of the most crucial components of Ziwen and is very commonly used.
+class Converter:
+    def __language_name_search(self, search_term: str) -> str:
+        """
+        Function that searches for a language name or its mispellings/alternate names. It will only return the code if it's
+        an *exact* match. There's a separate module in `fuzzy_text` above and in `converter` that will take care of
+        misspellings or other issues for the main supported languages.
 
-    :param input_text: Any string that may be a language name or code.
-    :return: A tuple with Code, Name, Supported (boolean), country (if present).
-    """
+        :param search_term: The term we're looking to check, most likely a language name.
+        :return: The equivalent language code if found, a blank string otherwise.
+        """
 
-    # Set default values
-    supported = False
-    language_code = ""
-    language_name = ""
-    country_name = ""
-    regional_case = False
-    is_script = False
-    country_code = None
-    targeted_language = input_text
+        for key, language_info in MAIN_LANGUAGES.items():
+            if search_term == language_info["name"]:
+                return key
+            if language_info["alternate_names"] is not None:
+                for alternate_name in language_info["alternate_names"]:
+                    if search_term == alternate_name:
+                        return key
 
-    # There's a hyphen... probably a special code.
-    if "-" in input_text and "Anglo" not in input_text:
-        # Take only the language part (ar).
-        # Get the specific code.
-        broader_code, specific_code = targeted_language.split("-", 1)
-        if len(specific_code) <= 1:  # If it's just a letter it cannot be valid.
-            input_text = broader_code
-            specific_code = None
-    else:  # Normal code
-        broader_code = specific_code = None
+        return ""
 
-    # Special code added to process codes with - in it.
-    if specific_code is not None:  # special code (unknown-cyrl / ar-LB).
-        # This takes a code and returns a name ar-LB becomes Arabic <Lebanon> and unknown-CYRL becomes Cyrillic (Script)
-        if broader_code == "unknown":  # This is going to be a script.
-            try:
-                # Get the script name.
-                input_text = lang_code_search(specific_code, script_search=True)[0]
-                is_script = True
-            except TypeError:  # Not a valid code.
-                pass
-        else:  # This should be a language code with a country code.
-            regional_case = True
-            country_code = country_converter(specific_code, True)[0].upper()
-            country_name = country_converter(country_code, True)[1]
-            input_text = broader_code
-            if (
-                f"{input_text}-{country_code}" in ISO_DEFAULT_ASSOCIATED
-                or country_code.lower() == input_text.lower()
-            ):  # Something like de-DE or zh-CN
-                regional_case = False
-                country_code = None
-                # We don't want to mark the default countries as too granular ones.
-            if len(country_name) == 0:
-                # There's no valid country from the converter. Reset it.
-                input_text = targeted_language  # Redefine the language as the original (pre-split)
-                regional_case = False
-                country_code = None
-    elif "{" in input_text and len(input_text) > 3:
-        # This may have a country tag. Let's be sure to remove it.
-        regional_case = True
-        input_text, country_name = input_text.split("{", 1)
-        country_name = country_name[:-1]
-        country_code = country_converter(country_name)[0]
+    def __fuzzy_text(self, word: str) -> str | None:
+        """
+        A quick function that assesses misspellings of supported languages. For example, 'Chinnsse' will be returned as
+        'Chinese." The closeness ratio can be adjusted to make this more or less sensitive.
+        A higher ratio means stricter, and a lower ratio means less strict.
 
-    # Make a special exemption for COUNTRY CODES because people keep messing that up.
-    for key, value in MISTAKE_ABBREVIATIONS.items():
-        if len(input_text) == 2 and input_text.lower() == key:
-            # If it's the same, let's replace it with the proper one.
-            input_text = value
+        :param word: Any word.
+        :return: If the word seems to be close to a supported language, return the likely match.
+        """
 
-    # We also want to help convert ISO 639-2B codes (there are twenty of them)
-    for key, value in ISO_639_2B.items():
-        if len(input_text) == 3 and input_text.lower() == key:
-            # If it's the same, let's replace it with the proper one.
-            input_text = value
+        for language in SUPPORTED_LANGUAGES:
+            closeness = fuzz.ratio(language, word)
 
-    # Convert and reassign special-reserved ISO 639-3 codes to their r/translator equivalents.
-    if input_text in ["mis", "und", "mul", "qnp"]:
-        # These are special codes that we reassign
-        supported = True
-        if input_text == "mul":
-            input_text = "multiple"
-        elif input_text in ["mis", "und", "qnp"]:  # These are assigned to "unknown"
-            input_text = "unknown"
+            if closeness > 75 and language != "Javanese":
+                return str(language)
 
-    # Start processing the string.
-    if len(input_text) < 2:  # This is too short.
+    def convert(self, input_text: str) -> ConverterTuple:
+        """
+        A function that can convert between language names and codes, and also parse additional data.
+        This is one of the most crucial components of Ziwen and is very commonly used.
+
+        :param input_text: Any string that may be a language name or code.
+        :return: A tuple with Code, Name, Supported (boolean), country (if present).
+        """
+
+        # Set default values
+        supported = False
         language_code = ""
         language_name = ""
-    elif is_script and specific_code:  # This is a script.
-        language_code = specific_code
-        language_name = input_text
-    elif input_text.lower() in ISO_639_1:
-        # Everything below is accessing languages. This is a ISO 639-1 code.
-        language_code = input_text.lower()
-        language_name = MAIN_LANGUAGES[language_code]["name"]
-        supported = MAIN_LANGUAGES[language_code]["supported"]
-    elif len(input_text) == 3 and input_text.lower() in ISO_639_3:
-        # This is equivalent to a supported one, eg 'cmn'.
-        for key, value in MAIN_LANGUAGES.items():
-            if input_text.lower() == value["language_code_3"]:
-                language_code = key
-                language_name = MAIN_LANGUAGES[language_code]["name"]
-                supported = MAIN_LANGUAGES[language_code]["supported"]
-    elif len(input_text) == 3 and len(language_name_search(input_text.title())) != 0:
-        # This is three letters and name.
-        # An example of this is 'Any'.
-        language_code = language_name_search(input_text.title())
-        language_name = MAIN_LANGUAGES[language_code]["name"]
-    elif len(input_text) == 3 and input_text.lower() not in ISO_639_3:
-        # This may be a non-supported ISO 639-3 code.
-        results = lang_code_search(input_text, False)[0]  # Consult the CSV file.
-        if len(results) != 0:  # We found a matching language name.
+        country_name = ""
+        regional_case = False
+        is_script = False
+        country_code = None
+        targeted_language = input_text
+
+        # There's a hyphen... probably a special code.
+        if "-" in input_text and "Anglo" not in input_text:
+            # Take only the language part (ar).
+            # Get the specific code.
+            broader_code, specific_code = targeted_language.split("-", 1)
+            if len(specific_code) <= 1:  # If it's just a letter it cannot be valid.
+                input_text = broader_code
+                specific_code = None
+        else:  # Normal code
+            broader_code = specific_code = None
+
+        # Special code added to process codes with - in it.
+        if specific_code is not None:  # special code (unknown-cyrl / ar-LB).
+            # This takes a code and returns a name ar-LB becomes Arabic <Lebanon> and unknown-CYRL becomes Cyrillic (Script)
+            if broader_code == "unknown":  # This is going to be a script.
+                try:
+                    # Get the script name.
+                    input_text = lang_code_search(specific_code, script_search=True)[0]
+                    is_script = True
+                except TypeError:  # Not a valid code.
+                    pass
+            else:  # This should be a language code with a country code.
+                regional_case = True
+                country_code = country_converter(specific_code, True)[0].upper()
+                country_name = country_converter(country_code, True)[1]
+                input_text = broader_code
+                if (
+                    f"{input_text}-{country_code}" in ISO_DEFAULT_ASSOCIATED
+                    or country_code.lower() == input_text.lower()
+                ):  # Something like de-DE or zh-CN
+                    regional_case = False
+                    country_code = None
+                    # We don't want to mark the default countries as too granular ones.
+                if len(country_name) == 0:
+                    # There's no valid country from the converter. Reset it.
+                    input_text = targeted_language  # Redefine the language as the original (pre-split)
+                    regional_case = False
+                    country_code = None
+        elif "{" in input_text and len(input_text) > 3:
+            # This may have a country tag. Let's be sure to remove it.
+            regional_case = True
+            input_text, country_name = input_text.split("{", 1)
+            country_name = country_name[:-1]
+            country_code = country_converter(country_name)[0]
+
+        # Make a special exemption for COUNTRY CODES because people keep messing that up.
+        for key, value in MISTAKE_ABBREVIATIONS.items():
+            if len(input_text) == 2 and input_text.lower() == key:
+                # If it's the same, let's replace it with the proper one.
+                input_text = value
+
+        # We also want to help convert ISO 639-2B codes (there are twenty of them)
+        for key, value in ISO_639_2B.items():
+            if len(input_text) == 3 and input_text.lower() == key:
+                # If it's the same, let's replace it with the proper one.
+                input_text = value
+
+        # Convert and reassign special-reserved ISO 639-3 codes to their r/translator equivalents.
+        if input_text in ["mis", "und", "mul", "qnp"]:
+            # These are special codes that we reassign
+            supported = True
+            if input_text == "mul":
+                input_text = "multiple"
+            elif input_text in ["mis", "und", "qnp"]:  # These are assigned to "unknown"
+                input_text = "unknown"
+
+        # Start processing the string.
+        if len(input_text) < 2:  # This is too short.
+            language_code = ""
+            language_name = ""
+        elif is_script and specific_code:  # This is a script.
+            language_code = specific_code
+            language_name = input_text
+        elif input_text.lower() in ISO_639_1:
+            # Everything below is accessing languages. This is a ISO 639-1 code.
             language_code = input_text.lower()
-            language_name = results
-    elif len(input_text) > 3:  # Not a code, let's look for names.
-        if input_text.title() in ISO_NAMES:  # This is a defined language with a name.
-            # This searches both regular and alternate names.
-            language_code = language_name_search(input_text.title())
             language_name = MAIN_LANGUAGES[language_code]["name"]
             supported = MAIN_LANGUAGES[language_code]["supported"]
-        elif input_text.title() not in ISO_NAMES:
-            fuzzy_result = (
-                fuzzy_text(input_text.title().strip())
-                if input_text.title() not in FUZZ_IGNORE_WORDS
-                else None
-            )
-
-            if fuzzy_result is not None:
-                # We found a language that this is close to in spelling.
-                language_code = language_name_search(fuzzy_result.title())
-                language_name = str(fuzzy_result)
+        elif len(input_text) == 3 and input_text.lower() in ISO_639_3:
+            # This is equivalent to a supported one, eg 'cmn'.
+            for key, value in MAIN_LANGUAGES.items():
+                if input_text.lower() == value["language_code_3"]:
+                    language_code = key
+                    language_name = MAIN_LANGUAGES[language_code]["name"]
+                    supported = MAIN_LANGUAGES[language_code]["supported"]
+        elif (
+            len(input_text) == 3
+            and len(self.__language_name_search(input_text.title())) != 0
+        ):
+            # This is three letters and name.
+            # An example of this is 'Any'.
+            language_code = self.__language_name_search(input_text.title())
+            language_name = MAIN_LANGUAGES[language_code]["name"]
+        elif len(input_text) == 3 and input_text.lower() not in ISO_639_3:
+            # This may be a non-supported ISO 639-3 code.
+            results = lang_code_search(input_text, False)[0]  # Consult the CSV file.
+            if len(results) != 0:  # We found a matching language name.
+                language_code = input_text.lower()
+                language_name = results
+        elif len(input_text) > 3:  # Not a code, let's look for names.
+            if (
+                input_text.title() in ISO_NAMES
+            ):  # This is a defined language with a name.
+                # This searches both regular and alternate names.
+                language_code = self.__language_name_search(input_text.title())
+                language_name = MAIN_LANGUAGES[language_code]["name"]
                 supported = MAIN_LANGUAGES[language_code]["supported"]
-            else:  # No fuzzy match. Now we're going to check if it's the name of an ISO 639-3 language or script.
-                total_results = lang_code_search(input_text, False)
-                specific_results = total_results[0]
-                if len(specific_results) != 0:
-                    language_code = specific_results
-                    language_name = lang_code_search(language_code, total_results[1])[0]
-                    if language_code in MAIN_LANGUAGES:
-                        supported = MAIN_LANGUAGES[language_code]["supported"]
-                elif len(specific_results) == 0 and len(input_text) == 4:
-                    # This is a script code.
-                    script_results = lang_code_search(input_text, True)[0]
-                    if len(script_results) != 0:
-                        language_name = script_results
-                        language_code = lang_code_search(script_results, True)[0]
+            elif input_text.title() not in ISO_NAMES:
+                fuzzy_result = (
+                    self.__fuzzy_text(input_text.title().strip())
+                    if input_text.title() not in FUZZ_IGNORE_WORDS
+                    else None
+                )
 
-    # We are re-enabling using < > to denote country names in certain ISO 639-3 languages.
-    # if "<" in language_name:  # Strip the brackets from ISO 639-3 languages.
-    #    language_name = language_name.split("<")[0].strip()  # Remove the country name in brackets
+                if fuzzy_result is not None:
+                    # We found a language that this is close to in spelling.
+                    language_code = self.__language_name_search(fuzzy_result.title())
+                    language_name = str(fuzzy_result)
+                    supported = MAIN_LANGUAGES[language_code]["supported"]
+                else:  # No fuzzy match. Now we're going to check if it's the name of an ISO 639-3 language or script.
+                    total_results = lang_code_search(input_text, False)
+                    specific_results = total_results[0]
+                    if len(specific_results) != 0:
+                        language_code = specific_results
+                        language_name = lang_code_search(
+                            language_code, total_results[1]
+                        )[0]
+                        if language_code in MAIN_LANGUAGES:
+                            supported = MAIN_LANGUAGES[language_code]["supported"]
+                    elif len(specific_results) == 0 and len(input_text) == 4:
+                        # This is a script code.
+                        script_results = lang_code_search(input_text, True)[0]
+                        if len(script_results) != 0:
+                            language_name = script_results
+                            language_code = lang_code_search(script_results, True)[0]
 
-    if len(language_code) == 0:
-        # There's no valid language so let's reset the country values.
-        country_code = None
-    elif regional_case and len(country_name) != 0 and len(language_code) != 0:
-        # This was for a specific language area.
-        language_name += " {" + country_name + "}"
-    return ConverterTuple(language_code, language_name, supported, country_code)
+        # We are re-enabling using < > to denote country names in certain ISO 639-3 languages.
+        # if "<" in language_name:  # Strip the brackets from ISO 639-3 languages.
+        #    language_name = language_name.split("<")[0].strip()  # Remove the country name in brackets
+
+        if len(language_code) == 0:
+            # There's no valid language so let's reset the country values.
+            country_code = None
+        elif regional_case and len(country_name) != 0 and len(language_code) != 0:
+            # This was for a specific language area.
+            language_name += " {" + country_name + "}"
+        return ConverterTuple(language_code, language_name, supported, country_code)
+
+
+def convert(input_text: str) -> ConverterTuple:
+    return Converter().convert(input_text)
 
 
 def country_validator(
@@ -503,7 +526,7 @@ def country_validator(
 
     if len(detected_word) != 0:
         for language in language_list:
-            language_code = converter(language).language_code
+            language_code = convert(language).language_code
 
             if language_code in LANGUAGE_COUNTRY_ASSOCIATED:
                 # There's a language assoc.
@@ -602,19 +625,6 @@ def comment_info_parser(pbody: str, command: str):
         return match, advanced_mode
 
 
-def english_fuzz(word: str) -> bool:
-    """
-    A quick function that detects if a word is likely to be "English." Used in replace_bad_english_typing below.
-
-    :param word: Any word.
-    :return: A boolean. True if it's likely to be a misspelling of the word 'English', false otherwise.
-    """
-
-    word = word.title()
-    closeness = fuzz.ratio("English", word)
-    return closeness > 70  # Very likely
-
-
 def replace_bad_english_typing(title: str) -> str:
     """
     Function that will replace a misspelling for English, so that it can still pass the title filter routine.
@@ -658,7 +668,7 @@ def language_mention_search(search_paragraph: str) -> None | List[str]:
 
     for match in matches:
         if len(match) > 3:  # We explicitly DO NOT want to match ISO 639-3 codes.
-            converter_result = converter(match)
+            converter_result = convert(match)
             language_code = converter_result.language_code
             language_name = converter_result.language_name
 
@@ -883,7 +893,7 @@ def final_title_salvager(d_source_languages: List[str], d_target_languages: List
         return None
     # We can get a last language classification
     try:
-        converter_output = converter(all_languages[0])
+        converter_output = convert(all_languages[0])
         return converter_output.language_code, converter_output.language_name
     except IndexError:
         return None
@@ -1032,7 +1042,7 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
         if hyphen_match is not None:
             hyphen_match = hyphen_match.group(0)
             # Check to see if it's a valid language name
-            hyphen_match_name = converter(hyphen_match).language_name
+            hyphen_match_name = convert(hyphen_match).language_name
             if len(hyphen_match_name) == 0:
                 # No language match found, let's replace the dash with a space.
                 title = title.replace("-", " ")
@@ -1101,16 +1111,9 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
         source_language = title.split("-")[0]
     elif "<" in title and ">" not in title:
         source_language = title.split(">")[0]
-
-    source_language = re.sub(
-        r"""
-                           [,.;@#?!&$()\[\]/“”’"•]+  # Accept one or more copies of punctuation
-                           \ *           # plus zero or more copies of a space,
-                           """,
-        " ",  # and replace it with a single space
-        source_language,
-        flags=re.VERBOSE,
-    )
+    # Accept one or more copies of punctuation plus zero or more copies of a space
+    # and replace it with a single space
+    source_language = re.sub(r"[,.;@#?!&$()\[\]/“”’\"•]+\ *", " ", source_language)
     source_language = source_language.title()
     # Convert it from a string to a list
     source_language = source_language_original = source_language.split()
@@ -1136,7 +1139,7 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
         if "Eng" in language.title() and len(language) <= 8:
             # If it's just English, we can assign it already.
             language = "English"
-        converter_search = converter(language).language_name
+        converter_search = convert(language).language_name
         if converter_search != "":
             # Try to get only the valid languages. Delete anything that isn't a language.
             d_source_languages.append(converter_search)
@@ -1164,16 +1167,7 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
             break
 
     # Replace punctuation in the string. Not yet divided.
-    target_language = re.sub(
-        r"""
-                           [,.;@#?!&$()“”’"\[•]+  # Accept one or more copies of punctuation
-                           \ *           # plus zero or more copies of a space,
-                           """,
-        " ",  # and replace it with a single space
-        target_language,
-        flags=re.VERBOSE,
-    )
-
+    target_language = re.sub(r"[,.;@#?!&$()“”’\"\[•]+\ *", " ", target_language)
     target_language = target_language.split()  # Divide into words
     target_language = [x.title() for x in target_language]
     # Check for a hyphenated word.. like Puyo-Paekche
@@ -1198,7 +1192,7 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
     d_target_languages = []  # Account for misspellings
 
     for language in target_language:
-        converter_target_search = converter(language).language_name
+        converter_target_search = convert(language).language_name
         if converter_target_search != "":
             # Try to get only the valid languages. Delete anything that isn't a language.
             d_target_languages.append(converter_target_search)
@@ -1261,18 +1255,18 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
                     continue
 
             if not complete_override:
-                final_css = converter(str(d_source_languages_m[0])).language_code
+                final_css = convert(str(d_source_languages_m[0])).language_code
             elif complete_override:  # Override.
-                final_css = converter(complete_source).language_code
+                final_css = convert(complete_source).language_code
         else:  # every other case
-            final_css = converter(str(d_source_languages[0])).language_code
+            final_css = convert(str(d_source_languages[0])).language_code
     elif "English" in d_source_languages and "English" not in d_target_languages:
         # If the source language is English, we want to give it a target language CSS.
-        final_css = converter(str(d_target_languages[0])).language_code
+        final_css = convert(str(d_target_languages[0])).language_code
         if len(d_target_languages) > 1:
             # We do a test to see if there's a specific target, e.g. Egyptian Arabic
             joined_target = target_language[-1]  # Get the last full string.
-            joined_target_data = converter(joined_target)
+            joined_target_data = convert(joined_target)
             if len(joined_target_data.language_code) != 0:
                 # The converter actually found a specific language code for this.
                 final_css = joined_target_data.language_code
@@ -1282,7 +1276,7 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
         combined_total = list(set(d_source_languages + d_target_languages))
         combined_total.remove("English")
         if len(combined_total) > 0:  # There's still a Non English item here
-            final_css = converter(combined_total[0]).language_code
+            final_css = convert(combined_total[0]).language_code
         else:
             final_css = "en"  # Obviously it was just English
 
@@ -1307,7 +1301,7 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
         is_multiple_test = [
             language
             for language in is_multiple_test
-            if len(converter(language).language_code) != 4
+            if len(convert(language).language_code) != 4
         ]
 
         if len(is_multiple_test) >= 2 and "English" not in d_target_languages:
@@ -1339,9 +1333,7 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
                 ):
                     # There is only one source language. Let's replace it with the determined one.
                     # This is also assuming English is the target language.
-                    d_source_languages = [
-                        converter(language_country_code).language_name
-                    ]
+                    d_source_languages = [convert(language_country_code).language_name]
                     final_css = language_country_code  # Change it to the ISO 639-3 code
                     # final_css_text = d_source_languages[0]
                     # print(d_source_languages)
@@ -1363,9 +1355,7 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
                 ):
                     # There is only one source language. Let's replace it with the determined one.
                     # This is also assuming English is the target language.
-                    d_target_languages = [
-                        converter(language_country_code).language_name
-                    ]
+                    d_target_languages = [convert(language_country_code).language_name]
                     final_css = language_country_code  # Change it to the ISO 639-3 code
                     # print(d_target_languages)
                 elif (
@@ -1378,7 +1368,7 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
 
     if len(final_css) != 4:  # This is not a script
         # Get the flair text for inclusion.
-        final_css_text = converter(final_css).language_name
+        final_css_text = convert(final_css).language_name
         if (
             language_country is not None
             and len(language_country) != 0
@@ -1402,7 +1392,7 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
         multiple_code_tag = []
         for language in notify_languages:
             # Get the code from the name
-            multiple_code_tag.append(converter(language).language_code.upper())
+            multiple_code_tag.append(convert(language).language_code.upper())
             multiple_code_tag = sorted(multiple_code_tag)  # Alphabetize
             if "MULTIPLE" in multiple_code_tag:
                 multiple_code_tag.remove("MULTIPLE")
@@ -1424,11 +1414,11 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
         # This is one where the target languages may not be what we want MULTIPLE.
         if "English" in d_source_languages:
             # The source is English, so let's choose a target css
-            final_css = converter(d_target_languages[0]).language_code
+            final_css = convert(d_target_languages[0]).language_code
             # we will send the multiple notifications, just in case.
             final_css_text = d_target_languages[0]
         else:  # English is in the targets, so let's take the source.
-            final_css = converter(d_source_languages[0]).language_code
+            final_css = convert(d_source_languages[0]).language_code
             final_css_text = d_source_languages[0]  # Just the name
             # Clear the notifications, we don't need them for this one.
             notify_languages = None
@@ -1506,7 +1496,7 @@ def language_list_splitter(list_string: List[str]):
     # Special case if there's only spaces - check to see if the whole thing
     if "," not in list_string and " " in list_string:
         # Assess whether the whole thing is a multi-word language itself.
-        all_match = converter(list_string).language_code
+        all_match = convert(list_string).language_code
         temporary_list = list_string.split() if len(all_match) == 0 else [all_match]
     else:
         # Get the individual elements with a first pass.
@@ -1519,7 +1509,7 @@ def language_list_splitter(list_string: List[str]):
         item = item.lower()  # Remove spaces.
 
         # Get the code.
-        converted_data = converter(item)
+        converted_data = convert(item)
 
         if (
             converted_data.country_code is None
