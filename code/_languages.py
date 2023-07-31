@@ -64,36 +64,49 @@ ISO_NAMES = []
 MISTAKE_ABBREVIATIONS = {}
 LANGUAGE_COUNTRY_ASSOCIATED = {}
 
-for language_code, language_module in MAIN_LANGUAGES.items():
-    ISO_639_1.append(language_code)
-    ISO_639_3.append(language_module["language_code_3"])
-    ISO_NAMES.append(language_module["name"])
-    if (
-        "alternate_names" in language_module
-        and language_module["alternate_names"] is not None
-    ):
-        for name in language_module["alternate_names"]:
-            ISO_NAMES.append(name)
 
-    if language_module["supported"]:
-        SUPPORTED_CODES.append(language_code)
-        SUPPORTED_LANGUAGES.append(language_module["name"])
+def language_lists_generator() -> None:
+    """
+    A routine that creates a bunch of the old lists that used to power `converter()`
 
-    if "countries_default" in language_module:
-        ISO_DEFAULT_ASSOCIATED.append(
-            f"{language_code}-{language_module['countries_default']}"
-        )
+    :return: Nothing, but it declares a bunch of global variables.
+    """
 
-    if "countries_associated" in language_module:
-        LANGUAGE_COUNTRY_ASSOCIATED[language_code] = language_module[
-            "countries_associated"
-        ]
+    for language_code, language_module in MAIN_LANGUAGES.items():
+        ISO_639_1.append(language_code)
+        ISO_639_3.append(language_module["language_code_3"])
+        ISO_NAMES.append(language_module["name"])
+        if (
+            "alternate_names" in language_module
+            and language_module["alternate_names"] is not None
+        ):
+            ISO_NAMES.extend(language_module["alternate_names"])
 
-    if "mistake_abbreviation" in language_module:
-        MISTAKE_ABBREVIATIONS[language_module["mistake_abbreviation"]] = language_code
+        if language_module["supported"]:
+            SUPPORTED_CODES.append(language_code)
+            SUPPORTED_LANGUAGES.append(language_module["name"])
 
-    if "language_code_2b" in language_module:
-        ISO_639_2B[language_module["language_code_2b"]] = language_code
+        if "countries_default" in language_module:
+            ISO_DEFAULT_ASSOCIATED.append(
+                f"{language_code}-{language_module['countries_default']}"
+            )
+
+        if "countries_associated" in language_module:
+            LANGUAGE_COUNTRY_ASSOCIATED[language_code] = language_module[
+                "countries_associated"
+            ]
+
+        if "mistake_abbreviation" in language_module:
+            MISTAKE_ABBREVIATIONS[
+                language_module["mistake_abbreviation"]
+            ] = language_code
+
+        if "language_code_2b" in language_module:
+            ISO_639_2B[language_module["language_code_2b"]] = language_code
+
+
+# Form the lists from the dictionary that are needed for compatibility.
+language_lists_generator()
 
 
 def fuzzy_text(word: str) -> str | None:

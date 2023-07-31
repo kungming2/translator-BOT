@@ -282,8 +282,8 @@ class ZiwenConfig:
         self.cached_multipliers.update({language_name: final_point_value})
 
         # Write data to the cache so that it can be retrieved later.
-        current_zeit = time.time()
-        month_string = datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
+        current_time = time.time()
+        month_string = datetime.fromtimestamp(current_time).strftime("%Y-%m")
         insert_data = (month_string, language_name, final_point_value)
         self.cursor_cache.execute(
             "INSERT INTO multiplier_cache VALUES (?, ?, ?)", insert_data
@@ -324,8 +324,8 @@ class ZiwenConfig:
         # It will transform the database info into a dictionary.
 
         # Get the year-month string.
-        current_zeit = time.time()
-        month_string = datetime.fromtimestamp(current_zeit).strftime("%Y-%m")
+        current_time = time.time()
+        month_string = datetime.fromtimestamp(current_time).strftime("%Y-%m")
 
         # Select from the database the current months data if it exists.
         multiplier_command = "SELECT * from multiplier_cache WHERE month_year = ?"
@@ -413,7 +413,6 @@ def record_to_wiki(
     s_or_i: bool,
     oflair_new: str,
     reddit: praw.Reddit,
-    subreddit: str,
     user: str | None = None,
 ) -> None:
     """
@@ -434,7 +433,7 @@ def record_to_wiki(
     oformat_date = datetime.fromtimestamp(int(odate)).strftime("%Y-%m-%d")
 
     if s_or_i:  # Means we should write to the 'saved' page:
-        page_content = reddit.subreddit(subreddit).wiki["saved"]
+        page_content = reddit.subreddit(CORRECTED_SUBREDDIT).wiki["saved"]
         new_content = (
             f"| {oformat_date} | [{otitle}](https://redd.it/{oid}) | {oflair_text} |"
         )
@@ -446,7 +445,7 @@ def record_to_wiki(
         )
         logger.info("Save_Wiki: Updated the 'saved' wiki page.")
     else:  # Means we should write to the 'identified' page:
-        page_content = reddit.subreddit(subreddit).wiki["identified"]
+        page_content = reddit.subreddit(CORRECTED_SUBREDDIT).wiki["identified"]
         new_content = f"{oformat_date} | [{otitle}](https://redd.it/{oid}) | {oflair_text} | {oflair_new} | u/{user}"
         # Log in the wiki for later reference
         page_content_new = str(page_content.content_md) + "\n" + new_content
@@ -461,7 +460,9 @@ def record_to_wiki(
             message_subject = f"[Notification] '{page_name}' Wiki Page Full"
             message_template = MSG_WIKIPAGE_FULL.format(page_name)
             logger.warning(f"Save_Wiki: The '{page_name}' wiki page is full.")
-            reddit.subreddit("translatorBOT").message(message_subject, message_template)
+            reddit.subreddit("translatorBOT").message(
+                subject=message_subject, message=message_template
+            )
         logger.info("Save_Wiki: Updated the 'identified' wiki page.")
 
 

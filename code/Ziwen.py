@@ -112,14 +112,17 @@ logger.info("Startup: Accessing SQL databases...")
 
 # This connects to the local cache used for detecting edits and the multiplier cache for points.
 conn_cache = sqlite3.connect(FILE_ADDRESS_CACHE)
+conn_cache.row_factory = sqlite3.Row
 cursor_cache = conn_cache.cursor()
 
 # This connects to the main database, including notifications, points, and past processed data.
 conn_main = sqlite3.connect(FILE_ADDRESS_MAIN)
+conn_main.row_factory = sqlite3.Row
 cursor_main = conn_main.cursor()
 
 # This connects to the database for Ajos, objects that the bot generates for posts.
 conn_ajo = sqlite3.connect(FILE_ADDRESS_AJO_DB)
+conn_ajo.row_factory = sqlite3.Row
 cursor_ajo = conn_ajo.cursor()
 
 # Connecting to the Reddit API via OAuth.
@@ -398,9 +401,10 @@ def points_tabulator(
         logger.debug(f"Points tabulator: Saved: {entry}")
         # Need code to NOT write it if the points are 0
         if entry[1] != 0:
-            addition_command = "INSERT INTO total_points VALUES (?, ?, ?, ?, ?)"
             addition_tuple = (month_string, pid, entry[0], str(entry[1]), oid)
-            cursor_main.execute(addition_command, addition_tuple)
+            cursor_main.execute(
+                "INSERT INTO total_points VALUES (?, ?, ?, ?, ?)", addition_tuple
+            )
             conn_main.commit()
 
 
@@ -557,8 +561,10 @@ def messaging_user_statistics_writer(body_text: str, username: str) -> None:
             cursor_main.execute("INSERT INTO total_commands VALUES (?, ?)", to_store)
         else:
             # This username exists. Update instead.
-            update_command = "UPDATE total_commands SET commands = ? WHERE username = ?"
-            cursor_main.execute(update_command, (str(commands_dictionary), username))
+            cursor_main.execute(
+                "UPDATE total_commands SET commands = ? WHERE username = ?",
+                (str(commands_dictionary), username),
+            )
         conn_main.commit()
     else:
         logger.debug("messaging_user_statistics_writer: No commands to write.")
@@ -697,11 +703,10 @@ def edit_finder() -> None:
                     force_change = True
 
                 # Code to swap out the stored comment text with the new text. This does NOT force a reprocess.
-                delete_command = "DELETE FROM comment_cache WHERE id = ?"
-                cursor_cache.execute(delete_command, (cid,))
-                cache_command = "INSERT INTO comment_cache VALUES (?, ?)"
-                insertion_tuple = (cid, cbody)
-                cursor_cache.execute(cache_command, insertion_tuple)
+                cursor_cache.execute("DELETE FROM comment_cache WHERE id = ?", (cid,))
+                cursor_cache.execute(
+                    "INSERT INTO comment_cache VALUES (?, ?)", (cid, cbody)
+                )
                 conn_cache.commit()
 
                 # Here we edit the cache file too IF there's a edited-in command that's new, omitting the crosspost ones
@@ -716,8 +721,7 @@ def edit_finder() -> None:
 
                 if force_change:
                     # Delete the comment from the processed database to force it to update and reprocess.
-                    delete_comment_command = "DELETE FROM oldcomments WHERE id = ?"
-                    cursor_main.execute(delete_comment_command, (cid,))
+                    cursor_main.execute("DELETE FROM oldcomments WHERE id = ?", (cid,))
                     conn_main.commit()
                     logger.debug(
                         f"Edit Finder: Removed edited comment `{cid}` from processed database."
@@ -729,9 +733,9 @@ def edit_finder() -> None:
 
             try:
                 # Insert the comment into our cache.
-                cache_command = "INSERT INTO comment_cache VALUES (?, ?)"
-                new_tuple = (cid, cbody)
-                cursor_cache.execute(cache_command, new_tuple)
+                cursor_cache.execute(
+                    "INSERT INTO comment_cache VALUES (?, ?)", (cid, cbody)
+                )
                 conn_cache.commit()
             except ValueError:  # Some sort of invalid character, don't write it.
                 logger.debug(
@@ -739,8 +743,10 @@ def edit_finder() -> None:
                 )
 
     if cleanup_database:  # There's a need to clean it up.
-        cleanup = "DELETE FROM comment_cache WHERE id NOT IN (SELECT id FROM comment_cache ORDER BY id DESC LIMIT ?)"
-        cursor_cache.execute(cleanup, (comment_limit,))
+        cursor_cache.execute(
+            "DELETE FROM comment_cache WHERE id NOT IN (SELECT id FROM comment_cache ORDER BY id DESC LIMIT ?)",
+            (comment_limit,),
+        )
 
         # Delete all but the last comment_limit comments.
         conn_cache.commit()
@@ -835,9 +841,9 @@ def ziwen_posts() -> None:
             logger.info(f"Posts: New {suggested_css_text.title()} post.")
 
             # Assign it a specific template that exists.
-            if oflair_css in config.post_templates.keys():
-                output_template = config.post_templates[oflair_css]
-                post.flair.select(output_template, suggested_css_text.title())
+            for key, output_template in config.post_templates.items():
+                if oflair_css == key:
+                    post.flair.select(output_template, suggested_css_text.title())
 
             # We want to exclude the Identification Threads
             if "Identification Thread" not in otitle:
@@ -953,7 +959,6 @@ def ziwen_posts() -> None:
                         oflair_text=suggested_css_text,
                         s_or_i=True,
                         reddit=reddit,
-                        subreddit=CORRECTED_SUBREDDIT,
                         oflair_new="",
                     )
             else:  # This is fully generic.
@@ -1033,10 +1038,10 @@ def ziwen_posts() -> None:
 
             # New Redesign Version to update flair
             # Check the global template dictionary
-            if final_css_class in config.post_templates.keys():
-                output_template = config.post_templates[final_css_class]
-                post.flair.select(output_template, final_css_text)
-                logger.debug("Posts: Flair template selected for post.")
+            for key, output_template in config.post_templates.items():
+                if final_css_class == key:
+                    post.flair.select(output_template, final_css_text)
+                    logger.debug("Posts: Flair template selected for post.")
 
             # Finally, create an Ajo object and save it locally.
             if final_css_class not in ["meta", "community"]:
@@ -1246,8 +1251,8 @@ def ziwen_bot() -> None:
             )
             try:
                 reddit.redditor(oauthor).message(
-                    "[Notification] A message about your translation request",
-                    short_msg,
+                    subject="[Notification] A message about your translation request",
+                    message=short_msg,
                 )
             except praw.exceptions.APIException:  # Likely shadowbanned.
                 pass

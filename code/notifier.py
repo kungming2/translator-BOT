@@ -82,15 +82,13 @@ def messaging_months_elapsed() -> int:
     """
 
     month_beginning = 24198  # This is the May 2016 month, when the redesign was implemented. No archive data before.
-    current_toki = time.time()
+    current_time = time.time()
 
-    month_int = int(datetime.fromtimestamp(current_toki).strftime("%m"))  # EG 05
-    year_int = int(datetime.fromtimestamp(current_toki).strftime("%Y"))  # EG 2017
+    month_int = int(datetime.fromtimestamp(current_time).strftime("%m"))  # EG 05
+    year_int = int(datetime.fromtimestamp(current_time).strftime("%Y"))  # EG 2017
 
     total_current_months = (year_int * 12) + month_int
-    months_num = total_current_months - month_beginning
-
-    return months_num
+    return total_current_months - month_beginning  # months num
 
 
 def messaging_language_frequency(
@@ -193,9 +191,7 @@ def messaging_language_frequency(
     return freq_string, stats_package
 
 
-def notifier_list_pruner(
-    username: str, reddit: praw.Reddit, cursor_main: Cursor, conn_main: Connection
-) -> None | str:
+def notifier_list_pruner(username: str, config: ZiwenConfig) -> None | str:
     """
     Function that removes deleted users from the notifications database.
     It performs a test, and if they don't exist, it will delete their entries from the SQLite database.
@@ -204,27 +200,28 @@ def notifier_list_pruner(
     :return: None if the user does not exist, a string containing their last subscribed languages otherwise.
     """
 
-    if messaging_is_valid_user(username, reddit):  # This user does exist
+    if messaging_is_valid_user(username, config.reddit):  # This user does exist
         return None
     # User does not exist.
 
     # Fetch a list of what this user WAS subscribed to. (For the final error message)
-    sql_cn = "SELECT * FROM notify_users WHERE username = ?"
-
     # We try to retrieve the languages the user is subscribed to.
-    cursor_main.execute(sql_cn, (username,))
-    all_subscriptions = cursor_main.fetchall()
+    config.cursor_main.execute(
+        "SELECT language_code FROM notify_users WHERE username = ?", (username,)
+    )
+    all_subscriptions = config.cursor_main.fetchall()
 
     # Remove the user from the database.
-    sql_command = "DELETE FROM notify_users WHERE username = ?"
-    cursor_main.execute(sql_command, (username,))
-    conn_main.commit()
+    config.cursor_main.execute(
+        "DELETE FROM notify_users WHERE username = ?", (username,)
+    )
+    config.conn_main.commit()
     logger.info(
         f"notifier_list_pruner: Deleted subscription information for u/{username}."
     )
 
     # We only want the language codes (don't need the username).
-    final_codes = [subscription[0] for subscription in all_subscriptions]
+    final_codes = [subscription["language_code"] for subscription in all_subscriptions]
     # Gather a list of the languages user WAS subscribed to
     return ", ".join(final_codes)  # Return the list of formerly subscribed languages
 
@@ -254,27 +251,25 @@ def notifier_regional_language_fetcher(
             if language_code == relevant_iso_code:
                 targeted_language = lang_country
 
-    sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
+    sql_lc = "SELECT username FROM notify_users WHERE language_code = ?"
     cursor_main.execute(sql_lc, (targeted_language,))
     notify_targets = cursor_main.fetchall()
 
     if relevant_iso_code is not None:
         # There is an equvalent code. Let's get the users from that too.
-        sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
         cursor_main.execute(sql_lc, (relevant_iso_code,))
         notify_targets += cursor_main.fetchall()
 
     # Get the usernames.
-    final_specific_usernames = {target[1] for target in notify_targets}
+    final_specific_usernames = {target["username"] for target in notify_targets}
 
     # Now we need to find the overall list's user names for the broader langauge (e.g. ar)
     broader_code = targeted_language.split("-")[0]  # Take only the language part (ar).
-    sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
     cursor_main.execute(sql_lc, (broader_code,))
     all_notify_targets = cursor_main.fetchall()
 
     # This creates a list of all the people signed up for the original.
-    all_broader_usernames = {target[1] for target in all_notify_targets}
+    all_broader_usernames = {target["username"] for target in all_notify_targets}
 
     return list(final_specific_usernames - all_broader_usernames)
 
@@ -291,11 +286,12 @@ def notifier_duplicate_checker(
     :return: True if entry pair is in there (the user is signed up for this language), False if not.
     """
 
-    sql_nc = "SELECT * FROM notify_users WHERE language_code = ? and username = ?"
-    sql_nc_tuple = (language_code, username)
-    cursor_main.execute(sql_nc, sql_nc_tuple)
-    specific_entries = cursor_main.fetchall()
-    return len(specific_entries) > 0  # There already is an entry.
+    cursor_main.execute(
+        "SELECT COUNT(*) AS user_count FROM notify_users WHERE language_code = ? and username = ?",
+        (language_code, username),
+    )
+    specific_entries = cursor_main.fetchone()
+    return specific_entries["user_count"] > 0  # There already is an entry.
 
 
 def notifier_title_cleaner(otitle: str) -> str:
@@ -320,8 +316,7 @@ def notifier_title_cleaner(otitle: str) -> str:
 def notifier_limit_writer(
     username: str,
     language_code: str,
-    cursor_main: Cursor,
-    conn_main: Connection,
+    config: ZiwenConfig,
     num_notifications: int = 1,
 ) -> None:
     """
@@ -339,12 +334,15 @@ def notifier_limit_writer(
     monthly_limit_dictionary = {}
 
     # Fetch the data
-    sql_lw = "SELECT * FROM notify_monthly_limit WHERE username = ?"
-    cursor_main.execute(sql_lw, (username,))
-    user_data = cursor_main.fetchone()
+    config.cursor_main.execute(
+        "SELECT * FROM notify_monthly_limit WHERE username = ?", (username,)
+    )
+    user_data = config.cursor_main.fetchone()
 
     # Parse the user's data. Load it if it exists.
     if user_data is not None:  # There's a record.
+        # TODO: query by col once column type issue is resolved
+        # Also change query from select *
         monthly_limit_dictionary = user_data[1]  # Take the stored dictionary.
         # Convert the string to a proper dictionary.
         monthly_limit_dictionary = eval(monthly_limit_dictionary)
@@ -357,7 +355,9 @@ def notifier_limit_writer(
 
         # Write to the database.
         to_store = (username, str(monthly_limit_dictionary))
-        cursor_main.execute("INSERT INTO notify_monthly_limit VALUES (?, ?)", to_store)
+        config.cursor_main.execute(
+            "INSERT INTO notify_monthly_limit VALUES (?, ?)", to_store
+        )
     else:  # Update an existing one.
         # Attempt to update the dictionary value.
         if language_code in monthly_limit_dictionary:
@@ -367,13 +367,12 @@ def notifier_limit_writer(
 
         # Write to the database.
         to_store = (str(monthly_limit_dictionary), username)
-        update_command = (
-            "UPDATE notify_monthly_limit SET received = ? WHERE username = ?"
+        config.cursor_main.execute(
+            "UPDATE notify_monthly_limit SET received = ? WHERE username = ?", to_store
         )
-        cursor_main.execute(update_command, to_store)
 
     # Commit changes.
-    conn_main.commit()
+    config.conn_main.commit()
 
 
 def notifier_equalizer(
@@ -449,9 +448,7 @@ def notifier_page_translators(
     opermalink: str,
     oauthor: str,
     is_nsfw: bool,
-    reddit: praw.Reddit,
-    cursor_main: Cursor,
-    conn_main: Connection,
+    config: ZiwenConfig,
 ) -> List[str] | None:
     """
     A function (the original purpose Ziwen was written for!) to page up to three users for a post's language.
@@ -470,16 +467,12 @@ def notifier_page_translators(
 
     number_to_page = 5  # How many users we want to page.
 
-    sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
-    cursor_main.execute(sql_lc, (language_code,))
-    page_targets = cursor_main.fetchall()
+    config.cursor_main.execute(
+        "SELECT username FROM notify_users WHERE language_code = ?", (language_code,)
+    )
+    page_targets = config.cursor_main.fetchall()
 
-    page_users_list = []
-
-    for target in page_targets:  # This is a list of tuples.
-        # Get the user name, as the language is [0] (ar, kungming2)
-        username = target[1]
-        page_users_list.append(username)  # Add the username to the list.
+    page_users_list = [target["username"] for target in page_targets]
 
     page_users_list = list(set(page_users_list))  # Remove duplicates
     # Remove the caller if on there
@@ -508,8 +501,8 @@ def notifier_page_translators(
 
         # Send the actual message. Delete the username if an error is encountered.
         try:
-            reddit.redditor(str(target_username)).message(
-                subject_line, message + BOT_DISCLAIMER
+            config.reddit.redditor(str(target_username)).message(
+                subject=subject_line, message=message + BOT_DISCLAIMER
             )
             logger.info(
                 f"Paging: Messaged u/{target_username} for a {language_name} post."
@@ -521,7 +514,7 @@ def notifier_page_translators(
                 f"Paging: Error occurred sending message to u/{target_username}. Removing..."
             )
             # Remove the username from our database.
-            notifier_list_pruner(target_username, reddit, cursor_main, conn_main)
+            notifier_list_pruner(target_username, config)
 
     return page_users_list
 
@@ -686,42 +679,43 @@ def messaging_user_statistics_loader(username: str, cursor_main: Cursor) -> str 
     :return: None if the user has no data (no commands that they called), a sorted table otherwise.
     """
 
-    commands_lines_to_post = []
-    notifications_lines_to_post = []
-    header = "| Command | Times |\n|---------|-------|\n"
-
     # Get commands data.
-    sql_us = "SELECT * FROM total_commands WHERE username = ?"
-    cursor_main.execute(sql_us, (username,))
+    cursor_main.execute(
+        "SELECT commands FROM total_commands WHERE username = ?", (username,)
+    )
     username_commands_data = cursor_main.fetchone()
 
     # Get notifications data.
-    sql_us = "SELECT * FROM notify_monthly_limit WHERE username = ?"
-    cursor_main.execute(sql_us, (username,))
+    cursor_main.execute(
+        "SELECT * FROM notify_monthly_limit WHERE username = ?", (username,)
+    )
     notifications_commands_data = cursor_main.fetchone()
 
+    commands_lines_to_post = []
     # Iterate over commands data.
     if username_commands_data is None:  # There is no data for this user.
         commands_lines_to_post = None
     else:  # There's data. Get the data and format it line-by-line.
-        commands_dictionary = eval(username_commands_data[1])
+        commands_dictionary = eval(username_commands_data["commands"])
         # We only want the stored dict here.
         for key, value in sorted(commands_dictionary.items()):
             command_type = key
             if command_type != "Notifications":  # This is a regular command.
-                if command_type == "`":
+                if command_type == KEYWORDS.back_quote:
                     command_type = "`lookup`"
                 formatted_line = f"| {command_type} | {value} |"
                 commands_lines_to_post.append(formatted_line)
 
+    notifications_lines_to_post = []
     # Iterate over notifications data. Get the dictionary of notifications that were sent.
     if notifications_commands_data is None:
         notifications_lines_to_post = None
     else:  # There's data
+        # TODO: update query and indexing after column is updated
         notification_dict = eval(notifications_commands_data[1])
         for language_code, notification_num in sorted(notification_dict.items()):
-            formatted_line = "| Notifications (`{}`) | {} |".format(
-                language_code, notification_num
+            formatted_line = (
+                f"| Notifications (`{language_code}`) | {notification_num} |"
             )
             # Reform it as a string from a list.
             notifications_lines_to_post.append(formatted_line)
@@ -734,7 +728,9 @@ def messaging_user_statistics_loader(username: str, cursor_main: Cursor) -> str 
         commands_lines_to_post = []
     if notifications_lines_to_post is None:
         notifications_lines_to_post = []
-    return header + "\n".join(commands_lines_to_post + notifications_lines_to_post)
+    return "| Command | Times |\n|---------|-------|\n" + "\n".join(
+        commands_lines_to_post + notifications_lines_to_post
+    )
 
 
 def record_retrieve_error_log() -> str:
@@ -771,38 +767,40 @@ def points_retreiver(username: str, cursor_main: Cursor) -> str:
     :return to_post: A string containing information on how many points the user has received on r/translator.
     """
 
-    recorded_months = []
     recorded_posts = []
     to_post = ""
 
     current_time = time.time()
-    month_string = datetime.datetime.fromtimestamp(current_time).strftime("%Y-%m")
+    month_string = datetime.fromtimestamp(current_time).strftime("%Y-%m")
 
-    sql_s = "SELECT * FROM total_points WHERE username = ? AND month_year = ?"
-    cursor_main.execute(sql_s, (username, month_string))
+    cursor_main.execute(
+        "SELECT points FROM total_points WHERE username = ? AND month_year = ?",
+        (username, month_string),
+    )
     username_month_points_data = cursor_main.fetchall()  # Returns a list of lists.
 
-    sql_un = "SELECT * FROM total_points WHERE username = ?"
-    cursor_main.execute(sql_un, (username,))
+    cursor_main.execute(
+        "SELECT points, oid, month_year FROM total_points WHERE username = ?",
+        (username,),
+    )
     username_all_points_data = cursor_main.fetchall()
 
     # Compile the monthly number of points the user has earned.
-    month_points = sum(data[3] for data in username_month_points_data)
+    month_points = sum(data["points"] for data in username_month_points_data)
     # Compile the total number of points the user has earned.
-    all_points = sum(data[3] for data in username_all_points_data)
-
+    all_points = 0
+    # Compile the total number of posts participated.
+    recorded_posts = set()
+    # Compile the total number of months that have been recorded. .
+    recorded_months = set()
     for data in username_all_points_data:
-        # Compile the total number of posts participated.
-        post_id = data[4]
-        recorded_posts.append(post_id)
-    recorded_posts = list(set(recorded_posts))
+        all_points += data["points"]
+        recorded_posts.add(data["oid"])
+        recorded_months.add(data["month_year"])
+    recorded_months = sorted(recorded_months)
+
     # This is the number of posts the user has participated in.
     recorded_posts_count = len(recorded_posts)
-
-    for data in username_all_points_data:
-        # Compile the total number of months that have been recorded. .
-        recorded_months.append(data[0])
-        recorded_months = sorted(list(set(recorded_months)))
 
     if all_points != 0:  # The user has points listed.
         to_post += (
@@ -815,16 +813,18 @@ def points_retreiver(username: str, cursor_main: Cursor) -> str:
 
     for month in recorded_months:  # Generate rows of data from the points data.
         recorded_month_points = 0
-        scratchpad_posts = []
+        scratchpad_posts = set()
 
-        command = "SELECT * FROM total_points WHERE username = ? AND month_year = ?"
-        cursor_main.execute(command, (username, month))
+        cursor_main.execute(
+            "SELECT points, oid FROM total_points WHERE username = ? AND month_year = ?",
+            (username, month),
+        )
         month_data = cursor_main.fetchall()
         for data in month_data:
-            recorded_month_points += data[3]
-            scratchpad_posts.append(data[4])
+            recorded_month_points += data["points"]
+            scratchpad_posts.add(data["oid"])
 
-        recorded_posts = len(set(scratchpad_posts))
+        recorded_posts = len(scratchpad_posts)
 
         to_post += f"\n{month} | {recorded_month_points} | {recorded_posts}"
     # Add a summary row for the totals.
@@ -843,7 +843,9 @@ def record_activity_csv(
     :param data_tuple: Package of data we want to insert.
     :return:
     """
-    with open(FILE_ADDRESS_ACTIVITY, mode="a", newline="") as csv_file:
+    with open(
+        FILE_ADDRESS_ACTIVITY, mode="a", newline="", encoding="utf-8"
+    ) as csv_file:
         data_writer = csv.writer(
             csv_file, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
         )
@@ -943,21 +945,20 @@ def ziwen_notifier(
             # add the additional people to the notifications list.
             notify_users_list += regional_data
 
-    sql_lc = "SELECT * FROM notify_users WHERE language_code = ?"
-    config.cursor_main.execute(sql_lc, (language_code,))
+    config.cursor_main.execute(
+        "SELECT username FROM notify_users WHERE language_code = ?", (language_code,)
+    )
     notify_targets = config.cursor_main.fetchall()
 
     if len(notify_targets) == 0 and len(notify_users_list) == 0:
         # If there's no one on the list, just continue
         return []
 
-    for target in notify_targets:  # This is a list of tuples.
-        # Get the user name, as the language is [0] (ar, kungming2)
-        username = target[1]
-        notify_users_list.append(username)
+    notify_users_list.extend(target["username"] for target in notify_targets)
 
-    notify_users_list = list(set(notify_users_list))  # Eliminate duplicates
+    notify_users_list = set(notify_users_list)  # Eliminate duplicates
     # Remove the usernames of users already contacted about this post.
+    # TODO do set subtraction instead
     notify_users_list = [x for x in notify_users_list if x not in contacted]
 
     # Code here to equalize data (see function above)
@@ -989,20 +990,17 @@ def ziwen_notifier(
         try:
             message_subject = f"[Notification] New {language_name} post on r/translator"
             config.reddit.redditor(username).message(
-                message_subject, message + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON
+                subject=message_subject,
+                message=message + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON,
             )
             # Record that they have been messaged
-            notifier_limit_writer(
-                username, language_code, config.cursor_main, config.conn_main
-            )
+            notifier_limit_writer(username, language_code, config)
         except praw.exceptions.APIException:  # If the user deleted their account...
             logger.info(
                 f"Notifier: An error occured while sending a message to u/{username}. Removing..."
             )
             # Remove the username from our database.
-            notifier_list_pruner(
-                username, config.reddit, config.cursor_main, config.conn_main
-            )
+            notifier_list_pruner(username, config)
 
     # Record to a log how long it took.
     messaging_mins = (time.time() - messaging_start) / 60
@@ -1173,16 +1171,16 @@ def ziwen_messages(config: ZiwenConfig) -> None:
 
         elif "status" in msubject:
             logger.info(f"Messages: New status request from u/{mauthor}.")
-            final_match_codes = []
 
             # We try to retrieve the languages the user is subscribed to.
-            sql_stat = "SELECT * FROM notify_users WHERE username = ?"
-            config.cursor_main.execute(sql_stat, (mauthor,))
+            config.cursor_main.execute(
+                "SELECT language_code FROM notify_users WHERE username = ?", (mauthor,)
+            )
             # Returns a list of lists w/ the language code & the username
             all_subscriptions = config.cursor_main.fetchall()
-            for subscription in all_subscriptions:
-                # We only want the language codes (don't need the username).
-                final_match_codes.append(subscription[0])
+            final_match_codes = [
+                subscription["language_code"] for subscription in all_subscriptions
+            ]
 
             # User is not subscribed to anything.
             if len(final_match_codes) == 0:
@@ -1191,9 +1189,8 @@ def ziwen_messages(config: ZiwenConfig) -> None:
                 final_match_names = []
                 for code in final_match_codes:  # Convert the codes into names
                     converted_result = converter(code)  # This will return a tuple.
-                    match_name = (
-                        converted_result.language_name
-                    )  # Should get the name from each
+                    # Should get the name from each
+                    match_name = converted_result.language_name
                     if code == "meta":
                         match_name = "Meta"
                     elif code == "community":
@@ -1268,20 +1265,17 @@ def ziwen_messages(config: ZiwenConfig) -> None:
                 f"Messages: New username removal message from moderator u/{mauthor}."
             )
 
-            subscribed_codes = []
-
             # Get the username of the user we want to add to the database.
             remove_username = mbody.split("USERNAME:", 1)[1].strip()
 
             # We try to retrieve the languages the user is subscribed to.
             config.cursor_main.execute(
-                "SELECT * FROM notify_users WHERE username = ?", (remove_username,)
+                "SELECT language_code FROM notify_users WHERE username = ?",
+                (remove_username,),
             )
-            # Returns a list of lists with both the code and the username.
-            all_subscriptions = config.cursor_main.fetchall()
-            for subscription in all_subscriptions:
-                # We only want the language codes (no need the username).
-                subscribed_codes.append(subscription[0])
+            subscribed_codes = [
+                subscription["language_code"] for subscription in all_subscriptions
+            ]
 
             # Actually delete the username from database.
             notifier_language_list_editer([], remove_username, config, "purge")

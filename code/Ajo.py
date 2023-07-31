@@ -874,14 +874,14 @@ def ajo_loader(ajo_id, config: ZiwenConfig) -> Ajo | None:
     """
 
     # Checks the database
-    config.cursor_ajo.execute("SELECT * FROM local_database WHERE id = ?", (ajo_id,))
+    config.cursor_ajo.execute("SELECT ajo FROM local_database WHERE id = ?", (ajo_id,))
     new_ajo = config.cursor_ajo.fetchone()
 
     if new_ajo is None:  # We couldn't find a stored dict for it.
         logger.debug("ajo_loader: No local Ajo stored.")
         return None
     # We do have stored data.
-    new_ajo_dict = eval(new_ajo[2])  # We only want the stored dict here.
+    new_ajo_dict = eval(new_ajo["ajo"])  # We only want the stored dict here.
     new_ajo = Ajo(new_ajo_dict, config.post_templates)
     logger.debug("ajo_loader: Loaded Ajo from local database.")
     return new_ajo  # Note: the Ajo class can build itself from this dict.
@@ -909,9 +909,9 @@ def ajo_defined_multiple_flair_assessor(flairtext):
             # There's a difference - maybe a symbol
             final_language_codes.update(
                 {
-                    language_code: statusKeywordsTuple.name
-                    for statusKeywordsTuple in STATUS_KEYWORDS.values()
-                    if statusKeywordsTuple.symbol in language
+                    language_code: status_keywords_tuple.name
+                    for status_keywords_tuple in STATUS_KEYWORDS.values()
+                    if status_keywords_tuple.symbol in language
                 }
             )
         else:  # No difference, must be untranslated.
@@ -950,9 +950,9 @@ def ajo_defined_multiple_flair_former(flairdict) -> str:
         language_code = iso639_3_to_iso639_1(language) or language  # No ISO 639-1 code
 
         symbol = ""
-        for statusKeywordsTuple in STATUS_KEYWORDS.values():
-            if statusKeywordsTuple.symbol == status:
-                symbol = statusKeywordsTuple.name
+        for status_keywords_tuple in STATUS_KEYWORDS.values():
+            if status_keywords_tuple.symbol == status:
+                symbol = status_keywords_tuple.name
                 break
 
         output_text.append(f"{language_code.upper()}{symbol}")

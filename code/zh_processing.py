@@ -374,10 +374,7 @@ def zh_character(character, zw_useragent: Dict[str, str]):
                 "# [{0}](https://en.wiktionary.org/wiki/{0}#Chinese)".format(character)
             )
             lookup_line_1 += "\n\nLanguage | Pronunciation\n---------|--------------\n"
-            lookup_line_1 += "**Mandarin** | *{}*\n**Cantonese** | *{}*"
-            lookup_line_1 = lookup_line_1.format(
-                cmn_pronunciation, yue_pronunciation[:-1]
-            )
+            lookup_line_1 += f"**Mandarin** | *{cmn_pronunciation}*\n**Cantonese** | *{yue_pronunciation[:-1]}*"
         else:
             logger.debug(
                 f"ZH-Character: The two versions of {character} are *not* identical."
@@ -388,10 +385,7 @@ def zh_character(character, zw_useragent: Dict[str, str]):
                 )
             )
             lookup_line_1 += "\n\nLanguage | Pronunciation\n---------|--------------\n"
-            lookup_line_1 += "**Mandarin** | *{}*\n**Cantonese** | *{}*"
-            lookup_line_1 = lookup_line_1.format(
-                cmn_pronunciation, yue_pronunciation[:-1]
-            )
+            lookup_line_1 += f"**Mandarin** | *{cmn_pronunciation}*\n**Cantonese** | *{yue_pronunciation[:-1]}*"
 
         # Hokkien and Hakka Data
         min_hak_data = zh_character_min_hak(tradify(character), zw_useragent)
@@ -521,6 +515,7 @@ def zh_character(character, zw_useragent: Dict[str, str]):
     return lookup_line_1 + lookup_line_2
 
 
+# pylint: disable=C0103
 def zh_word_decode_pinyin(s: str) -> str:
     """
     Function to convert numbered pin1 yin1 into proper tone marks. CC-CEDICT's format uses numerical pinyin.
@@ -579,6 +574,9 @@ def zh_word_decode_pinyin(s: str) -> str:
     result += t
 
     return result
+
+
+# pylint: enable=C0103
 
 
 # TODO handle overlap with zh_word_buddhist_dictionary_search
@@ -683,8 +681,8 @@ def zh_word_cccanto_search(cantonese_word: str) -> None | Dict[str, str]:
         formatted_line = '\n\n**Cantonese Meanings**: "{}."'.format(
             "; ".join(keywords["meanings"])
         )
-        formatted_line += " ([CC-Canto](https://cantonese.org/search.php?q={}))".format(
-            cantonese_word
+        formatted_line += (
+            f" ([CC-Canto](https://cantonese.org/search.php?q={cantonese_word}))"
         )
         for i in range(0, 9):
             keywords["jyutping"] = keywords["jyutping"].replace(
@@ -764,9 +762,6 @@ def zh_word_alt_romanization(pinyin_string: str) -> Tuple[str, str]:
     :return: A tuple. Yale romanization form first, then the Wade-Giles version.
     """
 
-    yale_list = []
-    wadegiles_list = []
-
     # Get the corresponding pronunciations into a dictonary.
     corresponding_dict = {}
     with open(FILE_ADDRESS_ZH_ROMANIZATION, encoding="utf-8") as csv_file:
@@ -775,29 +770,25 @@ def zh_word_alt_romanization(pinyin_string: str) -> Tuple[str, str]:
             pinyin_p, yale_p, wadegiles_p = row
             corresponding_dict[pinyin_p] = [yale_p.strip(), wadegiles_p.strip()]
 
-    # Divide the string into syllables
-    syllables = pinyin_string.split(" ")
-
+    yale_list = []
+    wadegiles_list = []
     # Process each syllable.
-    for syllable in syllables:
+    for syllable in pinyin_string.split(" "):
         tone = syllable[-1]
         syllable = syllable[:-1].lower()
 
+        yale_equiv = f"{corresponding_dict[syllable][0]}"
+        wadegiles_equiv = f"{corresponding_dict[syllable][1]}"
+
         # Make exception for null tones.
         if tone != "5":  # Add tone as superscript
-            yale_equiv = f"{corresponding_dict[syllable][0]}^({tone})"
-            wadegiles_equiv = f"{corresponding_dict[syllable][1]}^({tone})"
-        else:  # Null tone, no need to add a number.
-            yale_equiv = f"{corresponding_dict[syllable][0]}"
-            wadegiles_equiv = f"{corresponding_dict[syllable][1]}"
+            yale_equiv += f"^({tone})"
+            wadegiles_equiv += f"^({tone})"
         yale_list.append(yale_equiv)
         wadegiles_list.append(wadegiles_equiv)
 
     # Reconstitute the equivalent parts into a string.
-    yale_post = " ".join(yale_list)
-    wadegiles_post = " ".join(wadegiles_list)
-
-    return yale_post, wadegiles_post
+    return " ".join(yale_list), " ".join(wadegiles_list)
 
 
 def zh_word_chengyu(chengyu: str) -> str | None:

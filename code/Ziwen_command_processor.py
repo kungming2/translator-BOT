@@ -41,8 +41,6 @@ from code.Ziwen_helper import (
     lookup_matcher,
     record_to_wiki,
 )
-from sqlite3 import Connection, Cursor
-from typing import Dict
 
 import googlesearch
 import praw
@@ -259,7 +257,7 @@ class ZiwenCommandProcessor:
             )
             try:
                 self.reddit.redditor(self.oauthor).message(
-                    translated_subject, translated_body
+                    subject=translated_subject, message=translated_body
                 )
             except praw.exceptions.APIException:  # User doesn't allow for messages.
                 pass
@@ -304,14 +302,15 @@ class ZiwenCommandProcessor:
         # Now we check the database to see if it has data.
         if len(language_code) != 0:  # There's a valid code here.
             logger.info(f"reference_search Code: {language_lookup_code}")
-            sql_command = "SELECT * FROM language_cache WHERE language_code = ?"
-            self.cursor_main.execute(sql_command, (language_lookup_code,))
+            self.cursor_main.execute(
+                "SELECT language_data FROM language_cache WHERE language_code = ?",
+                (language_lookup_code,),
+            )
             reference_results = self.cursor_main.fetchone()
 
-            if (
-                reference_results is not None
-            ):  # We found a cached value for this language
-                reference_cached_info = reference_results[1]
+            if reference_results is not None:
+                # We found a cached value for this language
+                reference_cached_info = reference_results["language_data"]
                 logger.info(
                     f"Reference: Retrieved the cached reference information for {language_lookup_code}."
                 )
@@ -375,9 +374,7 @@ class ZiwenCommandProcessor:
                     self.opermalink,
                     self.oauthor,
                     is_nsfw,
-                    self.reddit,
-                    self.cursor_main,
-                    self.conn_main,
+                    self.config,
                 )
                 if paged_users is not None:
                     # Add the notified users to the list.
@@ -439,7 +436,8 @@ class ZiwenCommandProcessor:
             subject_line = "[Notification] About your !restore request"
             try:
                 self.reddit.redditor(self.pauthor).message(
-                    subject_line, MSG_RESTORE_TEXT_FAIL.format(self.opermalink)
+                    subject=subject_line,
+                    message=MSG_RESTORE_TEXT_FAIL.format(self.opermalink),
                 )
             except praw.exceptions.APIException:
                 pass
@@ -454,8 +452,8 @@ class ZiwenCommandProcessor:
         subject_line = "[Notification] Restored text for your !restore request"
         try:
             self.reddit.redditor(self.pauthor).message(
-                subject_line,
-                MSG_RESTORE_TEXT_TEMPLATE.format(self.opermalink, original_text)
+                subject=subject_line,
+                message=MSG_RESTORE_TEXT_TEMPLATE.format(self.opermalink, original_text)
                 + BOT_DISCLAIMER,
             )
         except praw.exceptions.APIException:
@@ -581,7 +579,6 @@ class ZiwenCommandProcessor:
                     oflair_new=self.oajo.language_name,
                     user=self.pauthor,
                     reddit=self.reddit,
-                    subreddit=CORRECTED_SUBREDDIT,
                 )
         else:  # This is an !identify command for multiple defined languages (e.g. !identify:ru+es+ja
             self.oajo.set_defined_multiple(match)
@@ -696,7 +693,7 @@ class ZiwenCommandProcessor:
 
         # This section allows for the deletion of previous responses if the content changes.
         komento_data = komento_analyzer(
-            self.reddit, komento_submission_from_comment(self.oid)
+            self.reddit, komento_submission_from_comment(self.reddit, self.oid)
         )
         if "bot_lookup_correspond" in komento_data:
             # This may have had a comment before.
@@ -921,8 +918,8 @@ class ZiwenCommandProcessor:
         )
         try:
             self.reddit.redditor(self.oauthor).message(
-                "A message from r/translator regarding your translation request",
-                total_message + BOT_DISCLAIMER,
+                subject="A message from r/translator regarding your translation request",
+                message=total_message + BOT_DISCLAIMER,
             )
         except praw.exceptions.APIException:
             pass
@@ -1159,7 +1156,6 @@ class ZiwenCommandProcessor:
             s_or_i=True,
             oflair_new="",
             reddit=self.reddit,
-            subreddit=CORRECTED_SUBREDDIT,
         )
 
     def process_set(self):
@@ -1208,5 +1204,5 @@ class ZiwenCommandProcessor:
         # Message the mod who called it.
         set_msg = f"The [post]({self.opermalink}) has been set to the language code `{language_code}` (`{language_name}`)."
         self.reddit.redditor(self.pauthor).message(
-            "[Notification] !set command successful", set_msg
+            subject="[Notification] !set command successful", message=set_msg
         )

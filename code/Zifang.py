@@ -199,7 +199,7 @@ def closeout(list_posts: List[praw.reddit.models.Submission]) -> None:
         closeout_message += ZF_DISCLAIMER
 
         try:
-            post.author.message(subject_line, closeout_message)
+            post.author.message(subject=subject_line, message=closeout_message)
         except praw.exceptions.APIException:
             pass
         else:
