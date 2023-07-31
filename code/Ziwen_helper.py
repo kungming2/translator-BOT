@@ -1,7 +1,7 @@
 import calendar
 import re
 import sys
-import time
+from time import time
 from code._config import (
     FILE_ADDRESS_MECAB,
     KEYWORDS,
@@ -127,8 +127,7 @@ class ZiwenConfig:
 
         # Define the time parameters (24 hours earlier from present)
         most_recent = []
-        current_vaqt = int(time.time())
-        current_vaqt_day_ago = current_vaqt - 86400
+        current_time_day_ago = int(time()) - 86400
 
         # 100 should be sufficient for the last day, assuming a monthly total of 3000 posts.
         posts = list(self.subreddit_helper.new(limit=100))
@@ -144,7 +143,7 @@ class ZiwenConfig:
                 continue
 
             # If the time of the post is after our limit, add it to our list.
-            if ocreated > current_vaqt_day_ago and oauthor != "translator-BOT":
+            if ocreated > current_time_day_ago and oauthor != "translator-BOT":
                 most_recent.append(oauthor)
 
         # Return the list
@@ -282,7 +281,7 @@ class ZiwenConfig:
         self.cached_multipliers.update({language_name: final_point_value})
 
         # Write data to the cache so that it can be retrieved later.
-        current_time = time.time()
+        current_time = time()
         month_string = datetime.fromtimestamp(current_time).strftime("%Y-%m")
         insert_data = (month_string, language_name, final_point_value)
         self.cursor_cache.execute(
@@ -324,7 +323,7 @@ class ZiwenConfig:
         # It will transform the database info into a dictionary.
 
         # Get the year-month string.
-        current_time = time.time()
+        current_time = time()
         month_string = datetime.fromtimestamp(current_time).strftime("%Y-%m")
 
         # Select from the database the current months data if it exists.
@@ -617,7 +616,7 @@ def komento_analyzer(
                 claimer = str(claimer.group(0)).strip()
                 results["claim_user"] = claimer
 
-                current_c_time = time.time()
+                current_c_time = time()
                 claimed_time = cbody.split(" at ")[1]
                 claimed_time = claimed_time.split(" UTC")[0]
                 claimed_date = claimed_time.split(" ")[0]
@@ -635,7 +634,7 @@ def komento_analyzer(
                     num_year, num_month, num_day, num_hour, num_min, num_sec
                 )
                 # Returns the time in UTC.
-                utc_timestamp = calendar.timegm(comment_datetime.timetuple())
+                utc_timestamp = calendar.timegm(comment_datetimetuple())
                 time_difference = int(current_c_time - utc_timestamp)
                 # How long the thing has been claimed for.
                 results["claim_time_diff"] = time_difference
