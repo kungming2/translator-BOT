@@ -1001,7 +1001,7 @@ def ajo_defined_multiple_comment_parser(pbody, language_names_list):
 
 
 def ajo_retrieve_script_code(script_name: str) -> str | None:
-    with open(FILE_ADDRESS_ISO_ALL, encoding="utf-8") as csv_file:
+    with open(FILE_ADDRESS_ISO_ALL, encoding="utf-8-sig") as csv_file:
         csv_reader = csv.DictReader(csv_file, delimiter=",")
         for row in csv_reader:
             # This is a script code (the others are 3 characters).

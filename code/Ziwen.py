@@ -47,7 +47,7 @@ from code._responses import (
 )
 from code.Ajo import Ajo, ajo_loader, ajo_writer
 from code.notifier import record_activity_csv, ziwen_messages, ziwen_notifier
-from code.zh_processing import zh_character, zh_word
+from code.zh_processing import ZhProcessor
 from code.Ziwen_command_processor import ZiwenCommandProcessor
 from code.Ziwen_helper import (
     CLAIM_PERIOD,
@@ -1465,12 +1465,13 @@ def cc_ref() -> None:
                     tokenized_list.append(match)
             for match in tokenized_list:
                 match_length = len(str(match))
+                processor = ZhProcessor(config.zw_useragent)
                 if match_length == 1:
-                    to_post = zh_character(match, config.zw_useragent)
+                    to_post = processor.zh_character(match)
                     post_content.append(to_post)
                 elif match_length >= 2:
                     find_word = str(match)
-                    post_content.append(zh_word(find_word, config.zw_useragent))
+                    post_content.append(processor.zh_word(find_word))
 
             post_content = "\n\n".join(post_content)
             if len(post_content) > 10000:  # Truncate only if absolutely necessary.

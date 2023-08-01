@@ -30,7 +30,7 @@ from code.notifier import (
     notifier_page_translators,
     ziwen_notifier,
 )
-from code.zh_processing import zh_character, zh_word
+from code.zh_processing import ZhProcessor
 from code.Ziwen_helper import (
     MESSAGES_OKAY,
     ZiwenConfig,
@@ -633,12 +633,11 @@ class ZiwenCommandProcessor:
 
     def chinese_matches(self, match, post_content, _key):
         match_length = len(match)
+        processor = ZhProcessor(self.zw_useragent)
         if match_length == 1:  # Single-character
-            to_post = zh_character(match, self.zw_useragent)
-            post_content.append(to_post)
+            post_content.append(processor.zh_character(match))
         elif match_length >= 2:  # A word or a phrase
-            find_word = str(match)
-            post_content.append(zh_word(find_word, self.zw_useragent))
+            post_content.append(processor.zh_word(str(match)))
 
         # Create a randomized wait time between requests.
         wait_sec = random.randint(3, 12)
@@ -648,11 +647,9 @@ class ZiwenCommandProcessor:
         match_length = len(str(match))
         processor = JapaneseProcessor(self.zw_useragent)
         if match_length == 1:
-            to_post = processor.ja_character(match)
-            post_content.append(to_post)
+            post_content.append(processor.ja_character(match))
         elif match_length > 1:
-            find_word = str(match)
-            post_content.append(processor.ja_word(find_word))
+            post_content.append(processor.ja_word(str(match)))
 
     def korean_matches(self, match, post_content, _key):
         find_word = str(match)

@@ -156,10 +156,10 @@ def lang_code_search(search_term: str, script_search: bool):
     master_dict = {}
     is_script = len(search_term) == 4
 
-    with open(FILE_ADDRESS_ISO_ALL, encoding="utf-8") as csv_file:
+    with open(FILE_ADDRESS_ISO_ALL, encoding="utf-8-sig") as csv_file:
         csv_reader = csv.DictReader(csv_file, delimiter=",")
         for row in csv_reader:
-            master_dict[row["\ufeffISO 639-3"]] = {
+            master_dict[row["ISO 639-3"]] = {
                 "name": row["Language Name"],
                 "name_lower": row["Language Name"].lower(),
                 "alt_name": row["Alternate Names"].lower(),
