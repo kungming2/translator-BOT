@@ -163,18 +163,23 @@ class Ajo:
                             oflair_text = reddit_submission.link_flair_text
 
             if title_data is not None:
-                self.direction = title_data[8]
+                self.direction = title_data.direction
 
                 # The source language data is converted into a list. If it's just one, let's make it a string.
                 # Take the only item
                 self.original_source_language_name = (
-                    title_data[0][0] if len(title_data[0]) == 1 else title_data[0]
+                    title_data.source_languages[0]
+                    if len(title_data.source_languages) == 1
+                    else title_data.source_languages
                 )
                 self.original_target_language_name = (
-                    title_data[1][0] if len(title_data[1]) == 1 else title_data[1]
+                    title_data.target_languages[0]
+                    if len(title_data.target_languages) == 1
+                    else title_data.target_languages
                 )
-                if len(title_data[4]) != 0:  # Were we able to determine a title?
-                    self.title = title_data[4]
+                if len(title_data.actual_title) != 0:
+                    # Were we able to determine a title?
+                    self.title = title_data.actual_title
                     self.title_original = reddit_submission.title
                 else:
                     self.title = self.title_original = reddit_submission.title
@@ -186,9 +191,12 @@ class Ajo:
                     country_suffix_name = country_suffix_name.group(1)
                     # Get the code (e.g. CH for Swiss)
                     self.country_code = country_converter(country_suffix_name)[0]
-                elif title_data[7] is not None and len(title_data[7]) <= 6:
+                elif (
+                    title_data.language_country is not None
+                    and len(title_data.language_country) <= 6
+                ):
                     # There is included code from title routine
-                    country_suffix = title_data[7].split("-", 1)[1]
+                    country_suffix = title_data.language_country.split("-", 1)[1]
                     self.country_code = country_suffix
                 else:
                     self.country_code = None
@@ -292,7 +300,7 @@ class Ajo:
                         )  # Append the names of the languages.
                 else:
                     # Get the languages that this is for. Will be a list or None.
-                    multiple_languages = title_data[6]
+                    multiple_languages = title_data.notify_languages
 
                 # Handle REGULAR MULTIPLE
                 if multiple_languages is None:  # This is a catch-all multiple case
@@ -481,10 +489,8 @@ class Ajo:
             if self.language_history[-1] != self.language_name:
                 # Add the new language name to the history.
                 self.language_history.append(self.language_name)
-        except (
-            AttributeError,
-            IndexError,
-        ):  # There was no language_history defined... Let's create it.
+        except (AttributeError, IndexError):
+            # There was no language_history defined... Let's create it.
             self.language_history = [old_language_name, self.language_name]
 
         self.is_identified = new_is_identified
@@ -568,10 +574,8 @@ class Ajo:
             if self.language_history[-1] != self.language_name:
                 # Add the new language name to the history.
                 self.language_history.append("Multiple Languages")
-        except (
-            AttributeError,
-            IndexError,
-        ):  # There was no language_history defined... Let's create it.
+        except (AttributeError, IndexError):
+            # There was no language_history defined... Let's create it.
             self.language_history = [old_language_name, "Multiple Languages"]
 
     def set_time(self, status: str, moment: int) -> None:

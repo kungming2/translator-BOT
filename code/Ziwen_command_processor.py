@@ -912,7 +912,6 @@ class ZiwenCommandProcessor:
         if not css_check(self.oflair_css):
             # Basic check to see if this is something that can be acted on.
             return
-
         total_message = MSG_MISSING_ASSETS.format(
             oauthor=self.oauthor, opermalink=self.opermalink
         )
@@ -1115,8 +1114,6 @@ class ZiwenCommandProcessor:
             # Check if user is a mod or the OP.
             self.oajo.reset(self.otitle)
             logger.info("Bot: > Reset everything for the designated post.")
-        else:
-            return
 
     # !long command, for mods to mark a post as long for translators.
     def process_long(self):

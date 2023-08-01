@@ -263,7 +263,7 @@ class ZiwenConfig:
         except IndexError:
             # There's a page but there is something wrong with data entered.
             logger.debug("Points determiner: There was a second error.")
-            total_percent = float(1)
+            total_percent = 1.0
 
         # Calculate the point multiplier.
         # The precise formula here is: (1/percentage)*35

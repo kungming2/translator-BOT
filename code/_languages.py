@@ -6,7 +6,7 @@ import csv
 import itertools
 import os
 import re
-from code._config import KEYWORDS, SCRIPT_DIRECTORY
+from code._config import KEYWORDS, SCRIPT_DIRECTORY, logger
 from code._language_consts import (
     APP_WORDS,
     COUNTRY_LIST,
@@ -981,13 +981,13 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
 
     if "]" not in title and "[" not in title and re.match(r"\((.+(>| to ).+)\)", title):
         # This is for cases where we have no square brackets but we have a > or " to " between parantheses instead.
-        # print("Replacing parantheses...")
+        # logger.info("Replacing parantheses...")
         # We only want to replace the first occurence.
         title = title.replace("(", "[", 1)
         title = title.replace(")", "]", 1)
     elif "]" not in title and "[" not in title and re.match(r"{(.+(>| to ).+)}", title):
         # This is for cases where we have no square brackets but we have a > or " to " between curly braces instead.
-        # print("Replacing braces...")
+        # logger.info("Replacing braces...")
         # We only want to replace the first occurence.
         title = title.replace("{", "[", 1)
         title = title.replace("}", "]", 1)
@@ -1100,8 +1100,8 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
         )
 
     if display_process:
-        print("\n## Title as Processed:")
-        print(title)
+        logger.info("\n## Title as Processed:")
+        logger.info(title)
 
     if ">" in title:
         source_language = title.split(">")[0]
@@ -1130,9 +1130,9 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
         if x not in ENGLISH_2_WORDS and x not in ENGLISH_3_WORDS
     ]
 
-    if display_process is True:
-        print("\n## Source Language Strings:")
-        print(source_language)
+    if display_process:
+        logger.info("\n## Source Language Strings:")
+        logger.info(source_language)
 
     d_source_languages = []  # Account for misspellings
     for language in source_language:
@@ -1150,9 +1150,9 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
 
     processed_title = title
 
-    if display_process is True:
-        print("\n## Final Determined Source Languages:")
-        print(d_source_languages)
+    if display_process:
+        logger.info("\n## Final Determined Source Languages:")
+        logger.info(d_source_languages)
 
     # Start processing TARGET languages
     replace_chars = ",/+]).:"
@@ -1185,9 +1185,9 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
         if x not in ENGLISH_2_WORDS and x not in ENGLISH_3_WORDS
     ]
 
-    if display_process is True:
-        print("\n## Target Language Strings:")
-        print(target_language)
+    if display_process:
+        logger.info("\n## Target Language Strings:")
+        logger.info(target_language)
 
     d_target_languages = []  # Account for misspellings
 
@@ -1210,9 +1210,9 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
     ):
         d_target_languages.remove("English")
 
-    if display_process is True:
-        print("\n## Final Determined Target Languages:")
-        print(d_target_languages)
+    if display_process:
+        logger.info("\n## Final Determined Target Languages:")
+        logger.info(d_target_languages)
 
     both_test_languages = both_non_english_detector(
         d_source_languages, d_target_languages
@@ -1336,7 +1336,7 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
                     d_source_languages = [convert(language_country_code).language_name]
                     final_css = language_country_code  # Change it to the ISO 639-3 code
                     # final_css_text = d_source_languages[0]
-                    # print(d_source_languages)
+                    # logger.info(d_source_languages)
                 elif (
                     "English" not in d_target_languages and language_country is not None
                 ):
@@ -1357,7 +1357,7 @@ def title_format(title: str, display_process: bool = False) -> TitleTuple:
                     # This is also assuming English is the target language.
                     d_target_languages = [convert(language_country_code).language_name]
                     final_css = language_country_code  # Change it to the ISO 639-3 code
-                    # print(d_target_languages)
+                    # logger.info(d_target_languages)
                 elif (
                     "English" not in d_source_languages and language_country is not None
                 ):
@@ -1646,14 +1646,14 @@ def main_posts_filter(otitle: str):
         """
         otitle = bad_title_reformat(otitle)
         if "[Unknown > English]" in otitle:  # The title was too generic, we ain't doing it.
-            print("> Filtered a post out due to incorrect title format. content_rule #1")
+            logger.info("> Filtered a post out due to incorrect title format. content_rule #1")
             post_okay = False
         """
 
         if not any(keyword in otitle.lower() for keyword in mandatory_keywords):
             # Try again
             filter_reason = "1"
-            print(
+            logger.info(
                 f"[L] Main_Posts_Filter: > Filtered a post with an incorrect title format. Rule: #{filter_reason}"
             )
             post_okay = False
@@ -1664,7 +1664,7 @@ def main_posts_filter(otitle: str):
         if not any(phrase in otitle.lower()[:25] for phrase in to_phrases_keywords):
             # This means the "to LANGUAGE" part is probably all the way at the end. Take it out.
             filter_reason = "1A"
-            print(
+            logger.info(
                 f"[L] Main_Posts_Filter: > Filtered a post with an incorrect title format. Rule: #{filter_reason}"
             )
             post_okay = False  # Since it's a bad post title, we don't need to process it anymore.
@@ -1683,13 +1683,13 @@ def main_posts_filter(otitle: str):
             if listed_languages is None or len(listed_languages) == 0:
                 filter_reason = "1B"
                 post_okay = False
-                print(
+                logger.info(
                     f"[L] Main_Posts_Filter: > Filtered a post with no valid language. Rule: #{filter_reason}"
                 )
     if ">" in otitle and "]" not in otitle and ">" not in otitle[0:50]:
         # If people tack on the languages as an afterthought, it can be hard to process.
         filter_reason = "2"
-        print(
+        logger.info(
             f"[L] Main_Posts_Filter: > Filtered a post out due to incorrect title format. Rule: #{filter_reason}"
         )
         post_okay = False
