@@ -473,6 +473,7 @@ class JapaneseProcessor:
         logger.info(f"JA-Name: '{name}' is a Japanese name. Returned search results.")
         return to_post
 
+    # doesn't work any more
     def __ja_word_yojijukugo(self, yojijukugo) -> str | None:
         """
         A newer rewrite of the yojijukugo function that has been changed to match the zh_word_chengyu function.

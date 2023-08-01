@@ -46,7 +46,7 @@ from code._responses import (
     MSG_SHORT_THANKS_TRANSLATED,
 )
 from code.Ajo import Ajo, ajo_loader, ajo_writer
-from code.notifier import record_activity_csv, ziwen_messages, ziwen_notifier
+from code.notifier import record_activity_csv, ziwen_messages, ZiwenNotifier
 from code.zh_processing import ZhProcessor
 from code.Ziwen_command_processor import ZiwenCommandProcessor
 from code.Ziwen_helper import (
@@ -847,8 +847,8 @@ def ziwen_posts() -> None:
 
             # We want to exclude the Identification Threads
             if "Identification Thread" not in otitle:
-                ziwen_notifier(
-                    suggested_css_text, otitle, opermalink, oauthor, False, config
+                ZiwenNotifier(config).ziwen_notifier(
+                    suggested_css_text, otitle, opermalink, oauthor, False
                 )
 
             continue  # Then exit.
@@ -999,13 +999,12 @@ def ziwen_posts() -> None:
                     for notification in multiple_notifications:
                         # This is the language name for consistency
                         multiple_language_text = convert(notification).language_name
-                        contacted = ziwen_notifier(
+                        contacted = ZiwenNotifier(config).ziwen_notifier(
                             multiple_language_text,
                             otitle,
                             opermalink,
                             oauthor,
                             False,
-                            config,
                         )
                     if final_css_class == "multiple":
                         # We wanna leave an advisory comment if it's a defined multiple
@@ -1015,7 +1014,7 @@ def ziwen_posts() -> None:
                     # there is a specific subcategory for us to look at (ar-LB, unknown-cyrl) etc
                     # The notifier routine will be able to make sense of the hyphenated code.
                     # Now we notify people who are signed up on the list.
-                    contacted = ziwen_notifier(
+                    contacted = ZiwenNotifier(config).ziwen_notifier(
                         suggested_css_text
                         if specific_sublanguage is None
                         else specific_sublanguage,
@@ -1023,7 +1022,6 @@ def ziwen_posts() -> None:
                         opermalink,
                         oauthor,
                         False,
-                        config,
                     )
 
             # If it's an unknown post, add an informative comment.

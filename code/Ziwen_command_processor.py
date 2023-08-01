@@ -28,7 +28,7 @@ from code.ja_processing import JapaneseProcessor
 from code.notifier import (
     notifier_page_multiple_detector,
     notifier_page_translators,
-    ziwen_notifier,
+    ZiwenNotifier,
 )
 from code.zh_processing import ZhProcessor
 from code.Ziwen_helper import (
@@ -591,13 +591,12 @@ class ZiwenCommandProcessor:
             # Just a check that we're not sending notifications AGAIN if the identified language is the same as orig
             # This makes sure that they're different languages. So !identify:Chinese on Chinese won't send messages.
             if o_language_name != language_name and MESSAGES_OKAY:
-                contacted = ziwen_notifier(
+                contacted = ZiwenNotifier(self.config).ziwen_notifier(
                     f"unknown-{language_code}" if match_script else language_name,
                     self.otitle,
                     self.opermalink,
                     self.oauthor,
                     True,
-                    self.config,
                 )
                 # Notify people on the list if the post hasn't already been marked as translated
                 # no use asking people to see something that's translated

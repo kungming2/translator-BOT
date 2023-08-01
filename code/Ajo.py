@@ -141,7 +141,9 @@ class Ajo:
                         self.script_name = (
                             oflair_text
                         ) = reddit_submission.link_flair_text.split("(")[0].strip()
-                        self.script_code = ajo_retrieve_script_code(self.script_name)
+                        self.script_code = self.__ajo_retrieve_script_code(
+                            self.script_name
+                        )
                     else:
                         self.is_script = False
                         self.script_name = self.script_code = None
@@ -343,7 +345,9 @@ class Ajo:
                     # Get just the codes
                     actual_list = reddit_submission.link_flair_text.split("[")[1][:-1]
                     # Pass it to dictionary constructor
-                    self.status = ajo_defined_multiple_flair_assessor(actual_list)
+                    self.status = self.__ajo_defined_multiple_flair_assessor(
+                        actual_list
+                    )
             else:
                 self.status = "untranslated"
 
@@ -360,6 +364,46 @@ class Ajo:
                 self.is_bot_crosspost = False
         self.output_oflair_css = None
         self.output_oflair_text = None
+
+    def __ajo_retrieve_script_code(self, script_name: str) -> str | None:
+        with open(FILE_ADDRESS_ISO_ALL, encoding="utf-8-sig") as csv_file:
+            csv_reader = csv.DictReader(csv_file, delimiter=",")
+            for row in csv_reader:
+                # This is a script code (the others are 3 characters).
+                if len(row["ISO 639-3"]) == 4 and script_name == row["Language Name"]:
+                    return row["ISO 639-3"]
+
+    def __ajo_defined_multiple_flair_assessor(flairtext):
+        """
+        A routine that evaluates a defined multiple flair text and its statuses as a dictionary.
+        It can make sense of the symbols that are associated with various states of a post.
+
+        :param flairtext: The flair text of a defined multiple post. (e.g. `Multiple Languages [CS, DE✔, HU✓, IT, NL✔]`)
+        :return final_language_codes: A dictionary keyed by language and their respective states (translated, claimed, etc)
+        """
+
+        final_language_codes = {}
+        flairtext = flairtext.lower()
+
+        languages_list = flairtext.split(", ")
+
+        for language in languages_list:
+            # Get just the language code.
+            language_code = " ".join(re.findall("[a-zA-Z]+", language))
+
+            if len(language_code) != len(language):
+                # There's a difference - maybe a symbol
+                final_language_codes.update(
+                    {
+                        language_code: status_keywords_tuple.name
+                        for status_keywords_tuple in STATUS_KEYWORDS.values()
+                        if status_keywords_tuple.symbol in language
+                    }
+                )
+            else:  # No difference, must be untranslated.
+                final_language_codes[language_code] = "untranslated"
+
+        return final_language_codes
 
     def __eq__(self, other):
         """
@@ -691,6 +735,46 @@ class Ajo:
             self.type = "multiple"
             self.language_code_1 = self.language_code_3 = formatted_title.final_css
 
+    def __iso639_3_to_iso639_1(specific_code: str) -> None | str:
+        """
+        Function to get the equivalent ISO 639-1 code from an ISO 639-3 code if it exists.
+
+        :param specific_code: An ISO 639-3 code.
+        :return:
+        """
+
+        for key, value in MAIN_LANGUAGES.items():
+            module_iso3 = value["language_code_3"]
+            if specific_code == module_iso3:
+                return key
+
+    def __ajo_defined_multiple_flair_former(self) -> str:
+        """
+        Takes a dictionary of defined multiple statuses and returns a string.
+        To be used with the ajo_defined_multiple_flair_assessor() function above.
+
+        :return output_text: A string for use in the flair text. (e.g. `Multiple Languages [CS, DE✔, HU✓, IT, NL✔]`)
+        """
+
+        output_text = []
+
+        for language, status in self.status.items():
+            # Try to get the ISO 639-1 if possible
+            language_code = (
+                self.__iso639_3_to_iso639_1(language) or language
+            )  # No ISO 639-1 code
+
+            symbol = ""
+            for status_keywords_tuple in STATUS_KEYWORDS.values():
+                if status_keywords_tuple.symbol == status:
+                    symbol = status_keywords_tuple.name
+                    break
+
+            output_text.append(f"{language_code.upper()}{symbol}")
+
+        output_text = ", ".join(sorted(output_text))  # Create a string.
+        return f"[{output_text}]"
+
     # noinspection PyAttributeOutsideInit,PyAttributeOutsideInit
     def update_reddit(self, reddit: praw.Reddit) -> None:
         """
@@ -777,7 +861,7 @@ class Ajo:
 
                 # If the status tag is a dictionary, then give it a proper tag.
                 if isinstance(self.status, dict):
-                    code_tag = ajo_defined_multiple_flair_former(self.status)
+                    code_tag = self.__ajo_defined_multiple_flair_former()
 
         if self.type == "single":
             # Code to determine the output flair text.
@@ -889,80 +973,6 @@ def ajo_loader(ajo_id, config: ZiwenConfig) -> Ajo | None:
     return new_ajo  # Note: the Ajo class can build itself from this dict.
 
 
-def ajo_defined_multiple_flair_assessor(flairtext):
-    """
-    A routine that evaluates a defined multiple flair text and its statuses as a dictionary.
-    It can make sense of the symbols that are associated with various states of a post.
-
-    :param flairtext: The flair text of a defined multiple post. (e.g. `Multiple Languages [CS, DE✔, HU✓, IT, NL✔]`)
-    :return final_language_codes: A dictionary keyed by language and their respective states (translated, claimed, etc)
-    """
-
-    final_language_codes = {}
-    flairtext = flairtext.lower()
-
-    languages_list = flairtext.split(", ")
-
-    for language in languages_list:
-        # Get just the language code.
-        language_code = " ".join(re.findall("[a-zA-Z]+", language))
-
-        if len(language_code) != len(language):
-            # There's a difference - maybe a symbol
-            final_language_codes.update(
-                {
-                    language_code: status_keywords_tuple.name
-                    for status_keywords_tuple in STATUS_KEYWORDS.values()
-                    if status_keywords_tuple.symbol in language
-                }
-            )
-        else:  # No difference, must be untranslated.
-            final_language_codes[language_code] = "untranslated"
-
-    return final_language_codes
-
-
-def iso639_3_to_iso639_1(specific_code: str) -> None | str:
-    """
-    Function to get the equivalent ISO 639-1 code from an ISO 639-3 code if it exists.
-
-    :param specific_code: An ISO 639-3 code.
-    :return:
-    """
-
-    for key, value in MAIN_LANGUAGES.items():
-        module_iso3 = value["language_code_3"]
-        if specific_code == module_iso3:
-            return key
-
-
-def ajo_defined_multiple_flair_former(flairdict) -> str:
-    """
-    Takes a dictionary of defined multiple statuses and returns a string.
-    To be used with the ajo_defined_multiple_flair_assessor() function above.
-
-    :param flairdict: A dictionary keyed by language and their respective states.
-    :return output_text: A string for use in the flair text. (e.g. `Multiple Languages [CS, DE✔, HU✓, IT, NL✔]`)
-    """
-
-    output_text = []
-
-    for language, status in flairdict.items():
-        # Try to get the ISO 639-1 if possible
-        language_code = iso639_3_to_iso639_1(language) or language  # No ISO 639-1 code
-
-        symbol = ""
-        for status_keywords_tuple in STATUS_KEYWORDS.values():
-            if status_keywords_tuple.symbol == status:
-                symbol = status_keywords_tuple.name
-                break
-
-        output_text.append(f"{language_code.upper()}{symbol}")
-
-    output_text = ", ".join(sorted(output_text))  # Create a string.
-    return f"[{output_text}]"
-
-
 def ajo_defined_multiple_comment_parser(pbody, language_names_list):
     """
     Takes a comment and a list of languages and looks for commands and language names.
@@ -998,12 +1008,3 @@ def ajo_defined_multiple_comment_parser(pbody, language_names_list):
     for keyword, detected_status in STATUS_KEYWORDS.items():
         if keyword in pbody:
             return detected_languages, detected_status.name
-
-
-def ajo_retrieve_script_code(script_name: str) -> str | None:
-    with open(FILE_ADDRESS_ISO_ALL, encoding="utf-8-sig") as csv_file:
-        csv_reader = csv.DictReader(csv_file, delimiter=",")
-        for row in csv_reader:
-            # This is a script code (the others are 3 characters).
-            if len(row["ISO 639-3"]) == 4 and script_name == row["Language Name"]:
-                return row["ISO 639-3"]

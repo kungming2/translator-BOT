@@ -22,3 +22,10 @@ def test_ja_word():
         JapaneseProcessor({}).ja_word("病気")
         == "# [病気](https://en.wiktionary.org/wiki/病気#Japanese)\n\n##### *Noun, Noun which may take the genitive case particle 'no'*\n\n**Reading:** びょうき (*byouki*)\n\n**Meanings**: \"illness (usu. excluding minor ailments, e.g. common cold), disease, sickness.\"\n\n^Information ^from ^[Jisho](https://jisho.org/search/病気%23words) ^| [^Kotobank](https://kotobank.jp/word/病気) ^| [^Tangorin](https://tangorin.com/general/病気) ^| [^(Weblio EJJE)](https://ejje.weblio.jp/content/病気)"
     )
+
+
+def test_surname():
+    assert (
+        JapaneseProcessor({}).ja_word("穂村")
+        == "# [穂村](https://en.wiktionary.org/wiki/穂村#Japanese)\n\n**Readings:** ほむら (*Homura*)\n\n**Meanings**: A Japanese surname.\n\n\n\n^Information ^from [^Myoji](https://myoji-yurai.net/searchResult.htm?myojiKanji=穂村) ^| [^Weblio ^EJJE](https://ejje.weblio.jp/content/穂村)"
+    )
