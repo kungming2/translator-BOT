@@ -373,7 +373,7 @@ class Ajo:
                 if len(row["ISO 639-3"]) == 4 and script_name == row["Language Name"]:
                     return row["ISO 639-3"]
 
-    def __ajo_defined_multiple_flair_assessor(flairtext):
+    def __ajo_defined_multiple_flair_assessor(self, flairtext):
         """
         A routine that evaluates a defined multiple flair text and its statuses as a dictionary.
         It can make sense of the symbols that are associated with various states of a post.
@@ -735,7 +735,7 @@ class Ajo:
             self.type = "multiple"
             self.language_code_1 = self.language_code_3 = formatted_title.final_css
 
-    def __iso639_3_to_iso639_1(specific_code: str) -> None | str:
+    def __iso639_3_to_iso639_1(self, specific_code: str) -> None | str:
         """
         Function to get the equivalent ISO 639-1 code from an ISO 639-3 code if it exists.
 

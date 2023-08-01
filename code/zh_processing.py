@@ -54,6 +54,7 @@ class ZhProcessor:
 
         eth_page = requests.get(
             f"https://www.mdbg.net/chinese/dictionary?page=chardict&cdcanoce=0&cdqchi={character}",
+            timeout=15,
             headers=self.zw_useragent,
         )
         tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
@@ -157,7 +158,9 @@ class ZhProcessor:
                     "https://www.mdbg.net/chindict/chindict.php?page=chardict&cdcanoce=0&cdqchi="
                     + wenzi
                 )
-                new_eth_page = requests.get(character_url, headers=self.zw_useragent)
+                new_eth_page = requests.get(
+                    character_url, timeout=15, headers=self.zw_useragent
+                )
                 # now contains the whole HTML page
                 new_tree = html.fromstring(new_eth_page.content)
                 pronunciation = [
@@ -256,6 +259,7 @@ class ZhProcessor:
         eth_page = requests.get(
             "https://www.mdbg.net/chinese/dictionary?page=worddict&wdrst=0&wdqb=c:"
             + word,
+            timeout=15,
             headers=self.zw_useragent,
         )
         tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
@@ -274,7 +278,7 @@ class ZhProcessor:
             search_results_buddhist = self.__zh_word_buddhist_dictionary_search(
                 tradify(word)
             )
-            search_results_tea = self.__zh_character_other_readings(simplify(word))
+            search_results_tea = self.__zh_word_tea_dictionary_search(simplify(word))
             search_results_cccanto = self.__zh_word_cccanto_search(tradify(word))
 
             # If both have nothing, we kick it down to the character search.
@@ -341,7 +345,9 @@ class ZhProcessor:
 
             # Obtain the Cantonese information.
             yue_page = requests.get(
-                "https://cantonese.org/search.php?q=" + word, headers=self.zw_useragent
+                "https://cantonese.org/search.php?q=" + word,
+                timeout=15,
+                headers=self.zw_useragent,
             )
             yue_tree = html.fromstring(
                 yue_page.content
@@ -478,7 +484,9 @@ class ZhProcessor:
 
         # Fetch Hokkien results
         min_page = requests.get(
-            f"https://www.moedict.tw/'{character}", headers=self.zw_useragent
+            f"https://www.moedict.tw/'{character}",
+            timeout=15,
+            headers=self.zw_useragent,
         )
         min_tree = html.fromstring(min_page.content)  # now contains the whole HTML page
 
@@ -493,7 +501,9 @@ class ZhProcessor:
 
         # Fetch Hakka results (Sixian)
         hak_page = requests.get(
-            f"https://www.moedict.tw/:{character}", headers=self.zw_useragent
+            f"https://www.moedict.tw/:{character}",
+            timeout=15,
+            headers=self.zw_useragent,
         )
         hak_tree = html.fromstring(hak_page.content)  # now contains the whole HTML page
         try:
@@ -536,7 +546,7 @@ class ZhProcessor:
 
         # Access the API
         u_url = f"http://ccdb.hemiola.com/characters/string/{character}?fields=kHangul,kKorean,kJapaneseKun,kJapaneseOn,kVietnamese"
-        unicode_rep = requests.get(u_url, headers=self.zw_useragent)
+        unicode_rep = requests.get(u_url, timeout=15, headers=self.zw_useragent)
         try:
             unicode_rep_json = unicode_rep.json()
             unicode_rep_jdict = unicode_rep_json[0]
@@ -702,6 +712,53 @@ class ZhProcessor:
 
             return general_dictionary
 
+    def __zh_word_tea_dictionary_search(self, chinese_word):
+        """
+        Function that searches the Babelcarp Chinese Tea Lexicon for Chinese tea terms.
+
+        :param chinese_word: Any Chinese word in *simplified* form.
+        :return: None if there is nothing that matches, a formatted string with meaning otherwise.
+        """
+        general_dictionary = {}
+
+        # Conduct a search.
+        web_search = f"http://babelcarp.org/babelcarp/babelcarp.cgi?phrase={chinese_word}&define=1"
+        eth_page = requests.get(web_search, headers=self.zw_useragent, timeout=15)
+        try:
+            tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
+            word_content = tree.xpath('//fieldset[contains(@id,"translation")]//text()')
+        except BaseException:
+            return None
+
+        # Get the headword of the entry.
+        try:
+            head_word = word_content[2].strip()
+        except IndexError:
+            return None
+
+        if chinese_word not in head_word:
+            # If the characters don't match: Exit. This includes null searches.
+            return None
+        else:  # It exists.
+            try:
+                pinyin = re.search(r"\((.*?)\)", word_content[2]).group(1).lower()
+            except AttributeError:  # Never mind, it does not exist.
+                return None
+
+            meaning = word_content[3:]
+            meaning = [item.strip() for item in meaning]
+
+            # Format the entry to return
+            formatted_line = f'\n\n**Tea Meanings**: "{" ".join(meaning)}."'
+            formatted_line = formatted_line.replace(" )", " ")
+            formatted_line = formatted_line.replace("  ", " ")
+            formatted_line += f" ([Babelcarp]({web_search}))"  # Append source
+
+            general_dictionary["meaning"] = formatted_line
+            general_dictionary["pinyin"] = pinyin
+
+            return general_dictionary
+
     def __zh_word_cccanto_search(self, cantonese_word: str) -> None | Dict[str, str]:
         """
         Function that parses and returns data from the CC-Canto database, which uses CC-CEDICT's format.
@@ -830,7 +887,9 @@ class ZhProcessor:
 
         try:
             # We run a search on the site and see if there are results.
-            results = requests.get(search_link.format(chengyu), headers=headers)
+            results = requests.get(
+                search_link.format(chengyu), headers=headers, timeout=15
+            )
             results.encoding = "gb2312"
             r_tree = html.fromstring(results.text)  # now contains the whole HTML page
             chengyu_exists = r_tree.xpath('//td[contains(@bgcolor,"#B4D8F5")]/text()')
@@ -861,7 +920,7 @@ class ZhProcessor:
 
             # Get the data from the actual link
             try:
-                eth_page = requests.get(actual_link)
+                eth_page = requests.get(actual_link, timeout=15, headers=headers)
                 eth_page.encoding = "gb2312"
                 tree = html.fromstring(
                     eth_page.text
@@ -919,7 +978,7 @@ def zh_character_calligraphy_search(character: str) -> str | None:
     # Form data to pass on to the POST system.
     formdata = {"sort": "7", "wd": character}
     try:
-        rdata = requests.post("http://www.shufazidian.com/", data=formdata)
+        rdata = requests.post("http://www.shufazidian.com/", data=formdata, timeout=15)
         tree = BeautifulSoup(rdata.content, "lxml")
         tree = str(tree)
         tree = html.fromstring(tree)

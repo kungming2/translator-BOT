@@ -126,7 +126,7 @@ class ZiwenCommandProcessor:
         # accidental returns of English stuff. It checks to see if a header
         # exists in that language. If it doesn't then it will return None.
         test_wikt_link = f"https://en.wiktionary.org/wiki/{search_term}#{language_name}"
-        test_page = requests.get(test_wikt_link, headers=self.zw_useragent)
+        test_page = requests.get(test_wikt_link, timeout=15, headers=self.zw_useragent)
         test_tree = html.fromstring(
             test_page.content
         )  # now contains the whole HTML page
@@ -419,7 +419,7 @@ class ZiwenCommandProcessor:
         search_query = (
             f"https://api.pushshift.io/reddit/search/submission/?ids={self.oid}"
         )
-        retrieved_data = requests.get(search_query).json()
+        retrieved_data = requests.get(search_query, timeout=15).json()
 
         if "data" in retrieved_data:  # We've got some data.
             returned_submission = retrieved_data["data"][0]

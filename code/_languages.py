@@ -109,41 +109,6 @@ def language_lists_generator() -> None:
 language_lists_generator()
 
 
-def english_fuzz(word: str) -> bool:
-    """
-    A quick function that detects if a word is likely to be "English." Used in replace_bad_english_typing below.
-
-    :param word: Any word.
-    :return: A boolean. True if it's likely to be a misspelling of the word 'English', false otherwise.
-    """
-
-    word = word.title()
-    closeness = fuzz.ratio("English", word)
-    return closeness > 70  # Very likely
-
-
-def transbrackets_new(title: str) -> str:
-    """
-    A simple function that takes a bracketed tag and moves the bracketed component to the front.
-    It will also work if the bracketed section is in the middle of the sentence.
-
-    :param title: A title which has the bracketed tag at the end, or in the middle.
-    :return: The transposed title, with the tag properly at the front.
-    """
-
-    if "]" in title:  # There is a defined end to this tag.
-        bracketed_tag = re.search(r"\[(.+)\]", title)
-        bracketed_tag = bracketed_tag.group(0)
-        title_remainder = title.replace(bracketed_tag, "")
-    else:  # No closing tag...
-        bracketed_tag = title.split("[", 1)[1]
-        title_remainder = title.replace(bracketed_tag, "")[:-1]
-        bracketed_tag = "[" + bracketed_tag + "]"  # enclose it
-
-    # reformatted title
-    return f"{bracketed_tag} {title_remainder}"
-
-
 def lang_code_search(search_term: str, script_search: bool):
     """
     Returns a tuple: name of a code or a script, is it a script? (that's a boolean)
@@ -208,11 +173,11 @@ def lang_code_search(search_term: str, script_search: bool):
     return "", False
 
 
-def country_converter(text_input: str, abbreviations_okay: bool = True):
+def country_converter(original_text_input: str, abbreviations_okay: bool = True):
     """
     Function that detects a country name in a given word.
 
-    :param text_input: Any string.
+    :param original_text_input: Any string.
     :param abbreviations_okay: means it's okay to check the list for abbreviations, like MX or GB.
     :return:
     """
@@ -221,50 +186,44 @@ def country_converter(text_input: str, abbreviations_okay: bool = True):
     country_code = ""
     country_name = ""
 
-    if len(text_input) <= 1:  # Too short, can't return anything for this.
-        pass
-    # This is only two letters long
-    elif len(text_input) == 2 and abbreviations_okay:
-        text_input = text_input.upper()  # Convert to upper case
+    if len(original_text_input) > 1:
+        text_input = (
+            original_text_input.upper()
+            if len(original_text_input) <= 3 and abbreviations_okay
+            else original_text_input.title()
+        )
         for country in COUNTRY_LIST:
-            if text_input == country.code2:  # Matches exactly
-                country_code = text_input
-                country_name = country.name
-    elif len(text_input) == 3 and abbreviations_okay:  # three letters long code
-        text_input = text_input.upper()  # Convert to upper case
-        for country in COUNTRY_LIST:
-            if text_input == country.code3:  # Matches exactly
+            abbreviation_check = abbreviations_okay and (
+                (len(text_input) == 2 and text_input == country.code2)
+                or (len(text_input) == 3 and text_input == country.code3)
+            )
+            contains_check = text_input == country.name or (
+                text_input in country.name and len(text_input) >= 3
+            )
+            if abbreviation_check or contains_check:
                 country_code = country.code2
                 country_name = country.name
-    else:  # It's longer than three, probably a name. Or abbreviations are disabled.
-        text_input = text_input.title()
-        for country in COUNTRY_LIST:
-            if text_input == country.name:  # It's an exact match
-                country_code = country.code2
-                country_name = country.name
-                return country_code, country_name  # Exit the loop, we're done.
-            if text_input in country.name and len(text_input) >= 3:
-                country_code = country.code2
-                country_name = country.name
+            elif not country_code and not country_name:
+                aliases = getattr(country, "aliases", [])
+                if not aliases:
+                    continue
+                for keyword in aliases:
+                    if original_text_input.title() == keyword:
+                        country_code = country.code2
+                        country_name = country.name
+                        break
+                else:
+                    continue
+            else:
+                continue
 
-        if country_code == "" and country_name == "":  # Still nothing
-            # Now we check against a list of associated words per country.
-            for country in COUNTRY_LIST:
-                try:
-                    # These are keywords associated with it.
-                    for keyword in country.aliases:
-                        if text_input.title() == keyword:  # A Match!
-                            country_code = country.code2
-                            country_name = country.name
-                except TypeError:
-                    # No keywords associated with this country.
-                    pass
+            break
 
-    if "," in country_name:  # There's a comma.
-        country_name = country_name.split(",", maxsplit=1)[0].strip()
-        # Take first part if there's a comma (Taiwan, Province of China)
+        if "," in country_name:  # There's a comma.
+            # Take first part if there's a comma (Taiwan, Province of China)
+            country_name = country_name.split(",", maxsplit=1)[0].strip()
 
-    return country_code, country_name
+        return country_code, country_name
 
 
 class ConverterTuple(NamedTuple):
@@ -483,69 +442,6 @@ def convert(input_text: str) -> ConverterTuple:
     return Converter().convert(input_text)
 
 
-def country_validator(
-    word_list: List[str], language_list: List[str]
-) -> Tuple[str, str] | None:
-    """
-    Takes a list of words, check for a country and a matching language. This allows us to find combinations like de-AT.
-
-    :param word_list: A list of words that may contain a country name.
-    :param language_list: A list of words that may contain a language name.
-
-    :return: If nothing is found it just returns None.
-    :return: If something is found, returns tuple (lang-COUNTRY, ISO 639-3 code).
-    """
-
-    # Set default values
-    detected_word = {}
-    all_detected_countries = []
-    final_word_list = []
-
-    if len(word_list) > 0:  # There are actually words to process.
-        if " " in word_list[-1]:
-            # There's a space in the last word list from additive function in the title routine
-            # Take the last one out. It'll be processed again later anyway.
-            word_list = word_list[:-1]
-    else:
-        return None  # There's nothing we can process.
-
-    if 2 < len(word_list) <= 4:  # There's more than two words. [Swiss, German, Geneva]
-        for position in range(2, len(word_list) + 1):  # Get all possible combinations.
-            for subset in itertools.combinations(word_list, position):
-                # This is useful for getting countries that have more than one word (Costa Rica)
-                # Join the words together as a string for searching.
-                final_word_list.append(" ".join(subset))
-
-    final_word_list += word_list
-
-    for word in final_word_list:
-        results = country_converter(text_input=word, abbreviations_okay=False)
-        if results[0] != "":  # The converter got nothing
-            detected_word[word] = results[0]
-            all_detected_countries.append(results[0])  # add the country code
-
-    if len(detected_word) != 0:
-        for language in language_list:
-            language_code = convert(language).language_code
-
-            if language_code in LANGUAGE_COUNTRY_ASSOCIATED:
-                # There's a language assoc.
-                check_countries = LANGUAGE_COUNTRY_ASSOCIATED.get(language_code)
-                # Fetch the list of countries associated with that language.
-
-                lang_country_combined = None
-                relevant_iso_code = None
-
-                for country in check_countries:
-                    if country in all_detected_countries:  # country is listed.
-                        lang_country_combined = f"{language_code}-{country}"
-                        relevant_iso_code = ISO_LANGUAGE_COUNTRY_ASSOCIATED.get(
-                            lang_country_combined
-                        )
-                        if relevant_iso_code:
-                            return lang_country_combined, relevant_iso_code
-
-
 def comment_info_parser(pbody: str, command: str):
     """
     A function that takes a comment and looks for actable information like languages or words to lookup.
@@ -623,34 +519,6 @@ def comment_info_parser(pbody: str, command: str):
             if language_name is not None and match.title() not in ISO_NAMES:
                 advanced_mode = True  # Return it as an advanced mode.
         return match, advanced_mode
-
-
-def replace_bad_english_typing(title: str) -> str:
-    """
-    Function that will replace a misspelling for English, so that it can still pass the title filter routine.
-
-    :param title: A post title on r/translator, presumably one with a misspelling.
-    :return: The post title but with any words that were mispellings of 'English' replaced.
-    """
-
-    title = re.sub(
-        r"""
-                   [,.;@#?!&$()“”’"•]+  # Accept one or more copies of punctuation
-                   \ *           # plus zero or more copies of a space,
-                   """,
-        " ",  # and replace it with a single space
-        title,
-        flags=re.VERBOSE,
-    )
-    title_words = title.split(" ")  # Split the sentence into words.
-    title_words = [str(word) for word in title_words]
-
-    for word in title_words:
-        if english_fuzz(word):  # This word is a misspelling of "English"
-            # Replace the offending word with the proper spelling.
-            title = title.replace(word, "English")
-
-    return title  # Return the title, now cleaned up.
 
 
 def language_mention_search(search_paragraph: str) -> None | List[str]:
@@ -918,6 +786,93 @@ class TitleFormat:
         except IndexError:
             return None
 
+    def __transbrackets_new(self, title: str) -> str:
+        """
+        A simple function that takes a bracketed tag and moves the bracketed component to the front.
+        It will also work if the bracketed section is in the middle of the sentence.
+
+        :param title: A title which has the bracketed tag at the end, or in the middle.
+        :return: The transposed title, with the tag properly at the front.
+        """
+
+        if "]" in title:  # There is a defined end to this tag.
+            bracketed_tag = re.search(r"\[(.+)\]", title)
+            bracketed_tag = bracketed_tag.group(0)
+            title_remainder = title.replace(bracketed_tag, "")
+        else:  # No closing tag...
+            bracketed_tag = title.split("[", 1)[1]
+            title_remainder = title.replace(bracketed_tag, "")[:-1]
+            bracketed_tag = "[" + bracketed_tag + "]"  # enclose it
+
+        # reformatted title
+        return f"{bracketed_tag} {title_remainder}"
+
+    def __country_validator(
+        self, word_list: List[str], language_list: List[str]
+    ) -> Tuple[str, str] | None:
+        """
+        Takes a list of words, check for a country and a matching language. This allows us to find combinations like de-AT.
+
+        :param word_list: A list of words that may contain a country name.
+        :param language_list: A list of words that may contain a language name.
+
+        :return: If nothing is found it just returns None.
+        :return: If something is found, returns tuple (lang-COUNTRY, ISO 639-3 code).
+        """
+
+        # Set default values
+        detected_word = {}
+        all_detected_countries = []
+        final_word_list = []
+
+        if len(word_list) > 0:  # There are actually words to process.
+            if " " in word_list[-1]:
+                # There's a space in the last word list from additive function in the title routine
+                # Take the last one out. It'll be processed again later anyway.
+                word_list = word_list[:-1]
+        else:
+            return None  # There's nothing we can process.
+
+        if (
+            2 < len(word_list) <= 4
+        ):  # There's more than two words. [Swiss, German, Geneva]
+            for position in range(
+                2, len(word_list) + 1
+            ):  # Get all possible combinations.
+                for subset in itertools.combinations(word_list, position):
+                    # This is useful for getting countries that have more than one word (Costa Rica)
+                    # Join the words together as a string for searching.
+                    final_word_list.append(" ".join(subset))
+
+        final_word_list += word_list
+
+        for word in final_word_list:
+            results = country_converter(word, abbreviations_okay=False)
+            if results[0] != "":  # The converter got nothing
+                detected_word[word] = results[0]
+                all_detected_countries.append(results[0])  # add the country code
+
+        if len(detected_word) != 0:
+            for language in language_list:
+                language_code = convert(language).language_code
+
+                if language_code in LANGUAGE_COUNTRY_ASSOCIATED:
+                    # There's a language assoc.
+                    check_countries = LANGUAGE_COUNTRY_ASSOCIATED.get(language_code)
+                    # Fetch the list of countries associated with that language.
+
+                    lang_country_combined = None
+                    relevant_iso_code = None
+
+                    for country in check_countries:
+                        if country in all_detected_countries:  # country is listed.
+                            lang_country_combined = f"{language_code}-{country}"
+                            relevant_iso_code = ISO_LANGUAGE_COUNTRY_ASSOCIATED.get(
+                                lang_country_combined
+                            )
+                            if relevant_iso_code:
+                                return lang_country_combined, relevant_iso_code
+
     def title_format(self, title: str, display_process: bool = False) -> TitleTuple:
         """
         This is the main function to help format a title and to determine information from it.
@@ -1021,18 +976,16 @@ class TitleFormat:
             # Probably has a country name in it.
             has_country = True
             country_suffix_name = re.search(r"{(\D+)}", title)
-            country_suffix_name = country_suffix_name.group(
-                1
-            )  # Get the Country name only
+            # Get the Country name only
+            country_suffix_name = country_suffix_name.group(1)
             country_suffix_code = country_converter(country_suffix_name)[0]
             if len(country_suffix_code) != 0:  # There was a good country code.
                 # Now we want to take out the country from the title.
                 title_first = title.split("{", 1)[0].strip()
                 title_second = title.split("}", 1)[1]
                 title = title_first + title_second
-        elif (
-            "{" in title and "[" not in title
-        ):  # Probably a malformed tag. let's fix it.
+        elif "{" in title and "[" not in title:
+            # Probably a malformed tag. let's fix it.
             title = title.replace("{", "[")
             title = title.replace("}", "]")
 
@@ -1045,7 +998,7 @@ class TitleFormat:
         if "[" in title and "[" not in title[0:10]:
             # There's a bracketed part, but it's not at the beginning, so it's probably at the end.
             # Let's transpose it.
-            title = transbrackets_new(title.strip())
+            title = self.__transbrackets_new(title.strip())
 
         if "]" not in title and "English." in title:
             title = title.replace("English.", "English] ")
@@ -1318,9 +1271,8 @@ class TitleFormat:
             d_source_languages, d_target_languages
         )
 
-        if (
-            len(d_target_languages) >= 2
-        ):  # Test to see if it has multiple target languages
+        if len(d_target_languages) >= 2:
+            # Test to see if it has multiple target languages
             is_multiple_test = list(d_target_languages)
             for name in ["English", "Multiple Languages"]:
                 # We want to remove these to see if there really is many targets
@@ -1341,14 +1293,13 @@ class TitleFormat:
 
         language_country = None
 
-        if (
-            not has_country
-        ):  # There isn't a country digitally in the source language part.
+        if not has_country:
+            # There isn't a country digitally in the source language part.
             # Now we check for regional variations.
-            source_country_data = country_validator(
+            source_country_data = self.__country_validator(
                 source_language_original, d_source_languages
             )
-            target_country_data = country_validator(
+            target_country_data = self.__country_validator(
                 target_language_original, d_target_languages
             )
 
@@ -1382,9 +1333,8 @@ class TitleFormat:
                         final_css = language_country.split("-", 1)[0]
                 elif target_country_data is not None:
                     language_country = target_country_data[0]  # Data like en-US
-                    language_country_code = target_country_data[
-                        1
-                    ]  # The ISO 639-3 code if exists
+                    # The ISO 639-3 code if exists
+                    language_country_code = target_country_data[1]
                     if (
                         len(d_target_languages) == 1
                         and language_country_code is not None
@@ -1395,9 +1345,8 @@ class TitleFormat:
                         d_target_languages = [
                             convert(language_country_code).language_name
                         ]
-                        final_css = (
-                            language_country_code  # Change it to the ISO 639-3 code
-                        )
+                        # Change it to the ISO 639-3 code
+                        final_css = language_country_code
                         # logger.info(d_target_languages)
                     elif (
                         "English" not in d_source_languages
@@ -1582,166 +1531,209 @@ def language_list_splitter(list_string: List[str]):
     return None if len(final_codes) == 0 else final_codes
 
 
-def main_posts_filter_required_keywords() -> Dict[str, List[str]]:
-    """
-    This function takes the language name list and a series of okay words for English and generates a list of keywords
-    that we can use to enforce the formatting requirements. This is case-insensitive and also allows more flexibility
-    for non-English requests.
-
-    :return: A dictionary with two keys: `total`, and `to_phrases`.
-    """
-
-    possible_strings = {"total": [], "to_phrases": []}
-
-    # Create a master list of words for "English"
-    words_for_english = ["english", "en", "eng", "englisch", "англи́йский", "英語", "英文"]
-
-    # Create a list of connecting words between languages.
-    words_connection = [">", "to", "<", "〉", "›", "》", "»", "⟶", "→", "~"]
-
-    # Add to the list combinations with 'English' that are allowed.
-    for word in words_for_english:
-        for connector in words_connection:
-            temporary_list = [
-                f"{connector}{word}",
-                f"{word}{connector}",
-            ]
-
-            if connector != "to":
-                temporary_list.append(f"{connector}{word}")
-                temporary_list.append(f"{word}{connector}")
-            else:
-                possible_strings["to_phrases"] += temporary_list
-            possible_strings["total"] += temporary_list
-
-    # Add to the list combinations with language names that are allowed.
-    for language in SUPPORTED_LANGUAGES:
-        language_lower = language.lower()
-        for connector in words_connection:
-            temporary_list = [
-                f"{connector}{language_lower}",
-                f"{language_lower}{connector}",
-            ]
-
-            if connector != "to":
-                temporary_list.append(f"{connector}{language_lower}")
-                temporary_list.append(f"{language_lower}{connector}")
-            else:
-                possible_strings["to_phrases"] += temporary_list
-            possible_strings["total"] += temporary_list
-
-    # Add to the list combinations with just dashes.
-    added_hyphens = []
-    for item in ENGLISH_DASHES:
-        added_hyphens.append(item.lower())
-    added_hyphens = list(sorted(added_hyphens))
-
-    # Function tags.
-    possible_strings["total"] += [">", "[unknown]", "[community]", "[meta]"]
-    possible_strings["total"] += added_hyphens
-
-    # Remove false matches. These often get through even though they should not be allowed.
-    bad_matches = [
-        "ch to ",
-        "en to ",
-        " to en",
-        " to me",
-        " to mi",
-        " to my",
-        " to mr",
-        " to kn",
-    ]
-    possible_strings["to_phrases"] = [
-        x for x in possible_strings["to_phrases"] if x not in bad_matches
-    ]
-    possible_strings["total"] = [
-        x for x in possible_strings["total"] if x not in bad_matches
-    ]
-
-    return possible_strings
-
-
-def main_posts_filter(otitle: str):
-    """
-    A functionized filter for title filtering (removing posts that don't match the formatting guidelines).
-    This was decoupled from ziwen_posts in order to be more easily maintained and to allow Wenyuan to use it.
-
-    :param otitle: Any potential or actual r/translator post title.
-    :return: post_okay: A boolean determining whether the post fits the community formatting guidelines.
-             otitle: A currently unused variable that would potentially allow this function to change the title text.
-             filter_reason: If the post violates the rules, the filter_reason is a one/two-letter code indicating
-                            what particular formatting rule it violated.
-                            1: The title contained none of the required keywords.
-                            1A: The title contained a string like "to English" but it was not in the first part of it.
-                            1B: The title was super short and generic. (e.g. 'Translation to English')
-                            2: The title contained the important symbol `>` but it was randomly somewhere in the title.
-                            EE: (not activated here) English-only post. (e.g. 'English > English')
-    """
-
-    post_okay = True
-    filter_reason = None
-
-    # Obtain a list of keywords that we will allow.
-    main_keywords = main_posts_filter_required_keywords()
-    mandatory_keywords = main_keywords["total"]
-    to_phrases_keywords = main_keywords["to_phrases"]
-
-    if not any(keyword in otitle.lower() for keyword in mandatory_keywords):
-        # This is the same thing as AM's content_rule #1. The title does not contain any of our keywords.
-        # But first, we'll try to salvage the title into something we can work with.
-        # This replaces any bad words for "English"
-        otitle = replace_bad_english_typing(otitle)
-
-        # The function below would allow for a lot looser rules but is currently unused.
+class PostFilter:
+    def __english_fuzz(self, word: str) -> bool:
         """
-        otitle = bad_title_reformat(otitle)
-        if "[Unknown > English]" in otitle:  # The title was too generic, we ain't doing it.
-            logger.info("> Filtered a post out due to incorrect title format. content_rule #1")
-            post_okay = False
+        A quick function that detects if a word is likely to be "English." Used in replace_bad_english_typing below.
+
+        :param word: Any word.
+        :return: A boolean. True if it's likely to be a misspelling of the word 'English', false otherwise.
         """
+
+        word = word.title()
+        closeness = fuzz.ratio("English", word)
+        return closeness > 70  # Very likely
+
+    def __replace_bad_english_typing(self, title: str) -> str:
+        """
+        Function that will replace a misspelling for English, so that it can still pass the title filter routine.
+
+        :param title: A post title on r/translator, presumably one with a misspelling.
+        :return: The post title but with any words that were mispellings of 'English' replaced.
+        """
+
+        title = re.sub(
+            r"""
+                    [,.;@#?!&$()“”’"•]+  # Accept one or more copies of punctuation
+                    \ *           # plus zero or more copies of a space,
+                    """,
+            " ",  # and replace it with a single space
+            title,
+            flags=re.VERBOSE,
+        )
+        title_words = title.split(" ")  # Split the sentence into words.
+        title_words = [str(word) for word in title_words]
+
+        for word in title_words:
+            if self.__english_fuzz(word):  # This word is a misspelling of "English"
+                # Replace the offending word with the proper spelling.
+                title = title.replace(word, "English")
+
+        return title  # Return the title, now cleaned up.
+
+    def __main_posts_filter_required_keywords(self) -> Dict[str, List[str]]:
+        """
+        This function takes the language name list and a series of okay words for English and generates a list of keywords
+        that we can use to enforce the formatting requirements. This is case-insensitive and also allows more flexibility
+        for non-English requests.
+
+        :return: A dictionary with two keys: `total`, and `to_phrases`.
+        """
+
+        possible_strings = {"total": [], "to_phrases": []}
+
+        # Create a master list of words for "English"
+        words_for_english = [
+            "english",
+            "en",
+            "eng",
+            "englisch",
+            "англи́йский",
+            "英語",
+            "英文",
+        ]
+
+        # Create a list of connecting words between languages.
+        words_connection = [">", "to", "<", "〉", "›", "》", "»", "⟶", "→", "~"]
+
+        # Add to the list combinations with 'English' that are allowed.
+        for word in words_for_english:
+            for connector in words_connection:
+                temporary_list = [
+                    f"{connector}{word}",
+                    f"{word}{connector}",
+                ]
+
+                if connector != "to":
+                    temporary_list.append(f"{connector}{word}")
+                    temporary_list.append(f"{word}{connector}")
+                else:
+                    possible_strings["to_phrases"] += temporary_list
+                possible_strings["total"] += temporary_list
+
+        # Add to the list combinations with language names that are allowed.
+        for language in SUPPORTED_LANGUAGES:
+            language_lower = language.lower()
+            for connector in words_connection:
+                temporary_list = [
+                    f"{connector}{language_lower}",
+                    f"{language_lower}{connector}",
+                ]
+
+                if connector != "to":
+                    temporary_list.append(f"{connector}{language_lower}")
+                    temporary_list.append(f"{language_lower}{connector}")
+                else:
+                    possible_strings["to_phrases"] += temporary_list
+                possible_strings["total"] += temporary_list
+
+        # Add to the list combinations with just dashes.
+        added_hyphens = []
+        for item in ENGLISH_DASHES:
+            added_hyphens.append(item.lower())
+        added_hyphens = list(sorted(added_hyphens))
+
+        # Function tags.
+        possible_strings["total"] += [">", "[unknown]", "[community]", "[meta]"]
+        possible_strings["total"] += added_hyphens
+
+        # Remove false matches. These often get through even though they should not be allowed.
+        bad_matches = [
+            "ch to ",
+            "en to ",
+            " to en",
+            " to me",
+            " to mi",
+            " to my",
+            " to mr",
+            " to kn",
+        ]
+        possible_strings["to_phrases"] = [
+            x for x in possible_strings["to_phrases"] if x not in bad_matches
+        ]
+        possible_strings["total"] = [
+            x for x in possible_strings["total"] if x not in bad_matches
+        ]
+
+        return possible_strings
+
+    def main_posts_filter(self, otitle: str):
+        """
+        A functionized filter for title filtering (removing posts that don't match the formatting guidelines).
+        This was decoupled from ziwen_posts in order to be more easily maintained and to allow Wenyuan to use it.
+
+        :param otitle: Any potential or actual r/translator post title.
+        :return: post_okay: A boolean determining whether the post fits the community formatting guidelines.
+                otitle: A currently unused variable that would potentially allow this function to change the title text.
+                filter_reason: If the post violates the rules, the filter_reason is a one/two-letter code indicating
+                                what particular formatting rule it violated.
+                                1: The title contained none of the required keywords.
+                                1A: The title contained a string like "to English" but it was not in the first part of it.
+                                1B: The title was super short and generic. (e.g. 'Translation to English')
+                                2: The title contained the important symbol `>` but it was randomly somewhere in the title.
+                                EE: (not activated here) English-only post. (e.g. 'English > English')
+        """
+
+        post_okay = True
+        filter_reason = None
+
+        # Obtain a list of keywords that we will allow.
+        main_keywords = self.__main_posts_filter_required_keywords()
+        mandatory_keywords = main_keywords["total"]
+        to_phrases_keywords = main_keywords["to_phrases"]
 
         if not any(keyword in otitle.lower() for keyword in mandatory_keywords):
-            # Try again
-            filter_reason = "1"
+            # This is the same thing as AM's content_rule #1. The title does not contain any of our keywords.
+            # But first, we'll try to salvage the title into something we can work with.
+            # This replaces any bad words for "English"
+            otitle = self.__replace_bad_english_typing(otitle)
+
+            if not any(keyword in otitle.lower() for keyword in mandatory_keywords):
+                # Try again
+                filter_reason = "1"
+                logger.info(
+                    f"[L] Main_Posts_Filter: > Filtered a post with an incorrect title format. Rule: #{filter_reason}"
+                )
+                post_okay = False
+        elif ">" not in otitle and any(
+            phrase in otitle.lower() for phrase in to_phrases_keywords
+        ):
+            # Try to take out titles that bury the lede.
+            if not any(phrase in otitle.lower()[:25] for phrase in to_phrases_keywords):
+                # This means the "to LANGUAGE" part is probably all the way at the end. Take it out.
+                filter_reason = "1A"
+                logger.info(
+                    f"[L] Main_Posts_Filter: > Filtered a post with an incorrect title format. Rule: #{filter_reason}"
+                )
+                post_okay = False  # Since it's a bad post title, we don't need to process it anymore.
+
+            # Added a Rule 1B, basically this checks for super short things like 'Translation to English'
+            # This should only activate if 1A is not triggered.
+            if len(otitle) < 35 and filter_reason is None and "[" not in otitle:
+                # Find a list of languages that are listed
+                listed_languages = language_mention_search(otitle.title())
+
+                # Remove English, we don't need that.
+                if listed_languages is not None:
+                    listed_languages = [x for x in listed_languages if x != "English"]
+
+                # If there's no listed language, then we can filter it out.
+                if listed_languages is None or len(listed_languages) == 0:
+                    filter_reason = "1B"
+                    post_okay = False
+                    logger.info(
+                        f"[L] Main_Posts_Filter: > Filtered a post with no valid language. Rule: #{filter_reason}"
+                    )
+        if ">" in otitle and "]" not in otitle and ">" not in otitle[0:50]:
+            # If people tack on the languages as an afterthought, it can be hard to process.
+            filter_reason = "2"
             logger.info(
-                f"[L] Main_Posts_Filter: > Filtered a post with an incorrect title format. Rule: #{filter_reason}"
+                f"[L] Main_Posts_Filter: > Filtered a post out due to incorrect title format. Rule: #{filter_reason}"
             )
             post_okay = False
-    elif ">" not in otitle and any(
-        phrase in otitle.lower() for phrase in to_phrases_keywords
-    ):
-        # Try to take out titles that bury the lede.
-        if not any(phrase in otitle.lower()[:25] for phrase in to_phrases_keywords):
-            # This means the "to LANGUAGE" part is probably all the way at the end. Take it out.
-            filter_reason = "1A"
-            logger.info(
-                f"[L] Main_Posts_Filter: > Filtered a post with an incorrect title format. Rule: #{filter_reason}"
-            )
-            post_okay = False  # Since it's a bad post title, we don't need to process it anymore.
 
-        # Added a Rule 1B, basically this checks for super short things like 'Translation to English'
-        # This should only activate if 1A is not triggered.
-        if len(otitle) < 35 and filter_reason is None and "[" not in otitle:
-            # Find a list of languages that are listed
-            listed_languages = language_mention_search(otitle.title())
+        return post_okay, otitle if post_okay else None, filter_reason
 
-            # Remove English, we don't need that.
-            if listed_languages is not None:
-                listed_languages = [x for x in listed_languages if x != "English"]
 
-            # If there's no listed language, then we can filter it out.
-            if listed_languages is None or len(listed_languages) == 0:
-                filter_reason = "1B"
-                post_okay = False
-                logger.info(
-                    f"[L] Main_Posts_Filter: > Filtered a post with no valid language. Rule: #{filter_reason}"
-                )
-    if ">" in otitle and "]" not in otitle and ">" not in otitle[0:50]:
-        # If people tack on the languages as an afterthought, it can be hard to process.
-        filter_reason = "2"
-        logger.info(
-            f"[L] Main_Posts_Filter: > Filtered a post out due to incorrect title format. Rule: #{filter_reason}"
-        )
-        post_okay = False
-
-    return post_okay, otitle if post_okay else None, filter_reason
+def main_posts_filter(otitle):
+    return PostFilter().main_posts_filter(otitle)

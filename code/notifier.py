@@ -127,7 +127,7 @@ def notifier_duplicate_checker(
     return specific_entries["user_count"] > 0  # There already is an entry.
 
 
-def notifier_language_list_editer(
+def notifier_language_list_editor(
     language_list: List[str],
     username: str,
     config: ZiwenConfig,
@@ -1056,15 +1056,12 @@ class ZiwenMessages:
         """
 
         # Fetch just the last five unread messages. Ziwen cycles every 30 seconds so this should be sufficient.
-        messages = []
-        messages += list(self.config.reddit.inbox.unread(limit=5))
-
+        messages = list(self.config.reddit.inbox.unread(limit=5))
         for message in messages:
             mauthor = str(message.author)
             msubject = message.subject.lower()  # Convert to lowercase
             mbody = message.body
             message.mark_read()  # Mark the message as read.
-
             if "subscribe" in msubject and "un" not in msubject:
                 # User wants to subscribe to language notifications.
                 logger.info(f"Messages: New subscription request from u/{mauthor}.")
@@ -1084,7 +1081,7 @@ class ZiwenMessages:
                     final_match_names = []
 
                     # Insert the relevant codes.
-                    notifier_language_list_editer(
+                    notifier_language_list_editor(
                         language_matches, mauthor, self.config, "insert"
                     )
 
@@ -1139,7 +1136,7 @@ class ZiwenMessages:
                 elif "all" in language_matches:
                     # User wants to unsubscribe from everything.
                     # Delete the user from the database.
-                    notifier_language_list_editer(
+                    notifier_language_list_editor(
                         language_matches, mauthor, self.config, "purge"
                     )
 
@@ -1151,7 +1148,7 @@ class ZiwenMessages:
                     action_counter(1, "Unsubscriptions")
                 else:  # Should return a list of specific languages the person doesn't want.
                     # Delete the relevant codes.
-                    notifier_language_list_editer(
+                    notifier_language_list_editor(
                         language_matches, mauthor, self.config, "delete"
                     )
                     # Get the language names of those codes.
@@ -1271,7 +1268,7 @@ class ZiwenMessages:
                 if language_matches is not None:
                     # In case the moderators' addition string is incomprehensible.
                     # Insert the relevant codes.
-                    notifier_language_list_editer(
+                    notifier_language_list_editor(
                         language_matches, add_username, self.config, "insert"
                     )
 
@@ -1299,7 +1296,7 @@ class ZiwenMessages:
                 ]
 
                 # Actually delete the username from database.
-                notifier_language_list_editer([], remove_username, self.config, "purge")
+                notifier_language_list_editor([], remove_username, self.config, "purge")
 
                 # Send a message back to the moderator confirming this.
                 final_match_codes_print = ", ".join(subscribed_codes)

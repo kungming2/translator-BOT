@@ -1,6 +1,7 @@
 from code._languages import (
     convert,
     ConverterTuple,
+    country_converter,
     main_posts_filter,
     title_format,
     TitleTuple,
@@ -50,3 +51,15 @@ def test_main_posts_filter_bad_title1():
 def test_main_posts_filter_bad_title2():
     test_str = "[eng > zh] hi"
     assert main_posts_filter(test_str) == (True, test_str, None)
+
+
+def test_country_converter1():
+    assert country_converter("china") == ("CN", "China")
+
+
+def test_country_converter2():
+    assert country_converter("cn") == ("CN", "China")
+
+
+def test_country_converter3():
+    assert country_converter("cn", False) == ("", "")

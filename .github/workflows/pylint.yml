@@ -19,6 +19,14 @@ jobs:
         python -m pip install --upgrade pip
         pip install pylint
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    - name: Create dummy login file
+      run: |
+        echo "PASSWORD = ''" >> code/_login.py
+        echo "USERNAME = ''" >> code/_login.py
+        echo "ZIFANG_APP_ID = ''" >> code/_login.py
+        echo "ZIFANG_APP_SECRET = ''" >> code/_login.py
+        echo "ZIWEN_APP_ID = ''" >> code/_login.py
+        echo "ZIWEN_APP_SECRET = ''" >> code/_login.py
     - name: Analysing the code with pylint
       run: |
         git ls-files '*.py' | grep -v '^tests/' | xargs pylint

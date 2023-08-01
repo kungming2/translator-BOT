@@ -50,6 +50,7 @@ class JapaneseProcessor:
             kana = kana_test.group(0)
             eth_page = requests.get(
                 f"http://jisho.org/search/{character}%20%23particle",
+                timeout=15,
                 headers=self.zw_useragent,
             )
             tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
@@ -66,6 +67,7 @@ class JapaneseProcessor:
                 # Regular old-school one character search.
                 eth_page = requests.get(
                     f"http://jisho.org/search/{character}%20%23kanji",
+                    timeout=15,
                     headers=self.zw_useragent,
                 )
                 # now contains the whole HTML page
@@ -134,6 +136,7 @@ class JapaneseProcessor:
 
                     eth_page = requests.get(
                         f"http://jisho.org/search/{moji}%20%23kanji",
+                        timeout=15,
                         headers=self.zw_useragent,
                     )
                     # now contains the whole HTML page
@@ -242,7 +245,7 @@ class JapaneseProcessor:
         link_json = (
             f"https://jisho.org/api/v1/search/words?keyword={japanese_word}%20%23words"
         )
-        returned_data = requests.get(link_json)
+        returned_data = requests.get(link_json, timeout=15, headers=self.zw_useragent)
         word_data = returned_data.json()
         main_data = word_data["data"]
 
@@ -342,7 +345,7 @@ class JapaneseProcessor:
         search_url = f"http://thejadednetwork.com/sfx/search/?keyword=+{katakana_string}&submitSearch=Search+SFX&x="
 
         # Conduct a search.
-        eth_page = requests.get(search_url, headers=self.zw_useragent)
+        eth_page = requests.get(search_url, timeout=15, headers=self.zw_useragent)
         tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
         list_of_links = tree.xpath("//td/a/@href")
 
@@ -354,7 +357,7 @@ class JapaneseProcessor:
 
         if actual_link is not None:  # We have a real dictionary entry.
             # Access the new page.
-            new_page = requests.get(actual_link)
+            new_page = requests.get(actual_link, timeout=15, headers=self.zw_useragent)
             new_tree = html.fromstring(new_page.content)
 
             # Gather data.
@@ -402,7 +405,7 @@ class JapaneseProcessor:
 
         # Conduct a search.
         web_search = f"http://kanji.reader.bz/{ja_given_name}"
-        eth_page = requests.get(web_search, headers=self.zw_useragent)
+        eth_page = requests.get(web_search, timeout=15, headers=self.zw_useragent)
         tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
         name_content = tree.xpath('//div[contains(@id,"main")]/p[1]/text()')
         hiragana_content = tree.xpath('//div[contains(@id,"main")]/p[1]/a/text()')
@@ -446,6 +449,7 @@ class JapaneseProcessor:
 
         eth_page = requests.get(
             "https://myoji-yurai.net/searchResult.htm?myojiKanji=" + name,
+            timeout=15,
             headers=self.zw_useragent,
         )
         tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
@@ -486,13 +490,13 @@ class JapaneseProcessor:
 
         # Fetch the page and its data.
         url_search = f"https://yoji.jitenon.jp/cat/search.php?getdata={yojijukugo}&search=part&page=1"
-        eth_page = requests.get(url_search, headers=self.zw_useragent)
+        eth_page = requests.get(url_search, timeout=15, headers=self.zw_useragent)
         tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
         url = tree.xpath('//th[contains(@scope,"row")]/a/@href')
 
         if len(url) != 0:  # There's data. Get the url.
             url_entry = url[0]  # Get the actual url of the entry.
-            entry_page = requests.get(url_entry, headers=self.zw_useragent)
+            entry_page = requests.get(url_entry, timeout=15, headers=self.zw_useragent)
             # now contains the whole HTML page
             entry_tree = html.fromstring(entry_page.content)
 
