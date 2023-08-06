@@ -993,9 +993,7 @@ class ZiwenCommandProcessor:
             )
 
     # This is a !translated function that messages people when their post has been translated.
-    def process_translated(
-        self,
-    ):
+    def process_translated(self):
         current_time = int(time.time())  # This is the current time.
         thanks_already = False
         translated_found = True

@@ -727,7 +727,7 @@ class ZhProcessor:
         try:
             tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
             word_content = tree.xpath('//fieldset[contains(@id,"translation")]//text()')
-        except BaseException:
+        except Exception:
             return None
 
         # Get the headword of the entry.
@@ -739,25 +739,24 @@ class ZhProcessor:
         if chinese_word not in head_word:
             # If the characters don't match: Exit. This includes null searches.
             return None
-        else:  # It exists.
-            try:
-                pinyin = re.search(r"\((.*?)\)", word_content[2]).group(1).lower()
-            except AttributeError:  # Never mind, it does not exist.
-                return None
+        try:
+            pinyin = re.search(r"\((.*?)\)", word_content[2]).group(1).lower()
+        except AttributeError:  # Never mind, it does not exist.
+            return None
 
-            meaning = word_content[3:]
-            meaning = [item.strip() for item in meaning]
+        meaning = word_content[3:]
+        meaning = [item.strip() for item in meaning]
 
-            # Format the entry to return
-            formatted_line = f'\n\n**Tea Meanings**: "{" ".join(meaning)}."'
-            formatted_line = formatted_line.replace(" )", " ")
-            formatted_line = formatted_line.replace("  ", " ")
-            formatted_line += f" ([Babelcarp]({web_search}))"  # Append source
+        # Format the entry to return
+        formatted_line = f'\n\n**Tea Meanings**: "{" ".join(meaning)}."'
+        formatted_line = formatted_line.replace(" )", " ")
+        formatted_line = formatted_line.replace("  ", " ")
+        formatted_line += f" ([Babelcarp]({web_search}))"  # Append source
 
-            general_dictionary["meaning"] = formatted_line
-            general_dictionary["pinyin"] = pinyin
+        general_dictionary["meaning"] = formatted_line
+        general_dictionary["pinyin"] = pinyin
 
-            return general_dictionary
+        return general_dictionary
 
     def __zh_word_cccanto_search(self, cantonese_word: str) -> None | Dict[str, str]:
         """

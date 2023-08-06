@@ -389,9 +389,8 @@ class Converter:
                 language_code = input_text.lower()
                 language_name = results
         elif len(input_text) > 3:  # Not a code, let's look for names.
-            if (
-                input_text.title() in ISO_NAMES
-            ):  # This is a defined language with a name.
+            if input_text.title() in ISO_NAMES:
+                # This is a defined language with a name.
                 # This searches both regular and alternate names.
                 language_code = self.__language_name_search(input_text.title())
                 language_name = MAIN_LANGUAGES[language_code]["name"]

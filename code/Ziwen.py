@@ -1044,7 +1044,9 @@ def ziwen_posts() -> None:
             # Finally, create an Ajo object and save it locally.
             if final_css_class not in ["meta", "community"]:
                 # Create an Ajo object, reload the post.
-                pajo = Ajo(reddit.submission(id=post.id), config.post_templates)
+                pajo = Ajo().init_from_submission(
+                    reddit.submission(id=post.id), config.post_templates
+                )
                 if len(contacted) != 0:  # We have a list of notified users.
                     pajo.add_notified(contacted)
                 # Save it to the local database
@@ -1137,7 +1139,7 @@ def ziwen_bot() -> None:
             if oajo is None:
                 # We couldn't find a stored dict, so we will generate it from the submission.
                 logger.debug("Bot: Couldn't find an AJO in the local database.")
-                oajo = Ajo(osubmission, config.post_templates)
+                oajo = Ajo().init_from_submission(osubmission, config.post_templates)
 
             if oajo.is_bot_crosspost:
                 komento_data = komento_analyzer(
@@ -1391,7 +1393,7 @@ def progress_checker() -> None:
             logger.debug(
                 "progress_checker: Couldn't find an Ajo in the local database. Loading from Reddit."
             )
-            oajo = Ajo(post, config.post_templates)
+            oajo = Ajo().init_from_submission(post, config.post_templates)
 
         # Process the post and get some data out of it.
         komento_data = komento_analyzer(reddit, post)
