@@ -202,7 +202,6 @@ class ZiwenCommandProcessor:
                         x.replace("\xa0", " ^") for x in master_text_list if x
                     ]
                     master_text_list = [x for x in master_text_list if x]
-                    print(master_text_list)
                     post_word_info = master_text_list[0]
 
                     meanings_format = "* " + "\n* ".join(master_text_list[1:])
@@ -638,10 +637,6 @@ class ZiwenCommandProcessor:
         elif match_length >= 2:  # A word or a phrase
             post_content.append(processor.zh_word(str(match)))
 
-        # Create a randomized wait time between requests.
-        wait_sec = random.randint(3, 12)
-        time.sleep(wait_sec)
-
     def japanese_matches(self, match, post_content, _key):
         match_length = len(str(match))
         processor = JapaneseProcessor(self.zw_useragent)
@@ -665,7 +660,7 @@ class ZiwenCommandProcessor:
         if (
             self.pauthor == USERNAME  # Don't respond to !search results from myself.
             or self.oflair_css in ["meta", "community", "missing"]
-            or self.oajo.ajo_language_info.language_name is None
+            or not self.oajo.ajo_language_info.language_name
         ):
             return
 

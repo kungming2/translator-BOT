@@ -755,8 +755,10 @@ def lookup_matcher(
 
     # Work with the text and clean it up.
     try:
-        content_text = content_text.split("`", 1)[1]  # Delete stuff before
-        content_text = content_text.rsplit("`", 1)[0]  # Delete stuff after
+        # Delete stuff before
+        content_text = content_text.split(KEYWORDS.back_quote, 1)[1]
+        # Delete stuff after
+        content_text = content_text.rsplit(KEYWORDS.back_quote, 1)[0]
         content_text = f"`{content_text}`"  # Re-add the graves.
     except IndexError:  # Split improperly
         return []
@@ -773,7 +775,6 @@ def lookup_matcher(
             matches.remove(match)
             matches.append(new_matches)
     matches = [x for x in matches if x]
-
     # A simple string to allow for quick detection of languages that fall in Unicode.
     combined_text = "".join(matches)
     zhja_true = re.findall("([\u2E80-\u9FFF]+)", combined_text, re.DOTALL)

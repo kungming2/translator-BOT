@@ -1,5 +1,5 @@
 from sqlite3 import Connection, Cursor
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from code.Ziwen_command_processor import ZiwenCommandProcessor
@@ -233,7 +233,6 @@ def test_process_id(mock_comment, mock_ajo, mock_submission, mock_config):
 
 
 def test_process_claim(mock_comment, mock_ajo, mock_submission, mock_config):
-    mock_ajo.language_name = ""
     processor = ZiwenCommandProcessor(
         "",
         "",
@@ -254,3 +253,54 @@ def test_process_claim(mock_comment, mock_ajo, mock_submission, mock_config):
     processor.process_claim()
     # the changes are later pushed to reddit with `update_reddit`
     mock_ajo.set_status.assert_called_once_with("inprogress")
+
+
+def test_process_backquote(mock_comment, mock_ajo, mock_submission, mock_config):
+    mock_ajo.ajo_language_info.language_name = ["Chinese"]
+    processor = ZiwenCommandProcessor(
+        "`贫穷`",
+        "",
+        mock_comment,
+        "",
+        "",
+        "",
+        "",
+        mock_ajo,
+        mock_submission,
+        0,
+        0,
+        "",
+        "",
+        "",
+        mock_config,
+    )
+    processor.chinese_matches = lambda _match, post_content, _key: post_content.append(
+        "test"
+    )
+    processor.process_backquote()
+    mock_comment.reply.assert_called_once_with(
+        "*u/ (OP), the following lookup results may be of interest to your request.*\n\ntest\n\n---\n^(Ziwen: a bot for r / translator) ^| ^[Documentation](https://www.reddit.com/r/translatorBOT/wiki/ziwen) ^| ^[FAQ](https://www.reddit.com/r/translatorBOT/wiki/faq) ^| ^[Feedback](https://www.reddit.com/r/translatorBOT)"
+    )
+
+
+def test_process_set(mock_comment, mock_ajo, mock_submission, mock_config):
+    mock_config.is_mod.return_value = True
+    processor = ZiwenCommandProcessor(
+        "!set:zh",
+        "",
+        mock_comment,
+        "",
+        "",
+        "",
+        "",
+        mock_ajo,
+        mock_submission,
+        0,
+        0,
+        "",
+        "",
+        "",
+        mock_config,
+    )
+    processor.process_set()
+    mock_ajo.set_language.assert_called_once_with("zh")
