@@ -32,13 +32,9 @@ def test_ziwen_notifier(mock_config):
         {"username": "mem2"},
     ]
     mock_config.cursor_main.fetchone.return_value = None
-    with patch(
-        "code.notifier.ajo_loader", side_effect=lambda mid, loader: MagicMock(Ajo)
-    ), patch.object(
+    with patch("code.notifier.ajo_loader", return_value=MagicMock(Ajo)), patch.object(
         notifier, "_ZiwenNotifier__messaging_language_frequency", return_value=None
-    ), patch(
-        "code.notifier.action_counter"
-    ):
+    ), patch("code.notifier.action_counter"):
         assert notifier.ziwen_notifier(
             "chinese",
             "my title",

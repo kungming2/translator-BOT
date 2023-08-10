@@ -60,7 +60,7 @@ class ZiwenCommandProcessor:
         oauthor: str,
         oajo: Ajo,
         osubmission: praw.reddit.models.Submission,
-        oid: str,
+        oid: int,
         ocreated: float,
         pid: str,
         pbody_original: str,
@@ -479,7 +479,7 @@ class ZiwenCommandProcessor:
         advanced_mode = determined_data[1]
         language_country = None  # Default value
         # Store the original language defined in the Ajo
-        o_language_name = str(self.oajo.language_name)
+        o_language_name = str(self.oajo.ajo_language_info.language_name)
         # This should return a boolean whether it's in advanced mode.
 
         logger.info(f"Bot: COMMAND: {KEYWORDS.id}, from u/{self.pauthor}.")
@@ -564,8 +564,8 @@ class ZiwenCommandProcessor:
 
             if (
                 not match_script
-                and o_language_name != self.oajo.language_name
-                or not convert(self.oajo.language_name).supported
+                and o_language_name != self.oajo.ajo_language_info.language_name
+                or not convert(self.oajo.ajo_language_info.language_name).supported
             ):
                 # Definitively a language. Let's archive this to the wiki.
                 # We've also made sure that it's not just a change of state, and write to the `identified` page.
@@ -575,7 +575,7 @@ class ZiwenCommandProcessor:
                     oid=self.oid,
                     oflair_text=o_language_name,
                     s_or_i=False,
-                    oflair_new=self.oajo.language_name,
+                    oflair_new=self.oajo.ajo_language_info.language_name,
                     user=self.pauthor,
                     reddit=self.reddit,
                 )
@@ -665,15 +665,11 @@ class ZiwenCommandProcessor:
         if (
             self.pauthor == USERNAME  # Don't respond to !search results from myself.
             or self.oflair_css in ["meta", "community", "missing"]
-            or self.oajo.language_name is None
+            or self.oajo.ajo_language_info.language_name is None
         ):
             return
 
-        if not isinstance(self.oajo.language_name, str):
-            # Multiple post?
-            search_language = self.oajo.language_name[0]
-        else:
-            search_language = self.oajo.language_name
+        search_language = self.oajo.ajo_language_info.language_name[0]
 
         # A dictionary keyed by language and search terms. Built in tokenizers.
         total_matches = lookup_matcher(self.pbody, search_language)
@@ -854,7 +850,7 @@ class ZiwenCommandProcessor:
     def process_doublecheck(self):
         current_time = int(time.time())
         if self.oajo.type == "multiple":
-            if isinstance(self.oajo.language_name, list):
+            if isinstance(self.oajo.ajo_language_info.language_name, list):
                 # It is a defined multiple post.
                 # Try to see if there's data in the comment.
                 # If the comment is just the command, we take the parent comment and together check to see.
@@ -869,7 +865,7 @@ class ZiwenCommandProcessor:
                         checked_text = f"{parent_comment.body} {self.pbody_original}"
 
                 comment_check = ajo_defined_multiple_comment_parser(
-                    checked_text, self.oajo.language_name
+                    checked_text, self.oajo.ajo_language_info.language_name
                 )
 
                 # We have data, we can set the status as different in the flair.
@@ -983,7 +979,7 @@ class ZiwenCommandProcessor:
                 COMMENT_CLAIM.format(
                     claimer=self.pauthor,
                     time=utc_timestamp,
-                    language_name=self.oajo.language_name,
+                    language_name=self.oajo.ajo_language_info.language_name,
                 )
                 + BOT_DISCLAIMER
             )
@@ -1002,7 +998,7 @@ class ZiwenCommandProcessor:
             self.oflair_css = "generic"  # Give it a generic flair.
 
         if self.oajo.type == "multiple":
-            if isinstance(self.oajo.language_name, list):
+            if isinstance(self.oajo.ajo_language_info.language_name, list):
                 # It is a defined multiple post.
                 # Try to see if there's data in the comment.
                 # If the comment is just the command, we take the parent comment and together check to see.
@@ -1017,7 +1013,7 @@ class ZiwenCommandProcessor:
                         checked_text = f"{parent_comment.body} {self.pbody_original}"
 
                 comment_check = ajo_defined_multiple_comment_parser(
-                    checked_text, self.oajo.language_name
+                    checked_text, self.oajo.ajo_language_info.language_name
                 )
 
                 # We have data, we can set the status as different in the flair.

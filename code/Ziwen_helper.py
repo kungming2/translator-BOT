@@ -1,8 +1,12 @@
 import calendar
 import re
+import sqlite3
 import sys
 from time import time
 from code._config import (
+    FILE_ADDRESS_AJO_DB,
+    FILE_ADDRESS_CACHE,
+    FILE_ADDRESS_MAIN,
     FILE_ADDRESS_MECAB,
     KEYWORDS,
     SUBREDDIT,
@@ -15,7 +19,6 @@ from code._languages import comment_info_parser, convert, language_mention_searc
 from code._login import USERNAME
 from code._responses import MSG_WIKIPAGE_FULL
 from datetime import datetime
-from sqlite3 import Connection, Cursor
 from typing import Any, Dict, List
 
 import jieba  # Segmenter for Mandarin Chinese.
@@ -49,21 +52,23 @@ if len(sys.argv) > 1:  # This is a new startup with additional parameters for mo
 class ZiwenConfig:
     def __init__(
         self,
-        conn_cache: Connection,
-        cursor_cache: Cursor,
-        conn_main: Connection,
-        cursor_main: Cursor,
-        conn_ajo: Connection,
-        cursor_ajo: Cursor,
         reddit: praw.Reddit,
         subreddit_helper: praw.reddit.models.SubredditHelper,
     ):
-        self.conn_cache = conn_cache
-        self.cursor_cache = cursor_cache
-        self.conn_main = conn_main
-        self.cursor_main = cursor_main
-        self.conn_ajo = conn_ajo
-        self.cursor_ajo = cursor_ajo
+        # This connects to the local cache used for detecting edits and the multiplier cache for points.
+        self.conn_cache = sqlite3.connect(FILE_ADDRESS_CACHE)
+        self.conn_cache.row_factory = sqlite3.Row
+        self.cursor_cache = self.conn_cache.cursor()
+
+        # This connects to the main database, including notifications, points, and past processed data.
+        self.conn_main = sqlite3.connect(FILE_ADDRESS_MAIN)
+        self.conn_main.row_factory = sqlite3.Row
+        self.cursor_main = self.conn_main.cursor()
+
+        # This connects to the database for Ajos, objects that the bot generates for posts.
+        self.conn_ajo = sqlite3.connect(FILE_ADDRESS_AJO_DB)
+        self.conn_ajo.row_factory = sqlite3.Row
+        self.cursor_ajo = self.conn_ajo.cursor()
         self.reddit = reddit
         self.subreddit_helper = subreddit_helper
         self.post_templates = {}

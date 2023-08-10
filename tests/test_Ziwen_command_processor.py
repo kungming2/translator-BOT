@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from code.Ziwen_command_processor import ZiwenCommandProcessor
-from code.Ajo import Ajo
+from code.Ajo import Ajo, AjoLanguageInfo
 import praw
 
 from code.Ziwen_helper import ZiwenConfig
@@ -16,7 +16,10 @@ def mock_comment():
 
 @pytest.fixture
 def mock_ajo():
-    return MagicMock(Ajo)
+    ajo = MagicMock(Ajo)
+    ajo.ajo_language_info = MagicMock(AjoLanguageInfo)
+    ajo.ajo_language_info.language_name = ""
+    return ajo
 
 
 @pytest.fixture
@@ -47,7 +50,7 @@ def test_init(mock_comment, mock_ajo, mock_submission, mock_config):
         "",
         mock_ajo,
         mock_submission,
-        "",
+        0,
         0,
         "",
         "",
@@ -91,7 +94,7 @@ def test_process_reset(
         oauthor,
         mock_ajo,
         mock_submission,
-        "",
+        0,
         0,
         "",
         "",
@@ -137,7 +140,7 @@ def test_process_long(
         "",
         mock_ajo,
         mock_submission,
-        "",
+        0,
         0,
         "",
         "",
@@ -178,7 +181,7 @@ def test_process_missing(mock_comment, mock_ajo, mock_submission, mock_config):
         mock_ajo.set_status.assert_called_once_with("missing")
 
 
-def test_process_missing(mock_comment, mock_ajo, mock_submission, mock_config):
+def test_process_doublecheck(mock_comment, mock_ajo, mock_submission, mock_config):
     mock_ajo.type = "single"
     processor = ZiwenCommandProcessor(
         "",
@@ -190,7 +193,7 @@ def test_process_missing(mock_comment, mock_ajo, mock_submission, mock_config):
         "",
         mock_ajo,
         mock_submission,
-        "",
+        0,
         0,
         "",
         "",
@@ -200,6 +203,33 @@ def test_process_missing(mock_comment, mock_ajo, mock_submission, mock_config):
     processor.process_doublecheck()
     # the changes are later pushed to reddit with `update_reddit`
     mock_ajo.set_status.assert_called_once_with("doublecheck")
+
+
+def test_process_id(mock_comment, mock_ajo, mock_submission, mock_config):
+    mock_ajo.type = "single"
+    mock_ajo.status = ""
+    with patch("code.Ziwen_command_processor.record_to_wiki") as notifier_patch:
+        notifier_patch.return_value = []
+        processor = ZiwenCommandProcessor(
+            "!identify: chinese",
+            "",
+            mock_comment,
+            "",
+            "",
+            "",
+            "",
+            mock_ajo,
+            mock_submission,
+            0,
+            0,
+            "",
+            "",
+            "",
+            mock_config,
+        )
+        processor.process_id()
+        # the changes are later pushed to reddit with `update_reddit`
+        mock_ajo.set_language.assert_called_once_with("zh", True)
 
 
 def test_process_claim(mock_comment, mock_ajo, mock_submission, mock_config):
@@ -214,7 +244,7 @@ def test_process_claim(mock_comment, mock_ajo, mock_submission, mock_config):
         "",
         mock_ajo,
         mock_submission,
-        "",
+        0,
         0,
         "",
         "",

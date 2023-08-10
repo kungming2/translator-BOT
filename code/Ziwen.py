@@ -8,17 +8,13 @@ members with useful reference information and enforces the community's formattin
 
 import os
 import re
-import sqlite3  # For processing and accessing the databases.
 import sys
 import time
 import traceback  # For documenting errors that are encountered.
 from code._config import (
     BOT_DISCLAIMER,
-    FILE_ADDRESS_AJO_DB,
-    FILE_ADDRESS_CACHE,
     FILE_ADDRESS_ERROR,
     FILE_ADDRESS_FILTER,
-    FILE_ADDRESS_MAIN,
     KEYWORDS,
     STATUS_KEYWORDS,
     THANKS_KEYWORDS,
@@ -101,29 +97,7 @@ VERIFYING_KEYWORDS = [
     "good work",
 ]
 
-
-"""
-CONNECTIONS TO REDDIT & SQL DATABASES
-
-Ziwen relies on several SQLite3 files to store its data and uses PRAW to connect to Reddit's API.
-"""
-
 logger.info("Startup: Accessing SQL databases...")
-
-# This connects to the local cache used for detecting edits and the multiplier cache for points.
-conn_cache = sqlite3.connect(FILE_ADDRESS_CACHE)
-conn_cache.row_factory = sqlite3.Row
-cursor_cache = conn_cache.cursor()
-
-# This connects to the main database, including notifications, points, and past processed data.
-conn_main = sqlite3.connect(FILE_ADDRESS_MAIN)
-conn_main.row_factory = sqlite3.Row
-cursor_main = conn_main.cursor()
-
-# This connects to the database for Ajos, objects that the bot generates for posts.
-conn_ajo = sqlite3.connect(FILE_ADDRESS_AJO_DB)
-conn_ajo.row_factory = sqlite3.Row
-cursor_ajo = conn_ajo.cursor()
 
 # Connecting to the Reddit API via OAuth.
 logger.info(f"Startup: Logging in as u/{USERNAME}...")
@@ -140,16 +114,7 @@ logger.info(
 )
 
 # Holds all the stateful variables used outside this module
-config = ZiwenConfig(
-    conn_cache,
-    cursor_cache,
-    conn_main,
-    cursor_main,
-    conn_ajo,
-    cursor_ajo,
-    reddit,
-    subreddit_helper,
-)
+config = ZiwenConfig(reddit, subreddit_helper)
 
 
 def points_tabulator(
@@ -157,7 +122,7 @@ def points_tabulator(
     oauthor: str,
     oflair_text: str,
     oflair_css: str,
-    comment: praw.reddit.models.Submission,
+    comment: praw.reddit.models.Comment,
 ) -> None:
     """
     The main function to save a user's points, given a post submission's content and comment.
@@ -173,7 +138,6 @@ def points_tabulator(
 
     current_time = time.time()
     month_string = datetime.fromtimestamp(current_time).strftime("%Y-%m")
-    points_status = []
 
     if oflair_css in ["meta", "art"]:
         return
@@ -187,6 +151,7 @@ def points_tabulator(
     if pauthor in ["AutoModerator", "translator-BOT"]:
         return  # Ignore these bots
 
+    assert config.points_worth_determiner(1) == 1
     # Load the Ajo from the database. We will check against it to see if it's None later.
 
     translator_to_add = None
@@ -204,10 +169,9 @@ def points_tabulator(
     if oflair_css in ["multiple", "app", "community"]:
         # If it's a multiple post, let's try and get the language name from the comment
         comment_language_data = language_mention_search(comment.body)
-        if comment_language_data is not None:  # There is a language mentioned..
-            language_name = comment_language_data[0]
-        else:
+        if comment_language_data is None:  # There is a language mentioned..
             return
+        language_name = comment_language_data[0]
     else:  # Regular posts here. Let's get the language.
         split_char = next((ch for ch in "[{(" if ch in oflair_text), None)
         if split_char is None:
@@ -341,29 +305,23 @@ def points_tabulator(
         parent_comment = comment.parent()
         try:  # Check if it's a comment:
             parent_post = parent_comment.parent_id
-            final_translator = (
-                parent_comment.author.name
-            )  # This is the person OP thanked.
+            # This is the person OP thanked.
+            final_translator = parent_comment.author.name
             logger.debug(
                 f"Points tabulator: Actual translator: u/{final_translator} for {parent_post}"
             )
             # Code here to check in the database if the person already got points.
             final_translator_points += 1 + (1 * language_multiplier)
             command_selection = (
-                "SELECT * FROM total_points WHERE username = ? AND oid = ?"
+                "SELECT points FROM total_points WHERE username = ? AND oid = ?"
             )
-            cursor_main.execute(command_selection, (final_translator, oid))
-            obtained_points = cursor_main.fetchall()
+            config.cursor_main.execute(command_selection, (final_translator, oid))
+            obtained_points = config.cursor_main.fetchall()
             # [('2017-09', 'dn9u1g0', 'davayrino', 2, '71bfh4'), ('2017-09', 'dn9u1g0', 'davayrino', 21, '71bfh4')
 
             for record in obtained_points:  # Go through
-                recorded_points = record[3]  # The points for this particular record.
-                recorded_post_id = record[4]  # The Reddit ID of the post.
-
-                if (
-                    recorded_points == final_translator_points
-                    and recorded_post_id == oid
-                ):
+                # The points for this particular record.
+                if record["points"] == final_translator_points:
                     # The person has gotten the exact same amount of points here. Reset.
                     final_translator_points = 0  # Reset the points if that's the case. Person has gotten it before.
 
@@ -372,14 +330,7 @@ def points_tabulator(
                 "Points tabulator: Parent of this comment is a post. Never mind."
             )
 
-    if any(pauthor in s for s in points_status):
-        # Check if author is already listed in our list.
-        for point_status in points_status:  # Add their points if so.
-            if point_status[0] == pauthor:  # Get their username
-                point_status[1] += points  # Add the running total of points
-    else:
-        # They're not in the list. Just add them.
-        points_status.append([pauthor, points])
+    points_status = [[pauthor, points]]
 
     if final_translator_points != 0:  # If we have another person's score to put in...
         points_status.append([final_translator, final_translator_points])
@@ -402,10 +353,10 @@ def points_tabulator(
         # Need code to NOT write it if the points are 0
         if entry[1] != 0:
             addition_tuple = (month_string, pid, entry[0], str(entry[1]), oid)
-            cursor_main.execute(
+            config.cursor_main.execute(
                 "INSERT INTO total_points VALUES (?, ?, ?, ?, ?)", addition_tuple
             )
-            conn_main.commit()
+            config.conn_main.commit()
 
 
 """
@@ -525,9 +476,9 @@ def messaging_user_statistics_writer(body_text: str, username: str) -> None:
         body_text = body_text.replace(KEYWORDS.id, KEYWORDS.identify)
 
     # Let's try and load any saved record of this
-    sql_us = "SELECT * FROM total_commands WHERE username = ?"
-    cursor_main.execute(sql_us, (username,))
-    username_commands_data = cursor_main.fetchall()
+    sql_us = "SELECT commands FROM total_commands WHERE username = ?"
+    config.cursor_main.execute(sql_us, (username,))
+    username_commands_data = config.cursor_main.fetchall()
 
     if len(username_commands_data) == 0:  # Not saved, create a new one
         commands_dictionary: Dict[str, int] = {}
@@ -535,7 +486,7 @@ def messaging_user_statistics_writer(body_text: str, username: str) -> None:
     else:  # There's data already for this username.
         already_saved = True
         # We only want the stored dict here.
-        commands_dictionary = eval(username_commands_data[0][1])
+        commands_dictionary = eval(username_commands_data[0]["commands"])
 
     # Process through the text and record the commands used.
     for keyword in [
@@ -558,14 +509,16 @@ def messaging_user_statistics_writer(body_text: str, username: str) -> None:
         if not already_saved:
             # This is a new username.
             to_store = (username, str(commands_dictionary))
-            cursor_main.execute("INSERT INTO total_commands VALUES (?, ?)", to_store)
+            config.cursor_main.execute(
+                "INSERT INTO total_commands VALUES (?, ?)", to_store
+            )
         else:
             # This username exists. Update instead.
-            cursor_main.execute(
+            config.cursor_main.execute(
                 "UPDATE total_commands SET commands = ? WHERE username = ?",
                 (str(commands_dictionary), username),
             )
-        conn_main.commit()
+        config.conn_main.commit()
     else:
         logger.debug("messaging_user_statistics_writer: No commands to write.")
 
@@ -609,6 +562,116 @@ commands are changes in the content that's looked up.
 """
 
 
+def edit_comment_processor(comment: praw.reddit.models.Comment) -> bool:
+    cleanup_database = False
+    current_time_com = time.time()
+
+    cbody = comment.body
+    cid = comment.id
+    cedited = comment.edited  # Is a boolean
+    ccreated = comment.created_utc
+
+    time_diff = current_time_com - ccreated
+    if time_diff > 3600 and not cedited:  # The edit is older than an hour.
+        return cleanup_database
+
+    # Let's retrieve any matching comment text in the cache.
+    get_old_sql = "SELECT content FROM comment_cache WHERE id = ?"  # Look for previous data for comment ID
+    config.cursor_cache.execute(get_old_sql, (cid,))
+    # Returns a list that contains a tuple (comment ID, comment text).
+    old_matching_data = config.cursor_cache.fetchall()
+    # Has this comment has previously been stored? Let's check it.
+    if len(old_matching_data) != 0:
+        logger.debug(
+            f"Edit Finder: Comment '{cid}' was previously stored in the cache."
+        )
+
+        # Define a way to override and force a change even if there is no difference in detected commands.
+        force_change = False
+
+        # Retrieve the previously stored text for this comment.
+        old_cbody = old_matching_data[0]["content"]
+
+        # Test the new retrieved text with the old one.
+        if cbody == old_cbody:  # The cached comment is the same as the current one.
+            return cleanup_database  # Do nothing.
+        # There is a change of some sort.
+        logger.debug(
+            f"Edit Finder: An edit for comment '{cid}' was detected. Processing..."
+        )
+        cleanup_database = True
+
+        # We detected a possible `lookup` change, where the words looked up are now different.
+        if "`" in cbody:
+            # First thing is compare the data in a lookup comment against what we have.
+
+            # Here we use the lookup_matcher function to get a LIST of everything that used to be in the graves.
+            total_matches = lookup_matcher(old_cbody, None)
+
+            # Then we get data from Komento, specifically looking for its version of results.
+            new_vars = komento_analyzer(
+                reddit, komento_submission_from_comment(reddit, cid)
+            )
+            new_overall_lookup_data = new_vars.get("bot_lookup_correspond", {})
+            if cid in new_overall_lookup_data:
+                # This comment is in our data
+                new_total_matches = new_overall_lookup_data[cid]
+                # Get the new matches
+                # Are they the same?
+                if set(new_total_matches) == set(total_matches):
+                    logger.debug(
+                        f"Edit-Finder: No change found for lookup comment '{cid}'."
+                    )
+                    return cleanup_database
+                logger.debug(f"Edit-Finder: Change found for lookup comment '{cid}'.")
+                force_change = True
+
+            # Code to swap out the stored comment text with the new text. This does NOT force a reprocess.
+            config.cursor_cache.execute(
+                "DELETE FROM comment_cache WHERE id = ?", (cid,)
+            )
+            config.cursor_cache.execute(
+                "INSERT INTO comment_cache VALUES (?, ?)", (cid, cbody)
+            )
+            config.conn_cache.commit()
+
+            # Here we edit the cache file too IF there's a edited-in command that's new, omitting the crosspost ones
+            # Iterate through the command keywords to see what's new.
+            for keyword in [key for key in KEYWORDS if key != KEYWORDS.translator]:
+                if keyword in cbody and keyword not in old_cbody:
+                    # This means the keyword is a NEW addition to the edited comment.
+                    logger.debug(
+                        f"Edit Finder: New command {keyword} detected for comment '{cid}'."
+                    )
+                    force_change = True
+
+            if force_change:
+                # Delete the comment from the processed database to force it to update and reprocess.
+                config.cursor_main.execute(
+                    "DELETE FROM oldcomments WHERE id = ?", (cid,)
+                )
+                config.conn_main.commit()
+                logger.debug(
+                    f"Edit Finder: Removed edited comment `{cid}` from processed database."
+                )
+
+    else:  # This is a comment that has not been stored.
+        logger.debug(f"Edit Finder: New comment '{cid}' to store in the cache.")
+        cleanup_database = True
+
+        try:
+            # Insert the comment into our cache.
+            config.cursor_cache.execute(
+                "INSERT INTO comment_cache VALUES (?, ?)", (cid, cbody)
+            )
+            config.conn_cache.commit()
+        except ValueError:  # Some sort of invalid character, don't write it.
+            logger.debug(
+                f"Edit Finder: ValueError when inserting comment `{cid}` into cache."
+            )
+    return cleanup_database
+
+
 def edit_finder() -> None:
     """
     A top-level function to detect edits and changes of note in r/translator comments, including commands and
@@ -630,126 +693,16 @@ def edit_finder() -> None:
 
     # Process the comments we've retrieved.
     for comment in comments:
-        current_time_com = time.time()
-
-        cbody = comment.body
-        cid = comment.id
-        cedited = comment.edited  # Is a boolean
-        ccreated = comment.created_utc
-
-        time_diff = current_time_com - ccreated
-
-        if time_diff > 3600 and not cedited:  # The edit is older than an hour.
-            continue
-        """
-        # Strip punctuation to allow for safe SQL storage.
-        replaced_characters = ['\n', '\x00', '(', ')', '[', "]", "'", "\""]
-        for character in replaced_characters:
-            cbody = cbody.replace(character, " ")
-        """
-
-        # Let's retrieve any matching comment text in the cache.
-        get_old_sql = "SELECT * FROM comment_cache WHERE id = ?"  # Look for previous data for comment ID
-        cursor_cache.execute(get_old_sql, (cid,))
-        # Returns a list that contains a tuple (comment ID, comment text).
-        old_matching_data = cursor_cache.fetchall()
-
-        # Has this comment has previously been stored? Let's check it.
-        if len(old_matching_data) != 0:
-            logger.debug(
-                f"Edit Finder: Comment '{cid}' was previously stored in the cache."
-            )
-
-            # Define a way to override and force a change even if there is no difference in detected commands.
-            force_change = False
-
-            # Retrieve the previously stored text for this comment.
-            old_cbody = old_matching_data[0][1]
-
-            # Test the new retrieved text with the old one.
-            if cbody == old_cbody:  # The cached comment is the same as the current one.
-                continue  # Do nothing.
-            # There is a change of some sort.
-            logger.debug(
-                f"Edit Finder: An edit for comment '{cid}' was detected. Processing..."
-            )
-            cleanup_database = True
-
-            # We detected a possible `lookup` change, where the words looked up are now different.
-            if "`" in cbody:
-                # First thing is compare the data in a lookup comment against what we have.
-
-                # Here we use the lookup_matcher function to get a LIST of everything that used to be in the graves.
-                total_matches = lookup_matcher(old_cbody, None)
-
-                # Then we get data from Komento, specifically looking for its version of results.
-                new_vars = komento_analyzer(
-                    reddit, komento_submission_from_comment(reddit, cid)
-                )
-                new_overall_lookup_data = new_vars.get("bot_lookup_correspond", {})
-                if cid in new_overall_lookup_data:
-                    # This comment is in our data
-                    new_total_matches = new_overall_lookup_data[cid]
-                    # Get the new matches
-                    # Are they the same?
-                    if set(new_total_matches) == set(total_matches):
-                        logger.debug(
-                            f"Edit-Finder: No change found for lookup comment '{cid}'."
-                        )
-                        continue
-                    logger.debug(
-                        f"Edit-Finder: Change found for lookup comment '{cid}'."
-                    )
-                    force_change = True
-
-                # Code to swap out the stored comment text with the new text. This does NOT force a reprocess.
-                cursor_cache.execute("DELETE FROM comment_cache WHERE id = ?", (cid,))
-                cursor_cache.execute(
-                    "INSERT INTO comment_cache VALUES (?, ?)", (cid, cbody)
-                )
-                conn_cache.commit()
-
-                # Here we edit the cache file too IF there's a edited-in command that's new, omitting the crosspost ones
-                # Iterate through the command keywords to see what's new.
-                for keyword in [key for key in KEYWORDS if key != KEYWORDS.translator]:
-                    if keyword in cbody and keyword not in old_cbody:
-                        # This means the keyword is a NEW addition to the edited comment.
-                        logger.debug(
-                            f"Edit Finder: New command {keyword} detected for comment '{cid}'."
-                        )
-                        force_change = True
-
-                if force_change:
-                    # Delete the comment from the processed database to force it to update and reprocess.
-                    cursor_main.execute("DELETE FROM oldcomments WHERE id = ?", (cid,))
-                    conn_main.commit()
-                    logger.debug(
-                        f"Edit Finder: Removed edited comment `{cid}` from processed database."
-                    )
-
-        else:  # This is a comment that has not been stored.
-            logger.debug(f"Edit Finder: New comment '{cid}' to store in the cache.")
-            cleanup_database = True
-
-            try:
-                # Insert the comment into our cache.
-                cursor_cache.execute(
-                    "INSERT INTO comment_cache VALUES (?, ?)", (cid, cbody)
-                )
-                conn_cache.commit()
-            except ValueError:  # Some sort of invalid character, don't write it.
-                logger.debug(
-                    f"Edit Finder: ValueError when inserting comment `{cid}` into cache."
-                )
+        cleanup_database |= edit_comment_processor(comment)
 
     if cleanup_database:  # There's a need to clean it up.
-        cursor_cache.execute(
+        config.cursor_cache.execute(
             "DELETE FROM comment_cache WHERE id NOT IN (SELECT id FROM comment_cache ORDER BY id DESC LIMIT ?)",
             (comment_limit,),
         )
 
         # Delete all but the last comment_limit comments.
-        conn_cache.commit()
+        config.conn_cache.commit()
         logger.debug("Edit Finder: Cleaned up the edited comments cache.")
 
 
@@ -825,15 +778,15 @@ def ziwen_posts() -> None:
             continue
 
         # Check the local database to see if this is in there.
-        cursor_main.execute("SELECT * FROM oldposts WHERE ID=?", [oid])
-        if cursor_main.fetchone():
+        config.cursor_main.execute("SELECT * FROM oldposts WHERE ID=?", [oid])
+        if config.cursor_main.fetchone():
             # Post is already in the database
             logger.debug(
                 f"Posts: This post {oid} already exists in the processed database."
             )
             continue
-        cursor_main.execute("INSERT INTO oldposts VALUES(?)", [oid])
-        conn_main.commit()
+        config.cursor_main.execute("INSERT INTO oldposts VALUES(?)", [oid])
+        config.conn_main.commit()
 
         if not css_check(oflair_css) and oflair_css is not None:
             # If it's a Meta or Community post (that's what css_check does), just alert those signed up for it.
@@ -1089,8 +1042,8 @@ def ziwen_bot() -> None:
         if pauthor == USERNAME:  # Will not reply to my own comments
             continue
 
-        cursor_main.execute("SELECT * FROM oldcomments WHERE ID=?", [pid])
-        if cursor_main.fetchone():
+        config.cursor_main.execute("SELECT * FROM oldcomments WHERE ID=?", [pid])
+        if config.cursor_main.fetchone():
             # Post is already in the database
             continue
 
@@ -1117,8 +1070,8 @@ def ziwen_bot() -> None:
 
         if oid != config.verified_post_id:
             # Enter it into the processed comments database
-            cursor_main.execute("INSERT INTO oldcomments VALUES(?)", [pid])
-            conn_main.commit()
+            config.cursor_main.execute("INSERT INTO oldcomments VALUES(?)", [pid])
+            config.conn_main.commit()
 
         pbody = comment.body
         pbody_original = str(pbody)  # Create a copy with capitalization
@@ -1295,12 +1248,12 @@ def verification_parser() -> None:
         except AttributeError:
             # Author is deleted. We don't care about this post.
             continue
-        cursor_main.execute("SELECT * FROM oldcomments WHERE ID=?", [cid])
-        if cursor_main.fetchone():
+        config.cursor_main.execute("SELECT * FROM oldcomments WHERE ID=?", [cid])
+        if config.cursor_main.fetchone():
             # Post is already in the database
             continue
-        cursor_main.execute("INSERT INTO oldcomments VALUES(?)", [cid])
-        conn_main.commit()
+        config.cursor_main.execute("INSERT INTO oldcomments VALUES(?)", [cid])
+        config.conn_main.commit()
 
         comment.save()  # Saves the comment on Reddit so we know not to use it. (bot will not process saved comments)
 
@@ -1434,8 +1387,8 @@ def cc_ref() -> None:
     for post in posts:
         pid = post.id
 
-        cursor_main.execute("SELECT * FROM oldcomments WHERE ID=?", [pid])
-        if cursor_main.fetchone():
+        config.cursor_main.execute("SELECT * FROM oldcomments WHERE ID=?", [pid])
+        if config.cursor_main.fetchone():
             # Post is already in the database
             continue
 
@@ -1446,8 +1399,8 @@ def cc_ref() -> None:
             # Does not contain our keyword
             continue
 
-        cursor_main.execute("INSERT INTO oldcomments VALUES(?)", [pid])
-        conn_main.commit()
+        config.cursor_main.execute("INSERT INTO oldcomments VALUES(?)", [pid])
+        config.conn_main.commit()
 
         if KEYWORDS.back_quote in pbody:
             post_content = []
@@ -1474,8 +1427,7 @@ def cc_ref() -> None:
                     post_content.append(processor.zh_word(find_word))
 
             post_content = "\n\n".join(post_content)
-            if len(post_content) > 10000:  # Truncate only if absolutely necessary.
-                post_content = post_content[:9900]
+            post_content = post_content[:9900]  # Truncate only if absolutely necessary.
             try:
                 post.reply(post_content + BOT_DISCLAIMER)
                 logger.info(
@@ -1489,19 +1441,15 @@ def cc_ref() -> None:
                 )
 
 
-"""INITIAL VARIABLE SET-UP"""
-
-# We start the bot with a couple of routines to populate the data from our wiki.
-config.ziwen_maintenance()
-logger.info("Bot routine starting up...")
-
-
 """RUNNING THE BOT"""
 
 # This is the actual loop that runs the top-level functions of the bot.
 # */10 * * * *
 
 if __name__ == "__main__":
+    # We start the bot with a couple of routines to populate the data from our wiki.
+    config.ziwen_maintenance()
+    logger.info("Bot routine starting up...")
     try:
         # noinspection PyBroadException
         set_start_time = time.time()
