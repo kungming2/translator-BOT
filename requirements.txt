@@ -1,3 +1,4 @@
+pytz
 bs4
 fuzzywuzzy[speedup]
 google
@@ -18,3 +19,4 @@ youtube_dl
 psutil
 korean_romanizer
 pyyaml
+pylint

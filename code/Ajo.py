@@ -35,6 +35,9 @@ from typing import Any, Dict, List
 
 import praw  # Simple interface to the Reddit API that also handles rate limiting of requests.
 
+MULTIPLE_LANGUAGES = "Multiple Languages"
+UNTRANSLATED = "untranslated"
+
 
 # new class to track all the language-related stuff. Need to ensure backwards compatability
 class AjoLanguageInfo:
@@ -72,7 +75,7 @@ class AjoLanguageInfo:
 
         return self.__dict__ == other.__dict__
 
-    def processTitle(
+    def process_title(
         self,
         oflair_text: str,
         link_flair_css_class: str,
@@ -180,7 +183,7 @@ class AjoLanguageInfo:
             # Handle REGULAR MULTIPLE
             if multiple_languages is None:  # This is a catch-all multiple case
                 flair_mapping = {
-                    "multiple": (["multiple"], ["multiple"], "Multiple Languages"),
+                    "multiple": (["multiple"], ["multiple"], MULTIPLE_LANGUAGES),
                     "app": (["app"], ["app"], "App"),
                 }
 
@@ -196,9 +199,9 @@ class AjoLanguageInfo:
                 self.language_code_1 = []
                 self.language_code_3 = []
                 self.language_name = []
-                self.language_history.append("Multiple Languages")
+                self.language_history.append(MULTIPLE_LANGUAGES)
                 for language in multiple_languages:  # Start creating the lists.
-                    self.language_name.append(language)
+                    self.language_name = MULTIPLE_LANGUAGES
                     multi_language_code = convert(language).language_code
                     if len(multi_language_code) == 2:
                         self.language_code_1.append(multi_language_code)
@@ -260,7 +263,7 @@ class AjoLanguageInfo:
                 self.is_supported = True
         else:  # For generic multiples (all)
             if new_language_code == "multiple":
-                self.language_name = "Multiple Languages"
+                self.language_name = MULTIPLE_LANGUAGES
 
             elif new_language_code == "app":
                 self.language_name = "App"
@@ -294,8 +297,8 @@ class AjoLanguageInfo:
             name = converted_language.language_name
             if len(code) != 0 and len(name) != 0:
                 set_languages_processed_codes.append(code)
-                self.language_name.append(name)
-                status[code] = "untranslated"
+                self.language_name = MULTIPLE_LANGUAGES
+                status[code] = UNTRANSLATED
 
         # Evaluate the length of the potential string
         languages_tag_string = ", ".join(set_languages_processed_codes)
@@ -319,11 +322,11 @@ class AjoLanguageInfo:
                 self.language_code_3.append(code)
                 self.language_code_1.append(None)
         if len(self.language_history) == 0:
-            self.language_history = [old_language_name, "Multiple Languages"]
+            self.language_history = [old_language_name, MULTIPLE_LANGUAGES]
         elif self.language_history[-1] != self.language_name:
             # We do a check here to make sure we are not including the same thing twice.
             # This is to avoid something like ['Unknown', 'Chinese', 'Chinese']
-            self.language_history.append("Multiple Languages")
+            self.language_history.append(MULTIPLE_LANGUAGES)
         return status
 
 
@@ -375,6 +378,8 @@ class Ajo:
     id: str
     created_utc: int
     post_templates: Dict[str, str]
+    recorded_translators: List[str]
+    notified: List[str]
     author: str
     direction: str
     original_source_language_name: str
@@ -387,10 +392,11 @@ class Ajo:
     is_script: bool
     parent_crosspost: Any
     author_messaged: bool
-    status: str
+    status: str | Dict[str, str]
     script_name: str
     script_code: str
     time_delta: Dict[str, int]
+    ajo_language_info: AjoLanguageInfo
 
     # noinspection PyUnboundLocalVariable
     def __init__(self):
@@ -399,11 +405,10 @@ class Ajo:
 
     @classmethod
     def init_from_values(cls, ajo_dict: Dict[Any, Any]):
-        cur_ajo = cls()
+        self = cls()
         logger.debug("Ajo: Loaded Ajo from local database.")
         if "type" in ajo_dict:
-            cur_ajo.ajo_language_info = AjoLanguageInfo(ajo_dict["type"])
-        # TODO make sure this doesn't mess up initializing and deserializing the AjoLanguage subclass
+            self.ajo_language_info = AjoLanguageInfo(ajo_dict["type"])
         for key, value in ajo_dict.items():
             if key in [
                 "language_code_1",
@@ -413,14 +418,14 @@ class Ajo:
                 "language_history",
                 "is_supported",
             ]:
-                setattr(cur_ajo.ajo_language_info, key, value)
+                setattr(self.ajo_language_info, key, value)
             else:
-                setattr(cur_ajo, key, value)
+                setattr(self, key, value)
         if "ajo_language_info" in ajo_dict:
-            cur_ajo.ajo_language_info = AjoLanguageInfo()
+            self.ajo_language_info = AjoLanguageInfo()
             for key, value in ajo_dict["ajo_language_info"].items():
-                setattr(cur_ajo.ajo_language_info, key, value)
-        return cur_ajo
+                setattr(self.ajo_language_info, key, value)
+        return self
 
     @classmethod
     def init_from_submission(
@@ -428,63 +433,59 @@ class Ajo:
         reddit_submission: praw.reddit.models.Submission,
         post_templates: Dict[str, str],
     ):
-        cur_ajo = cls()
+        self = cls()
         # This takes a Reddit Submission object and generates info from it.
         logger.debug("Ajo: Getting Ajo from Reddit.")
-        cur_ajo.id = reddit_submission.id  # The base Reddit submission ID.
-        cur_ajo.created_utc = int(reddit_submission.created_utc)
+        self.id = reddit_submission.id  # The base Reddit submission ID.
+        self.created_utc = int(reddit_submission.created_utc)
 
         # Create some empty variables that can be used later.
-        cur_ajo.recorded_translators = []
-        cur_ajo.notified = []
-        cur_ajo.time_delta = {}
-        cur_ajo.author_messaged = False
-        cur_ajo.post_templates = post_templates
+        self.recorded_translators = []
+        self.notified = []
+        self.time_delta = {}
+        self.author_messaged = False
+        self.post_templates = post_templates
 
         title_data = title_format(reddit_submission.title)
 
         try:  # Check if user is deleted
-            cur_ajo.author = reddit_submission.author.name
+            self.author = reddit_submission.author.name
         except AttributeError:
             # Comment author is deleted
-            cur_ajo.author = "[deleted]"
+            self.author = "[deleted]"
 
-        cur_ajo.ajo_language_info = AjoLanguageInfo(
-            reddit_submission.link_flair_css_class
-        )
+        self.ajo_language_info = AjoLanguageInfo(reddit_submission.link_flair_css_class)
 
         # oflair_text is an internal variable used to mimic the linkflair text.
         if reddit_submission.link_flair_text is None:  # There is no linkflair text.
             oflair_text = "Generic"
-            cur_ajo.is_identified = (
-                cur_ajo.is_long
-            ) = cur_ajo.is_script = cur_ajo.is_bot_crosspost = False
+            self.is_identified = (
+                self.is_long
+            ) = self.is_script = self.is_bot_crosspost = False
         else:
-            cur_ajo.is_long = "(Long)" in reddit_submission.link_flair_text
+            self.is_long = "(Long)" in reddit_submission.link_flair_text
 
             if reddit_submission.link_flair_css_class == "unknown":
                 # Check to see if there is a script classified.
                 if "(Script)" in reddit_submission.link_flair_text:
-                    cur_ajo.is_script = True
-                    cur_ajo.script_name = (
+                    self.is_script = True
+                    self.script_name = (
                         oflair_text
                     ) = reddit_submission.link_flair_text.split("(")[0].strip()
-                    cur_ajo.script_code = cur_ajo.__ajo_retrieve_script_code(
-                        cur_ajo.script_name
-                    )
+                    self.script_code = self.__ajo_retrieve_script_code(self.script_name)
                 else:
-                    cur_ajo.is_script = False
-                    cur_ajo.script_name = cur_ajo.script_code = None
+                    self.is_script = False
+                    self.script_name = self.script_code = None
                     oflair_text = "Unknown"
-                cur_ajo.is_identified = False
+                self.is_identified = False
             else:
                 if "(Identified)" in reddit_submission.link_flair_text:
-                    cur_ajo.is_identified = True
+                    self.is_identified = True
                     oflair_text = reddit_submission.link_flair_text.split("(")[
                         0
                     ].strip()
                 else:
-                    cur_ajo.is_identified = False
+                    self.is_identified = False
                     if "(" in reddit_submission.link_flair_text:  # Contains (Long)
                         oflair_text = reddit_submission.link_flair_text.split("(")[
                             0
@@ -493,35 +494,35 @@ class Ajo:
                         oflair_text = reddit_submission.link_flair_text
 
         if title_data is not None:
-            cur_ajo.direction = title_data.direction
+            self.direction = title_data.direction
 
             # The source language data is converted into a list. If it's just one, let's make it a string.
             # Take the only item
-            cur_ajo.original_source_language_name = (
+            self.original_source_language_name = (
                 title_data.source_languages[0]
                 if len(title_data.source_languages) == 1
                 else title_data.source_languages
             )
-            cur_ajo.original_target_language_name = (
+            self.original_target_language_name = (
                 title_data.target_languages[0]
                 if len(title_data.target_languages) == 1
                 else title_data.target_languages
             )
             if len(title_data.actual_title) != 0:
                 # Were we able to determine a title?
-                cur_ajo.title = title_data.actual_title
-                cur_ajo.title_original = reddit_submission.title
+                self.title = title_data.actual_title
+                self.title_original = reddit_submission.title
             else:
-                cur_ajo.title = cur_ajo.title_original = reddit_submission.title
+                self.title = self.title_original = reddit_submission.title
 
-            # possibly redundant since we do a similar check in processTitle
+            # possibly redundant since we do a similar check in process_title
             if all(x in reddit_submission.title for x in "{}"):
                 # likely contains a country name
                 country_suffix_name = re.search(r"{(\D+)}", reddit_submission.title)
                 # Get the Country name only
                 country_suffix_name = country_suffix_name.group(1)
                 # Get the code (e.g. CH for Swiss)
-                cur_ajo.ajo_language_info.country_code = country_converter(
+                self.ajo_language_info.country_code = country_converter(
                     country_suffix_name
                 )[0]
             elif (
@@ -530,47 +531,45 @@ class Ajo:
             ):
                 # There is included code from title routine
                 country_suffix = title_data.language_country.split("-", 1)[1]
-                cur_ajo.ajo_language_info.country_code = country_suffix
+                self.ajo_language_info.country_code = country_suffix
             else:
-                cur_ajo.ajo_language_info.country_code = None
+                self.ajo_language_info.country_code = None
 
-        cur_ajo.ajo_language_info.processTitle(
+        self.ajo_language_info.process_title(
             oflair_text,
             reddit_submission.link_flair_css_class,
             title_data,
             reddit_submission.link_flair_text,
         )
 
-        flair_set = [keyword.name for keyword in STATUS_KEYWORDS]
-        if reddit_submission.link_flair_css_class in flair_set:
-            cur_ajo.status = reddit_submission.link_flair_css_class
-        elif cur_ajo.ajo_language_info.is_multiple:
+        flairs = [keyword.name for keyword in STATUS_KEYWORDS.values()]
+        if reddit_submission.link_flair_css_class in flairs:
+            self.status = reddit_submission.link_flair_css_class
+        elif self.ajo_language_info.is_multiple:
             # It's a generic one.
-            if len(cur_ajo.ajo_language_info.language_code_3) == 1:
-                cur_ajo.status = "untranslated"
+            if len(self.ajo_language_info.language_code_3) == 1:
+                self.status = UNTRANSLATED
             else:
                 # Construct a status dictionary. (we could also use multiple_languages)
                 # Get just the codes
                 actual_list = reddit_submission.link_flair_text.split("[")[1][:-1]
                 # Pass it to dictionary constructor
-                cur_ajo.status = cur_ajo.__ajo_defined_multiple_flair_assessor(
-                    actual_list
-                )
+                self.status = self.__ajo_defined_multiple_flair_assessor(actual_list)
         else:
-            cur_ajo.status = "untranslated"
+            self.status = UNTRANSLATED
 
         try:
             # Check to see if this is a bot crosspost.
             original_post_id = reddit_submission.crosspost_parent
             crossposter = reddit_submission.author.name
             if crossposter == "translator-BOT":
-                cur_ajo.is_bot_crosspost = True
-                cur_ajo.parent_crosspost = original_post_id[3:]
+                self.is_bot_crosspost = True
+                self.parent_crosspost = original_post_id[3:]
             else:
-                cur_ajo.is_bot_crosspost = False
+                self.is_bot_crosspost = False
         except AttributeError:  # It's not a crosspost.
-            cur_ajo.is_bot_crosspost = False
-        return cur_ajo
+            self.is_bot_crosspost = False
+        return self
 
     def __ajo_retrieve_script_code(self, script_name: str) -> str | None:
         with open(FILE_ADDRESS_ISO_ALL, encoding="utf-8-sig") as csv_file:
@@ -608,7 +607,7 @@ class Ajo:
                     }
                 )
             else:  # No difference, must be untranslated.
-                final_language_codes[language_code] = "untranslated"
+                final_language_codes[language_code] = UNTRANSLATED
 
         return final_language_codes
 
@@ -636,7 +635,7 @@ class Ajo:
         """
         self.status = new_status
 
-    def set_status_multiple(self, status_language_code, new_status):
+    def set_status_multiple(self, status_language_code: str, new_status: str):
         """
         Similar to `set_status` but changes the status of a defined multiple post. This function does this by writing
         its status as a dictionary instead, keyed by the language.
@@ -706,9 +705,9 @@ class Ajo:
 
         if (
             self.ajo_language_info.is_multiple
-            and self.ajo_language_info.language_name in ("App", "Multiple Languages")
+            and self.ajo_language_info.language_name in ("App", MULTIPLE_LANGUAGES)
         ):
-            self.status = "untranslated"
+            self.status = UNTRANSLATED
         self.is_identified = new_is_identified
 
     def set_script(self, new_script_code):
@@ -812,7 +811,7 @@ class Ajo:
         # reset language data
         self.ajo_language_info.reset(original_title)
 
-        self.status = "untranslated"
+        self.status = UNTRANSLATED
         self.time_delta = {}  # Clear this dictionary.
         self.is_identified = False
         self.is_script = False
@@ -828,8 +827,7 @@ class Ajo:
         """
 
         for key, value in MAIN_LANGUAGES.items():
-            module_iso3 = value["language_code_3"]
-            if specific_code == module_iso3:
+            if specific_code == value["language_code_3"]:
                 return key
 
     def __ajo_defined_multiple_flair_former(self) -> str:
@@ -861,7 +859,7 @@ class Ajo:
     # noinspection PyAttributeOutsideInit,PyAttributeOutsideInit
     def update_reddit(self, reddit: praw.Reddit) -> None:
         """
-        Sets the flair properly on Reddit. No arguments taken.
+        Sets the flair properly on Reddit.
         It collates all the attributes and decides what flair
         to give it, then selects the appropriate template for it.
 
@@ -905,7 +903,7 @@ class Ajo:
                 code_tag = "[?]"
                 self.output_oflair_css = "unknown"
                 print(f">>> Update Reddit: Unknown post `{self.id}`.")
-            elif lang_info.language_name == "Generic" or lang_info.language_name == "":
+            elif lang_info.language_name in ("Generic", ""):
                 # There is no language flair defined.
                 code_tag = "[--]"
                 self.output_oflair_css = "generic"
@@ -917,7 +915,7 @@ class Ajo:
                 code_tag = None  # Blank code tag, don't need it.
             else:  # This is a defined multiple post.
                 # Check to see if we should give this an 'app' classification.
-                real_title = title_format(original_submission.title).actual_title
+                real_title = title_format(self.title_original).actual_title
                 app_yes = app_multiple_definer(real_title)
 
                 self.output_oflair_css = "app" if app_yes else "multiple"
@@ -928,10 +926,10 @@ class Ajo:
 
         if not lang_info.is_multiple:
             # Code to determine the output flair text.
-            for status in STATUS_KEYWORDS:
-                if self.status == status.name:
+            for enum in STATUS_KEYWORDS.values():
+                if self.status == enum.name:
                     self.output_oflair_css = self.status
-                    self.output_oflair_text = f"{status.description} {code_tag}"
+                    self.output_oflair_text = f"{enum.description} {code_tag}"
                     break
             else:  # It's an untranslated language
                 # The default flair text is just the language name.
@@ -970,8 +968,8 @@ class Ajo:
         # Push the updated text to the server (redesign version)
         # Check the global template dictionary.
         # If we have the css in the keys as a proper flair, then we can mark it with the new template.
-        if self.output_oflair_css in self.post_templates.keys():
-            output_template = self.post_templates[self.output_oflair_css]
+        output_template = self.post_templates.get(self.output_oflair_css)
+        if output_template is not None:
             logger.info(
                 f"Update Reddit: Template for CSS `{self.output_oflair_css}` is `{output_template}`."
             )

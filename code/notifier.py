@@ -514,11 +514,7 @@ class ZiwenNotifier:
         cursor_main = self.config.cursor_main
 
         if "-" in targeted_language:  # This is a ITR code. ar-LB
-            if targeted_language in ISO_LANGUAGE_COUNTRY_ASSOCIATED:
-                # This means there is an ISO 639-3 code for this that we wanna use
-                relevant_iso_code = ISO_LANGUAGE_COUNTRY_ASSOCIATED.get(
-                    targeted_language
-                )
+            relevant_iso_code = ISO_LANGUAGE_COUNTRY_ASSOCIATED.get(targeted_language)
         else:  # It's an ISO code.
             relevant_iso_code = targeted_language
             for lang_country, language_code in ISO_LANGUAGE_COUNTRY_ASSOCIATED.items():
@@ -538,9 +534,8 @@ class ZiwenNotifier:
         final_specific_usernames = {target["username"] for target in notify_targets}
 
         # Now we need to find the overall list's user names for the broader langauge (e.g. ar)
-        broader_code = targeted_language.split("-")[
-            0
-        ]  # Take only the language part (ar).
+        # Take only the language part (ar).
+        broader_code = targeted_language.split("-")[0]
         cursor_main.execute(sql_lc, (broader_code,))
         all_notify_targets = cursor_main.fetchall()
 
@@ -571,15 +566,14 @@ class ZiwenNotifier:
 
         # Fetch the data
         self.config.cursor_main.execute(
-            "SELECT * FROM notify_monthly_limit WHERE username = ?", (username,)
+            "SELECT received FROM notify_monthly_limit WHERE username = ?", (username,)
         )
         user_data = self.config.cursor_main.fetchone()
 
         # Parse the user's data. Load it if it exists.
         if user_data is not None:  # There's a record.
-            # TODO: query by col once column type issue is resolved
-            # Also change query from select *
-            monthly_limit_dictionary = user_data[1]  # Take the stored dictionary.
+            # Take the stored dictionary.
+            monthly_limit_dictionary = user_data["received"]
             # Convert the string to a proper dictionary.
             monthly_limit_dictionary = eval(monthly_limit_dictionary)
 
@@ -890,10 +884,9 @@ class ZiwenMessages:
 
         # Get notifications data.
         self.config.cursor_main.execute(
-            "SELECT * FROM notify_monthly_limit WHERE username = ?", (username,)
+            "SELECT received FROM notify_monthly_limit WHERE username = ?", (username,)
         )
         notifications_commands_data = self.config.cursor_main.fetchone()
-
         commands_lines_to_post = []
         # Iterate over commands data.
         if username_commands_data is None:  # There is no data for this user.
@@ -901,8 +894,7 @@ class ZiwenMessages:
         else:  # There's data. Get the data and format it line-by-line.
             commands_dictionary = eval(username_commands_data["commands"])
             # We only want the stored dict here.
-            for key, value in sorted(commands_dictionary.items()):
-                command_type = key
+            for command_type, value in sorted(commands_dictionary.items()):
                 if command_type != "Notifications":  # This is a regular command.
                     if command_type == KEYWORDS.back_quote:
                         command_type = "`lookup`"
@@ -914,8 +906,7 @@ class ZiwenMessages:
         if notifications_commands_data is None:
             notifications_lines_to_post = None
         else:  # There's data
-            # TODO: update query and indexing after column is updated
-            notification_dict = eval(notifications_commands_data[1])
+            notification_dict = eval(notifications_commands_data["received"])
             for language_code, notification_num in sorted(notification_dict.items()):
                 formatted_line = (
                     f"| Notifications (`{language_code}`) | {notification_num} |"
@@ -1217,10 +1208,8 @@ class ZiwenMessages:
                         final_match_names.append(match_name)
 
                     # De-dupe and sort the returned languages.
-                    # Remove duplicates
-                    final_match_names = list(set(final_match_names))
                     # Alphabetize
-                    final_match_names = sorted(final_match_names, key=str.lower)
+                    final_match_names = sorted(set(final_match_names), key=str.lower)
 
                     # Format the message to send to the requester.
                     status_message = "You're subscribed to notifications on r/translator for:\n\n* {}"

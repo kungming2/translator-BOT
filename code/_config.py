@@ -106,11 +106,12 @@ class StatusKeywordsTuple(NamedTuple):
     symbol: str
 
 
+# have to use values for name since claim is different
 statuses = {
-    KEYWORDS.missing: (KEYWORDS.missing.name, "Translated", "⍉"),
+    KEYWORDS.missing: (KEYWORDS.missing.name, "Missing Assets", "⍉"),
     KEYWORDS.claim: ("inprogress", "In Progress", "¦"),
     KEYWORDS.doublecheck: (KEYWORDS.doublecheck.name, "Needs Review", "✓"),
-    KEYWORDS.translated: (KEYWORDS.translated.name, "Missing Assets", "✔"),
+    KEYWORDS.translated: (KEYWORDS.translated.name, "Translated", "✔"),
 }
 
 # Convert each tuple in the list to a named tuple

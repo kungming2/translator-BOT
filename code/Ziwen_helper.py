@@ -686,10 +686,10 @@ def lookup_zhja_tokenizer(phrase: str, language: str):
                 mecab_directory = "/usr/local/lib/mecab/dic/mecab-ipadic-neologd"
             else:
                 mecab_directory = "/usr/lib/mecab/dic/mecab-ipadic-neologd"'''
-            mt = MeCab.Tagger(f"r'-d {FILE_ADDRESS_MECAB}'")
+            mecab_tagger = MeCab.Tagger(f"r'-d {FILE_ADDRESS_MECAB}'")
             # Per https://github.com/SamuraiT/mecab-python3/issues/3 to fix Unicode issue
-            mt.parse(phrase)
-            parsed = mt.parseToNode(phrase.strip())
+            mecab_tagger.parse(phrase)
+            parsed = mecab_tagger.parseToNode(phrase.strip())
             components = []
 
             while parsed:

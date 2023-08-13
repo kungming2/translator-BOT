@@ -1,5 +1,4 @@
 import datetime
-import random
 import re
 import time
 from code._config import BOT_DISCLAIMER, KEYWORDS, logger
@@ -46,6 +45,7 @@ import praw
 import requests
 from lxml import html
 from wiktionaryparser import WiktionaryParser
+import pytz
 
 
 class ZiwenCommandProcessor:
@@ -765,7 +765,7 @@ class ZiwenCommandProcessor:
 
     # The !search function looks for strings in other posts on r/translator
     def process_search(self):
-        determined_data = comment_info_parser(self.pbody, f"{KEYWORDS.search}:")
+        determined_data = comment_info_parser(self.pbody, KEYWORDS.search)
         # This should return what was actually identified. Normally will be a Tuple or None
         if determined_data is None:
             # The command is problematic. Wrong punctuation, not enough arguments
@@ -795,9 +795,9 @@ class ZiwenCommandProcessor:
         for oid in reddit_id:
             submission = self.reddit.submission(id=oid)
             s_title = submission.title
-            s_date = datetime.datetime.fromtimestamp(submission.created).strftime(
-                "%Y-%m-%d"
-            )
+            s_date = datetime.datetime.fromtimestamp(
+                submission.created, tz=pytz.UTC
+            ).strftime("%Y-%m-%d")
             s_permalink = submission.permalink
             header_string = f"#### [{s_title}]({s_permalink}) ({s_date})\n\n"
             reply_body.append(header_string)
@@ -986,8 +986,6 @@ class ZiwenCommandProcessor:
     # This is a !translated function that messages people when their post has been translated.
     def process_translated(self):
         current_time = int(time.time())  # This is the current time.
-        thanks_already = False
-        translated_found = True
 
         if self.oflair_css is None:  # If there is no CSS flair...
             self.oflair_css = "generic"  # Give it a generic flair.
@@ -998,14 +996,11 @@ class ZiwenCommandProcessor:
                 # Try to see if there's data in the comment.
                 # If the comment is just the command, we take the parent comment and together check to see.
                 checked_text = str(self.pbody_original)
-                if len(self.pbody) < 12:
-                    # This is just the command, so let's get the parent comment.
-                    # Get the parent comment
-                    parent_item = self.comment.parent_id
-                    if "t1" in parent_item:  # The parent is a comment
-                        parent_comment = self.comment.parent()
-                        # Combine the two together.
-                        checked_text = f"{parent_comment.body} {self.pbody_original}"
+                if len(self.pbody) < 12 and "t1" in self.comment.parent_id:
+                    # The parent is a comment
+                    parent_comment = self.comment.parent()
+                    # Combine the two together.
+                    checked_text = f"{parent_comment.body} {self.pbody_original}"
 
                 comment_check = ajo_defined_multiple_comment_parser(
                     checked_text, self.oajo.ajo_language_info.language_name
@@ -1061,16 +1056,11 @@ class ZiwenCommandProcessor:
             claim_comment = komento_data["bot_claim_comment"]
             claim_comment = self.reddit.comment(claim_comment)
             claim_comment.delete()
-        if "op_thanks" in komento_data:
-            # OP has thanked someone in the thread before.
-            thanks_already = True
-            translated_found = False
 
-        if (
-            translated_found
-            and not thanks_already
-            and self.oflair_css not in ["multiple", "app"]
-        ):
+        if "op_thanks" not in komento_data and self.oflair_css not in [
+            "multiple",
+            "app",
+        ]:
             # First we check to see if the author has already been recorded as getting a message.
             messaged_already = getattr(self.oajo, "author_messaged", False)
 

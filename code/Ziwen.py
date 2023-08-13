@@ -794,9 +794,9 @@ def ziwen_posts() -> None:
             logger.info(f"Posts: New {suggested_css_text.title()} post.")
 
             # Assign it a specific template that exists.
-            for key, output_template in config.post_templates.items():
-                if oflair_css == key:
-                    post.flair.select(output_template, suggested_css_text.title())
+            output_template = config.post_templates.get(suggested_css_text)
+            if output_template is not None:
+                post.flair.select(output_template, suggested_css_text.title())
 
             # We want to exclude the Identification Threads
             if "Identification Thread" not in otitle:
@@ -989,10 +989,10 @@ def ziwen_posts() -> None:
 
             # New Redesign Version to update flair
             # Check the global template dictionary
-            for key, output_template in config.post_templates.items():
-                if final_css_class == key:
-                    post.flair.select(output_template, final_css_text)
-                    logger.debug("Posts: Flair template selected for post.")
+            output_template = config.post_templates.get(final_css_class)
+            if output_template is not None:
+                post.flair.select(output_template, final_css_text)
+                logger.debug("Posts: Flair template selected for post.")
 
             # Finally, create an Ajo object and save it locally.
             if final_css_class not in ["meta", "community"]:

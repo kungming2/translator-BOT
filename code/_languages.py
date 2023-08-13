@@ -374,6 +374,7 @@ class Converter:
                     language_code = key
                     language_name = MAIN_LANGUAGES[language_code]["name"]
                     supported = MAIN_LANGUAGES[language_code]["supported"]
+                    break
         elif (
             len(input_text) == 3
             and len(self.__language_name_search(input_text.title())) != 0
@@ -666,18 +667,12 @@ class TitleFormat:
         if language_check is None or len(title_words_selected) == 0:
             return None
 
-        for key in sorted(title_words_selected.keys()):
+        for key, value in sorted(title_words_selected.items()):
             if str(key) == title_words[0]:
-                new_title_text = title_text.replace(
-                    key, "[" + title_words_selected[key]
-                )
-
-        for key in sorted(title_words_selected.keys()):
-            if title_words_selected[key] == last_language:
+                new_title_text = title_text.replace(key, "[" + value)
+            if value == last_language:
                 # add a bracket to the last found language
-                new_title_text = new_title_text.replace(
-                    key, title_words_selected[key] + "] "
-                )
+                new_title_text = new_title_text.replace(key, value + "] ")
 
         if " to " in new_title_text:
             new_title_text = new_title_text.replace(" to ", " > ")
@@ -699,7 +694,7 @@ class TitleFormat:
         :return: A list of the languages for notifying, or None if there's nothing to return.
         """
 
-        all_languages = list(set(source_language + target_language))
+        all_languages = sorted(set(source_language + target_language))
 
         if "English" in all_languages:
             # English is in here, so it CAN'T be what we're looking for.
@@ -899,7 +894,6 @@ class TitleFormat:
         final_code_tag = final_css.title()
 
         has_country = False
-        notify_languages = None
 
         # Strip cross-post formatting, which happens at the end.
         if "(x-post" in title:
@@ -1175,7 +1169,7 @@ class TitleFormat:
                 # Try to get only the valid languages. Delete anything that isn't a language.
                 d_target_languages.append(converter_target_search)
         # Remove duplicates (Like "Mandarin Chinese")
-        d_target_languages = list(set(d_target_languages))
+        d_target_languages = sorted(set(d_target_languages))
         if len(d_target_languages) == 0:
             # If we are unable to find a target language, leave it blank
             d_target_languages = ["Generic"]
@@ -1195,6 +1189,7 @@ class TitleFormat:
         both_test_languages = self.__both_non_english_detector(
             d_source_languages, d_target_languages
         )
+        notify_languages = None
         if both_test_languages is not None:
             # Check to see if there are two non-English things
             notify_languages = both_test_languages
@@ -1469,7 +1464,7 @@ def title_format(*args, **kwargs):
     return TitleFormat().title_format(*args, **kwargs)
 
 
-def language_list_splitter(list_string: List[str]):
+def language_list_splitter(list_string: str):
     """
     A function to help split up lists of codes or names of languages with different delimiters.
     An example would be a string like `ar, latin, yi` or `ko+lo`. This function will be able to split it no matter what.
@@ -1509,9 +1504,8 @@ def language_list_splitter(list_string: List[str]):
         # Get the code.
         converted_data = convert(item)
 
-        if (
-            converted_data.country_code is None
-        ):  # This has no country data attached to it.
+        if converted_data.country_code is None:
+            # This has no country data attached to it.
             code = converted_data.language_code
         else:
             code = f"{converted_data.language_code}-{converted_data.country_code}"
@@ -1599,13 +1593,12 @@ class PostFilter:
         for word in words_for_english:
             for connector in words_connection:
                 temporary_list = [
-                    f"{connector}{word}",
-                    f"{word}{connector}",
+                    f" {connector} {word}",
+                    f"{word} {connector} ",
                 ]
 
                 if connector != "to":
-                    temporary_list.append(f"{connector}{word}")
-                    temporary_list.append(f"{word}{connector}")
+                    temporary_list.extend([f"{connector}{word}", f"{word}{connector}"])
                 else:
                     possible_strings["to_phrases"] += temporary_list
                 possible_strings["total"] += temporary_list
@@ -1615,13 +1608,14 @@ class PostFilter:
             language_lower = language.lower()
             for connector in words_connection:
                 temporary_list = [
-                    f"{connector}{language_lower}",
-                    f"{language_lower}{connector}",
+                    f" {connector} {language_lower}",
+                    f"{language_lower} {connector} ",
                 ]
 
                 if connector != "to":
-                    temporary_list.append(f"{connector}{language_lower}")
-                    temporary_list.append(f"{language_lower}{connector}")
+                    temporary_list.extend(
+                        [f"{connector}{language_lower}", f"{language_lower}{connector}"]
+                    )
                 else:
                     possible_strings["to_phrases"] += temporary_list
                 possible_strings["total"] += temporary_list

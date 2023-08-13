@@ -260,7 +260,6 @@ class JapaneseProcessor:
             logger.info(
                 f"JA-Word: No results found for a Japanese word '{japanese_word}'."
             )
-
             # Check if katakana. Will return none if kanji.
             katakana_test = re.search("[\u30a0-\u30ff]", japanese_word)
             # Check to see if it's a surname.
@@ -302,11 +301,11 @@ class JapaneseProcessor:
         )
 
         # Check if it's a yojijukugo.
-        if len(japanese_word) == 4:
-            y_data = self.__ja_word_yojijukugo(japanese_word)
-            if y_data is not None:  # If there's data, append it.
-                logger.debug("JA-Word: Yojijukugo data retrieved.")
-                return_comment += y_data
+        # if len(japanese_word) == 4:
+        #     y_data = self.__ja_word_yojijukugo(japanese_word)
+        #     if y_data is not None:  # If there's data, append it.
+        #         logger.debug("JA-Word: Yojijukugo data retrieved.")
+        #         return_comment += y_data
 
         # Add the footer
         footer = (
@@ -343,7 +342,6 @@ class JapaneseProcessor:
 
         # Format the search URL.
         search_url = f"http://thejadednetwork.com/sfx/search/?keyword=+{katakana_string}&submitSearch=Search+SFX&x="
-
         # Conduct a search.
         eth_page = requests.get(search_url, timeout=15, headers=self.zw_useragent)
         tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
@@ -476,45 +474,3 @@ class JapaneseProcessor:
         to_post = lookup_line_1 + lookup_line_2 + "\n" + lookup_line_3
         logger.info(f"JA-Name: '{name}' is a Japanese name. Returned search results.")
         return to_post
-
-    # doesn't work any more
-    def __ja_word_yojijukugo(self, yojijukugo) -> str | None:
-        """
-        A newer rewrite of the yojijukugo function that has been changed to match the zh_word_chengyu function.
-        That is, now its role is to grab a Japanese meaning and explanation in order to give some insight.
-        For examples, see https://www.edrdg.org/projects/yojijukugo.html
-
-        :param yojijukugo: Any four-kanji Japanese idiom.
-        :return: A formatted string for addition to ja_word or None if nothing is found.
-        """
-
-        # Fetch the page and its data.
-        url_search = f"https://yoji.jitenon.jp/cat/search.php?getdata={yojijukugo}&search=part&page=1"
-        eth_page = requests.get(url_search, timeout=15, headers=self.zw_useragent)
-        tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
-        url = tree.xpath('//th[contains(@scope,"row")]/a/@href')
-
-        if len(url) != 0:  # There's data. Get the url.
-            url_entry = url[0]  # Get the actual url of the entry.
-            entry_page = requests.get(url_entry, timeout=15, headers=self.zw_useragent)
-            # now contains the whole HTML page
-            entry_tree = html.fromstring(entry_page.content)
-
-            # Check to make sure the data is the same.
-            entry_title = entry_tree.xpath("//h1/text()")[0]
-            # Retrieve only the main title of the page.
-            entry_title = entry_title.split("」", 1)[0][1:]
-            if entry_title != yojijukugo:  # If the data doesn't match
-                logger.debug("JA-Chengyu: The titles don't match.")
-                return None
-
-            # Format the data properly.
-            row_data = [td.text_content() for td in entry_tree.xpath("//td")]
-            logger.info(
-                f"JA-Chengyu: Retrieved information on {yojijukugo} from {url_entry}."
-            )
-
-            # Add the literary info.
-            y_meaning = row_data[1].strip()
-            y_source = row_data[2].strip()
-            return f"\n\n**Japanese Explanation**: {y_meaning}\n\n**Literary Source**: {y_source}"

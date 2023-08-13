@@ -732,7 +732,7 @@ class ZhProcessor:
 
         # Get the headword of the entry.
         try:
-            head_word = word_content[2].strip()
+            head_word = word_content[3].strip()
         except IndexError:
             return None
 
@@ -744,12 +744,12 @@ class ZhProcessor:
         except AttributeError:  # Never mind, it does not exist.
             return None
 
-        meaning = word_content[3:]
+        meaning = word_content[4:]
         meaning = [item.strip() for item in meaning]
 
         # Format the entry to return
         formatted_line = f'\n\n**Tea Meanings**: "{" ".join(meaning)}."'
-        formatted_line = formatted_line.replace(" )", " ")
+        formatted_line = formatted_line.replace(")", "")
         formatted_line = formatted_line.replace("  ", " ")
         formatted_line += f" ([Babelcarp]({web_search}))"  # Append source
 

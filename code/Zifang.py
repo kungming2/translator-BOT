@@ -60,7 +60,7 @@ reddit = praw.Reddit(
     user_agent=USER_AGENT,
     username=USERNAME,
 )
-r = reddit.subreddit(SUBREDDIT)
+subreddit_helper = reddit.subreddit(SUBREDDIT)
 logger.info(
     f"Startup: Initializing {BOT_NAME} {VERSION_NUMBER} for r/{SUBREDDIT} with languages module {VERSION_NUMBER_LANGUAGES}."
 )
@@ -93,7 +93,7 @@ def record_error_log(error_save_entry: str) -> None:
 
 def is_mod(username: str) -> bool:
     """Checks if the user is a moderator of the subreddit."""
-    mod_list = [x.name.lower() for x in r.moderator()]
+    mod_list = [x.name.lower() for x in subreddit_helper.moderator()]
 
     return username in mod_list
 
@@ -249,8 +249,6 @@ def search_removal_reasons(reasons_dict: Dict[int, tuple] | None, prompt: str) -
 def calculate_similarity(strings: List[str]) -> float:
     """Assesses several strings and returns a probability (out of 100)
     on how similar they are."""
-    similarity_scores = []
-
     # Iterate over each pair of strings
     similarity_scores = [
         fuzz.token_sort_ratio(strings[i], strings[j])
@@ -307,6 +305,7 @@ def duplicate_detector(
     :return: A list of Reddit IDs to remove, or `None`.
     """
     author_list = defaultdict(int)
+    # titles values = (title, id)
     titles = defaultdict(list)
     actionable_posts = []
     current_time = int(time.time())
@@ -367,8 +366,8 @@ def duplicate_detector(
             f"> The posts by u/{author} have a similarity index of {similarity_index}."
         )
         if similarity_index >= DUPLICATE_CONFIDENCE:
-            author_post_ids = [t[1] for t in author_data]
-            author_post_ids.sort()  # Oldest post will be first.
+            # Oldest post will be first.
+            author_post_ids = sorted([t[1] for t in author_data])
 
             actionable_posts += author_post_ids[1:]
             logger.info(f">> Added posts `{author_post_ids[1:]} for removal.")
@@ -383,8 +382,7 @@ def duplicate_detector(
 def extract_text_within_curly_braces(text: str) -> List[str]:
     """Gets text from between curly braces."""
     pattern = r"\{{([^}}]+)\}"  # Regex pattern to match text within curly braces
-    matches = re.findall(pattern, text)
-    return matches
+    return re.findall(pattern, text)
 
 
 def wikipedia_lookup(terms: List[str], language: str = "English") -> str | None:
@@ -399,8 +397,7 @@ def wikipedia_lookup(terms: List[str], language: str = "English") -> str | None:
 
     # Code for searching non-English Wikipedia, currently not needed.
     if language != "English":
-        lang_code = convert(language).language_code
-        wikipedia.set_lang(lang_code)
+        wikipedia.set_lang(convert(language).language_code)
 
     # Look up the terms and format them appropriately.
     for term in terms[:5]:  # Limit to five terms.
@@ -465,12 +462,11 @@ def zifang_posts(removal_reasons: Dict[int, tuple] | None) -> None:
 
     :return: Nothing.
     """
-    posts = []
 
     # Get the last posts that we can get. With the API limit of 1000,
     # that should be approximately more than a week's worth of posts.
 
-    posts += list(r.new(limit=None))
+    posts = list(subreddit_helper.new(limit=None))
     posts.reverse()  # Reverse it so that we start processing the older ones first. Newest ones last.
 
     # Check for duplicates.
@@ -507,7 +503,7 @@ def zifang_comments(comment_limit: int = 200) -> None:
     acted_comments = []
     previous_ids = wiki_access(None, retrieve=True)
 
-    comments = list(r.comments(limit=comment_limit))
+    comments = list(subreddit_helper.comments(limit=comment_limit))
     comments.reverse()  # Reverse it so that we start processing the older ones first. Newest ones last.
 
     # Look for search terms.

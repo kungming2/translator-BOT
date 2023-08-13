@@ -304,3 +304,67 @@ def test_process_set(mock_comment, mock_ajo, mock_submission, mock_config):
     )
     processor.process_set()
     mock_ajo.set_language.assert_called_once_with("zh")
+
+
+def test_process_translated(mock_comment, mock_ajo, mock_submission, mock_config):
+    mock_ajo.type = "single"
+    mock_ajo.is_bot_crosspost = False
+    processor = ZiwenCommandProcessor(
+        "",
+        "pauthor",
+        mock_comment,
+        "",
+        "",
+        "",
+        "",
+        mock_ajo,
+        mock_submission,
+        0,
+        0,
+        "",
+        "",
+        "",
+        mock_config,
+    )
+    processor.process_translated()
+    mock_ajo.set_status.assert_called_once_with("translated")
+
+
+@patch("code.Ziwen_command_processor.googlesearch")
+def test_process_search(
+    googlesearch, mock_comment, mock_ajo, mock_submission, mock_config
+):
+    googlesearch.search.return_value = [
+        "https://www.reddit.com/r/translator/comments/soohox/sanskrit_english_manjushri_mantra_i_figured_out/",
+        "https://www.reddit.com/r/translator/comments/5fz28l/hindienglish_found_this_paper_with_the_om_symbol/",
+        "https://www.reddit.com/r/translator/comments/ed1nzx/devanagari_script_english_closest_phrase_i_can/",
+        "https://www.reddit.com/r/translator/comments/sozi0s/sanskrit_english_are_these_two_the_same_script/",
+    ]
+    mock_found_submission = MagicMock(praw.reddit.models.Submission)
+    mock_found_submission.title = "Mock Title"
+    mock_found_submission.created = 0
+    mock_found_submission.permalink = "permalink"
+
+    # Set the return value of reddit.submission() to the mock_submission
+    mock_config.reddit.submission.return_value = mock_found_submission
+    processor = ZiwenCommandProcessor(
+        "!search: om mani padme hum",
+        "",
+        mock_comment,
+        "",
+        "",
+        "",
+        "",
+        mock_ajo,
+        mock_submission,
+        0,
+        0,
+        "",
+        "",
+        "",
+        mock_config,
+    )
+    processor.process_search()
+    mock_comment.reply.assert_called_once_with(
+        '## Search results on r/translator for "om":\n\n#### [Mock Title](permalink) (1970-01-01)\n\n\n\n#### [Mock Title](permalink) (1970-01-01)\n\n\n\n#### [Mock Title](permalink) (1970-01-01)\n\n\n\n#### [Mock Title](permalink) (1970-01-01)\n\n'
+    )
