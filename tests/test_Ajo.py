@@ -27,7 +27,7 @@ def test_ajo():
     return Ajo().init_from_values(ajo_dict)
 
 
-repr_str = "{'output_oflair_css': 'translated', 'output_oflair_text': 'Translated [IT]', 'ajo_language_info': {'is_multiple': False, 'language_code_1': 'it', 'language_code_3': 'ita', 'language_name': 'Italian', 'country_code': None, 'language_history': [], 'is_supported': True}, 'created_utc': 1515795465, 'direction': 'english_from', 'is_long': False, 'original_source_language_name': 'English', 'status': 'translated', 'id': '7q07n6', 'original_target_language_name': 'Italian', 'is_identified': False, 'title_original': '[English > Italian] \"Body Mind & Soul\"', 'is_bot_crosspost': False, 'type': 'single', 'title': '\"Body Mind  &  Soul\"', 'post_templates': {}}"
+repr_str = "{'id': '7q07n6', 'created_utc': 1515795465, 'post_templates': {}, 'recorded_translators': [], 'notified': [], 'author': '', 'direction': 'english_from', 'original_source_language_name': 'English', 'original_target_language_name': 'Italian', 'title': '\"Body Mind  &  Soul\"', 'title_original': '[English > Italian] \"Body Mind & Soul\"', 'is_bot_crosspost': False, 'is_identified': False, 'is_long': False, 'is_script': False, 'parent_crosspost': None, 'author_messaged': False, 'status': 'translated', 'script_name': '', 'script_code': '', 'time_delta': {}, 'ajo_language_info': {'is_multiple': False, 'language_code_1': 'it', 'language_code_3': 'ita', 'language_name': 'Italian', 'country_code': None, 'language_history': [], 'is_supported': True}, 'output_oflair_css': 'translated', 'output_oflair_text': 'Translated [IT]', 'type': 'single'}"
 
 
 def test_ajo_from_str(test_ajo):
@@ -85,11 +85,11 @@ def test_update_reddit_multiple(test_ajo):
     assert test_ajo.output_oflair_text == "Multiple Languages [CH, ZH]"
 
 
-pickled_data = "{'output_oflair_css': None, 'output_oflair_text': None, 'id': '15122fm', 'created_utc': 1689500594, 'recorded_translators': [], 'notified': [], 'time_delta': {}, 'author_messaged': False, 'post_templates': {}, 'author': 'your_average_bear', 'ajo_language_info': {'is_multiple': True, 'language_code_1': ['it', 'ru', 'uz'], 'language_code_3': ['ita', 'rus', 'uzn'], 'language_name': 'Multiple Languages', 'country_code': None, 'language_history': ['Multiple Languages'], 'is_supported': True}, 'is_long': False, 'is_identified': False, 'direction': 'english_none', 'original_source_language_name': 'Unknown', 'original_target_language_name': 'Chinese', 'title': 'hi', 'title_original': '[unknown > chinese] hi', 'status': {'it': 'untranslated', 'ru': 'translated', 'uz': 'untranslated'}, 'is_bot_crosspost': False}"
+pickled_data_output = "{'id': '15122fm', 'created_utc': 1689500594, 'post_templates': {}, 'recorded_translators': [], 'notified': [], 'author': 'your_average_bear', 'direction': 'english_none', 'original_source_language_name': 'Unknown', 'original_target_language_name': 'Chinese', 'title': 'hi', 'title_original': '[unknown > chinese] hi', 'is_bot_crosspost': False, 'is_identified': False, 'is_long': False, 'is_script': False, 'parent_crosspost': None, 'author_messaged': False, 'status': {'it': 'untranslated', 'ru': 'translated', 'uz': 'untranslated'}, 'script_name': '', 'script_code': '', 'time_delta': {}, 'ajo_language_info': {'is_multiple': True, 'language_code_1': ['it', 'ru', 'uz'], 'language_code_3': ['ita', 'rus', 'uzn'], 'language_name': 'Multiple Languages', 'country_code': None, 'language_history': ['Multiple Languages'], 'is_supported': True}, 'output_oflair_css': None, 'output_oflair_text': None}"
 
 
 def test_ajo_from_reddit_pickle():
     with open("tests/pickle_test_data/reddit_submission.pickle", "rb") as f:
         data = pickle.loads(f.read())
         my_ajo = Ajo.init_from_submission(data, {})
-        assert repr(my_ajo) == pickled_data
+        assert repr(my_ajo) == pickled_data_output

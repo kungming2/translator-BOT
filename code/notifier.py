@@ -174,8 +174,6 @@ def notifier_language_list_editor(
                     sql_package,
                 )
                 config.conn_main.commit()
-            else:
-                continue
 
 
 def load_statistics_data(language_code: str) -> Dict[str, Any]:
@@ -258,6 +256,13 @@ def record_activity_csv(
         data_writer.writerow(data_tuple)
 
 
+def fetch_users_to_notify(cursor_main: Cursor, language_code: str):
+    cursor_main.execute(
+        "SELECT username FROM notify_users WHERE language_code = ?", (language_code,)
+    )
+    return cursor_main.fetchall()
+
+
 def notifier_page_translators(
     language_code: str,
     language_name: str,
@@ -284,11 +289,7 @@ def notifier_page_translators(
     """
 
     number_to_page = 5  # How many users we want to page.
-
-    config.cursor_main.execute(
-        "SELECT username FROM notify_users WHERE language_code = ?", (language_code,)
-    )
-    page_targets = config.cursor_main.fetchall()
+    page_targets = fetch_users_to_notify(config.cursor_main, language_code)
 
     page_users_list = [target["username"] for target in page_targets]
 
@@ -521,14 +522,11 @@ class ZiwenNotifier:
                 if language_code == relevant_iso_code:
                     targeted_language = lang_country
 
-        sql_lc = "SELECT username FROM notify_users WHERE language_code = ?"
-        cursor_main.execute(sql_lc, (targeted_language,))
-        notify_targets = cursor_main.fetchall()
+        notify_targets = fetch_users_to_notify(cursor_main, targeted_language)
 
         if relevant_iso_code is not None:
             # There is an equvalent code. Let's get the users from that too.
-            cursor_main.execute(sql_lc, (relevant_iso_code,))
-            notify_targets += cursor_main.fetchall()
+            notify_targets += fetch_users_to_notify(cursor_main, relevant_iso_code)
 
         # Get the usernames.
         final_specific_usernames = {target["username"] for target in notify_targets}
@@ -536,8 +534,7 @@ class ZiwenNotifier:
         # Now we need to find the overall list's user names for the broader langauge (e.g. ar)
         # Take only the language part (ar).
         broader_code = targeted_language.split("-")[0]
-        cursor_main.execute(sql_lc, (broader_code,))
-        all_notify_targets = cursor_main.fetchall()
+        all_notify_targets = fetch_users_to_notify(cursor_main, broader_code)
 
         # This creates a list of all the people signed up for the original.
         all_broader_usernames = {target["username"] for target in all_notify_targets}
@@ -773,9 +770,8 @@ class ZiwenNotifier:
             language_code = suggested_css_text.split("-", 1)[0]
             language_name = convert(suggested_css_text).language_name
             if language_code == "unknown":  # Add a new script phrase
-                language_name += (
-                    " (Script)"  # This is to distinguish script notifications
-                )
+                # This is to distinguish script notifications
+                language_name += " (Script)"
             regional_data = self.__notifier_regional_language_fetcher(
                 suggested_css_text
             )
@@ -783,11 +779,7 @@ class ZiwenNotifier:
                 # add the additional people to the notifications list.
                 notify_users_list += regional_data
 
-        self.config.cursor_main.execute(
-            "SELECT username FROM notify_users WHERE language_code = ?",
-            (language_code,),
-        )
-        notify_targets = self.config.cursor_main.fetchall()
+        notify_targets = fetch_users_to_notify(self.config.cursor_main, language_code)
 
         if len(notify_targets) == 0 and len(notify_users_list) == 0:
             # If there's no one on the list, just continue
@@ -823,11 +815,8 @@ class ZiwenNotifier:
                 oauthor=oauthor,
             )
             try:
-                message_subject = (
-                    f"[Notification] New {language_name} post on r/translator"
-                )
                 self.config.reddit.redditor(username).message(
-                    subject=message_subject,
+                    subject=f"[Notification] New {language_name} post on r/translator",
                     message=message + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON,
                 )
                 # Record that they have been messaged
@@ -858,11 +847,16 @@ class ZiwenNotifier:
         return notify_users_list
 
 
-class ZiwenMessages:
-    def __init__(self, config: ZiwenConfig):
+class ZiwenMessageProcessor:
+    def __init__(
+        self, config: ZiwenConfig, message: praw.reddit.models.Message
+    ) -> None:
         self.config = config
+        self.message = message
+        self.mbody = message.body
+        self.mauthor = str(message.author)
 
-    def __messaging_user_statistics_loader(self, username: str) -> str | None:
+    def __messaging_user_statistics_loader(self) -> str | None:
         """
         Function that pairs with messaging_user_statistics_writer. Takes a username and looks up what commands they have
         been recorded as using.
@@ -875,13 +869,14 @@ class ZiwenMessages:
 
         # Get commands data.
         self.config.cursor_main.execute(
-            "SELECT commands FROM total_commands WHERE username = ?", (username,)
+            "SELECT commands FROM total_commands WHERE username = ?", (self.mauthor,)
         )
         username_commands_data = self.config.cursor_main.fetchone()
 
         # Get notifications data.
         self.config.cursor_main.execute(
-            "SELECT received FROM notify_monthly_limit WHERE username = ?", (username,)
+            "SELECT received FROM notify_monthly_limit WHERE username = ?",
+            (self.mauthor,),
         )
         notifications_commands_data = self.config.cursor_main.fetchone()
         commands_lines_to_post = []
@@ -923,7 +918,7 @@ class ZiwenMessages:
             commands_lines_to_post + notifications_lines_to_post
         )
 
-    def __points_retreiver(self, username: str) -> str:
+    def __points_retreiver(self) -> str:
         """
         Fetches the total number of points earned by a user in the current month.
         This is used with the messages routine to tell people how many points they have earned.
@@ -932,23 +927,19 @@ class ZiwenMessages:
         :return to_post: A string containing information on how many points the user has received on r/translator.
         """
 
-        recorded_posts = []
-        to_post = ""
-
         current_time = time.time()
         month_string = datetime.fromtimestamp(current_time).strftime("%Y-%m")
 
         self.config.cursor_main.execute(
             "SELECT points FROM total_points WHERE username = ? AND month_year = ?",
-            (username, month_string),
+            (self.mauthor, month_string),
         )
-        username_month_points_data = (
-            self.config.cursor_main.fetchall()
-        )  # Returns a list of lists.
+        # Returns a list of lists.
+        username_month_points_data = self.config.cursor_main.fetchall()
 
         self.config.cursor_main.execute(
             "SELECT points, oid, month_year FROM total_points WHERE username = ?",
-            (username,),
+            (self.mauthor,),
         )
         username_all_points_data = self.config.cursor_main.fetchall()
 
@@ -964,11 +955,9 @@ class ZiwenMessages:
             all_points += data["points"]
             recorded_posts.add(data["oid"])
             recorded_months.add(data["month_year"])
-        recorded_months = sorted(recorded_months)
 
-        # This is the number of posts the user has participated in.
         recorded_posts_count = len(recorded_posts)
-
+        to_post = ""
         if all_points != 0:  # The user has points listed.
             to_post += (
                 f"You've earned **{month_points} points** on r/translator this month.\n\n"
@@ -978,22 +967,21 @@ class ZiwenMessages:
         else:  # User has no points listed.
             return MSG_NO_POINTS
 
-        for month in recorded_months:  # Generate rows of data from the points data.
-            recorded_month_points = 0
-            scratchpad_posts = set()
-
+        # Generate rows of data from the points data.
+        for month in sorted(recorded_months):
             self.config.cursor_main.execute(
                 "SELECT points, oid FROM total_points WHERE username = ? AND month_year = ?",
-                (username, month),
+                (self.mauthor, month),
             )
             month_data = self.config.cursor_main.fetchall()
+
+            recorded_month_points = 0
+            scratchpad_posts = set()
             for data in month_data:
                 recorded_month_points += data["points"]
                 scratchpad_posts.add(data["oid"])
 
-            recorded_posts = len(scratchpad_posts)
-
-            to_post += f"\n{month} | {recorded_month_points} | {recorded_posts}"
+            to_post += f"\n{month} | {recorded_month_points} | {len(scratchpad_posts)}"
         # Add a summary row for the totals.
         to_post += f"\n*Total* | {all_points} | {recorded_posts_count}"
 
@@ -1023,296 +1011,295 @@ class ZiwenMessages:
         # Return what has been recorded for today_counter
         return f"\n\n{ping_error_output}"
 
-    def ziwen_messages(self) -> None:
-        """
-        A top-level system to process commands via the messaging system of Reddit. This system acts upon keywords included
-        in the message's subject field, including the following.
+    def process_subscribe(self):
+        # User wants to subscribe to language notifications.
+        logger.info(f"Messages: New subscription request from u/{self.mauthor}.")
 
-        * `subscribe`
-        * `unsubscribe`
-        * `ping`
-        * `status`
-        * `points`
-        * `add`
-        * `remove`
+        # This gets a list of language codes from the message body.
+        language_matches = language_list_splitter(self.mbody)
 
-        The function will mark any incoming messages/mentions as read, even if they aren't actable. That's going to depend
-        on the operator of this script to check the account itself.
+        if language_matches is None:  # There are no valid codes to subscribe.
+            # Reply to user.
+            self.message.reply(
+                MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER
+            )
+            logger.info("Messages: Subscription languages listed are not valid.")
+        else:  # There are valid codes. Let's insert them into our database and reply with a confirmation message.
+            # Insert the relevant codes.
+            notifier_language_list_editor(
+                language_matches, self.mauthor, self.config, "insert"
+            )
 
-        :param: Nothing.
-        :return: Nothing.
-        """
+            # Get the language names of those codes.
+            final_match_names = [
+                convert(code).language_name for code in language_matches
+            ]
 
-        # Fetch just the last five unread messages. Ziwen cycles every 30 seconds so this should be sufficient.
-        messages = list(self.config.reddit.inbox.unread(limit=5))
-        for message in messages:
-            mauthor = str(message.author)
-            msubject = message.subject.lower()  # Convert to lowercase
-            mbody = message.body
-            message.mark_read()  # Mark the message as read.
-            if "subscribe" in msubject and "un" not in msubject:
-                # User wants to subscribe to language notifications.
-                logger.info(f"Messages: New subscription request from u/{mauthor}.")
+            # Add the various components of the reply.
+            thanks_phrase = MAIN_LANGUAGES.get(language_matches[0], {}).get(
+                "thanks", "Thank you"
+            )
+            bullet_list = "\n* ".join(final_match_names)
+            frequency_table = messaging_language_frequency_table(language_matches)
 
-                # This gets a list of language codes from the message body.
-                language_matches = language_list_splitter(mbody)
+            # Pull it all together with the template.
+            main_body = MSG_SUBSCRIBE.format(
+                thanks_phrase, bullet_list, frequency_table
+            )
 
-                if language_matches is None:  # There are no valid codes to subscribe.
-                    # Reply to user.
-                    message.reply(
-                        MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER
-                    )
-                    logger.info(
-                        "Messages: Subscription languages listed are not valid."
-                    )
-                else:  # There are valid codes. Let's insert them into our database and reply with a confirmation message.
-                    final_match_names = []
+            # Reply to the subscribing user.
+            self.message.reply(main_body + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
+            logger.info(
+                f"Messages: Added notification subscriptions for u/{self.mauthor}."
+            )
+            action_counter(len(language_matches), "Subscriptions")
 
-                    # Insert the relevant codes.
-                    notifier_language_list_editor(
-                        language_matches, mauthor, self.config, "insert"
-                    )
+    def process_unsubscribe(self):
+        # User wants to unsubscribe from notifications.
+        logger.info(f"Messages: New unsubscription request from u/{self.mauthor}.")
 
-                    # Get the language names of those codes.
-                    for code in language_matches:
-                        final_match_names.append(convert(code).language_name)
+        # This gets a list of language codes from the message body.
+        language_matches = language_list_splitter(self.mbody)
 
-                    # Add the various components of the reply.
-                    thanks_phrase = MAIN_LANGUAGES.get(language_matches[0], {}).get(
-                        "thanks", "Thank you"
-                    )
-                    bullet_list = "\n* ".join(final_match_names)
-                    frequency_table = messaging_language_frequency_table(
-                        language_matches
-                    )
+        # Iterate over the results.
+        if language_matches is None:
+            # There are no valid codes to unsubscribe them from.
+            # Format the error reply message.
+            self.message.reply(
+                MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER
+            )
 
-                    # Pull it all together with the template.
-                    main_body = MSG_SUBSCRIBE.format(
-                        thanks_phrase, bullet_list, frequency_table
-                    )
+            # Forward the message to my creator.
+            self.config.reddit.redditor("kungming2").message(
+                subject=f"Unsubscribe Attempt: u/{self.mauthor}",
+                message=f"Forwarded message:\n\n---\n\n{self.mbody}",
+            )
+            logger.info(
+                "Messages: Unsubscription languages listed are invalid. Replied w/ more info."
+            )
+        elif "all" in language_matches:
+            # User wants to unsubscribe from everything.
+            # Delete the user from the database.
+            notifier_language_list_editor(
+                language_matches, self.mauthor, self.config, "purge"
+            )
 
-                    # Reply to the subscribing user.
-                    message.reply(main_body + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
-                    logger.info(
-                        f"Messages: Added notification subscriptions for u/{mauthor}."
-                    )
-                    action_counter(len(language_matches), "Subscriptions")
+            # Send the reply.
+            self.message.reply(
+                MSG_UNSUBSCRIBE_ALL.format("all", MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER
+            )
+            action_counter(1, "Unsubscriptions")
+        else:  # Should return a list of specific languages the person doesn't want.
+            # Delete the relevant codes.
+            notifier_language_list_editor(
+                language_matches, self.mauthor, self.config, "delete"
+            )
+            # Get the language names of those codes.
+            final_match_names = [
+                convert(code).language_name for code in language_matches
+            ]
 
-            elif "unsubscribe" in msubject:
-                # User wants to unsubscribe from notifications.
-                logger.info(f"Messages: New unsubscription request from u/{mauthor}.")
+            # Join the list into a string that is bulleted.
+            bullet_list = "\n* ".join(final_match_names)
 
-                # This gets a list of language codes from the message body.
-                language_matches = language_list_splitter(mbody)
+            # Format the reply message.
+            self.message.reply(
+                MSG_UNSUBSCRIBE_ALL.format(bullet_list, MSG_SUBSCRIBE_LINK)
+                + BOT_DISCLAIMER
+                + MSG_UNSUBSCRIBE_BUTTON
+            )
+            logger.info(
+                f"Messages: Removed notification subscriptions for u/{self.mauthor}."
+            )
+            action_counter(len(language_matches), "Unsubscriptions")
 
-                # Iterate over the results.
-                if language_matches is None:
-                    # There are no valid codes to unsubscribe them from.
-                    # Format the error reply message.
-                    message.reply(
-                        MSG_CANNOT_PROCESS.format(MSG_SUBSCRIBE_LINK) + BOT_DISCLAIMER
-                    )
+    def process_ping(self):
+        logger.info(f"Messages: New status check from u/{self.mauthor}.")
+        to_post = "Ziwen is running nominally.\n\n"
 
-                    # Forward the message to my creator.
-                    self.config.reddit.redditor("kungming2").message(
-                        subject=f"Unsubscribe Attempt: u/{mauthor}",
-                        message=f"Forwarded message:\n\n---\n\n{mbody}",
-                    )
-                    logger.info(
-                        "Messages: Unsubscription languages listed are invalid. Replied w/ more info."
-                    )
-                elif "all" in language_matches:
-                    # User wants to unsubscribe from everything.
-                    # Delete the user from the database.
-                    notifier_language_list_editor(
-                        language_matches, mauthor, self.config, "purge"
-                    )
+        # Determine if user is a moderator.
+        if self.config.is_mod(self.mauthor):  # New status check from moderators.
+            # Get the last two recorded error entries for debugging.
+            to_post += self.__record_retrieve_error_log()
+            if len(to_post) > 10000:  # If the PM is too long, shorten it.
+                to_post = to_post[0:9750]
 
-                    # Send the reply.
-                    message.reply(
-                        MSG_UNSUBSCRIBE_ALL.format("all", MSG_SUBSCRIBE_LINK)
-                        + BOT_DISCLAIMER
-                    )
-                    action_counter(1, "Unsubscriptions")
-                else:  # Should return a list of specific languages the person doesn't want.
-                    # Delete the relevant codes.
-                    notifier_language_list_editor(
-                        language_matches, mauthor, self.config, "delete"
-                    )
-                    # Get the language names of those codes.
-                    final_match_names = [
-                        convert(code).language_name for code in language_matches
-                    ]
+        # Reply to user.
+        self.message.reply(to_post + BOT_DISCLAIMER)
+        logger.info("Messages: Replied with ping call.")
 
-                    # Join the list into a string that is bulleted.
-                    bullet_list = "\n* ".join(final_match_names)
+    def process_status(self):
+        logger.info(f"Messages: New status request from u/{self.mauthor}.")
 
-                    # Format the reply message.
-                    message.reply(
-                        MSG_UNSUBSCRIBE_ALL.format(bullet_list, MSG_SUBSCRIBE_LINK)
-                        + BOT_DISCLAIMER
-                        + MSG_UNSUBSCRIBE_BUTTON
-                    )
-                    logger.info(
-                        f"Messages: Removed notification subscriptions for u/{mauthor}."
-                    )
-                    action_counter(len(language_matches), "Unsubscriptions")
+        # We try to retrieve the languages the user is subscribed to.
+        self.config.cursor_main.execute(
+            "SELECT language_code FROM notify_users WHERE username = ?",
+            (self.mauthor,),
+        )
+        # Returns a list of lists w/ the language code & the username
+        all_subscriptions = self.config.cursor_main.fetchall()
+        final_match_codes = [
+            subscription["language_code"] for subscription in all_subscriptions
+        ]
 
-            elif "ping" in msubject:
-                logger.info(f"Messages: New status check from u/{mauthor}.")
-                to_post = "Ziwen is running nominally.\n\n"
+        # User is not subscribed to anything.
+        if len(final_match_codes) == 0:
+            status_component = MSG_NO_SUBSCRIPTIONS.format(MSG_SUBSCRIBE_LINK)
+        else:
+            final_match_names = []
+            for code in final_match_codes:  # Convert the codes into names
+                converted_result = convert(code)  # This will return a tuple.
+                # Should get the name from each
+                match_name = converted_result.language_name
+                if code == "meta":
+                    match_name = "Meta"
+                elif code == "community":
+                    match_name = "Community"
+                elif "unknown-" in code:  # For scripts
+                    match_name += " (Script)"
+                final_match_names.append(match_name)
 
-                # Determine if user is a moderator.
-                if self.config.is_mod(mauthor):  # New status check from moderators.
-                    # Get the last two recorded error entries for debugging.
-                    to_post += self.__record_retrieve_error_log()
-                    if len(to_post) > 10000:  # If the PM is too long, shorten it.
-                        to_post = to_post[0:9750]
+            # De-dupe and sort the returned languages.
+            # Alphabetize
+            final_match_names = sorted(set(final_match_names), key=str.lower)
 
-                # Reply to user.
-                message.reply(to_post + BOT_DISCLAIMER)
-                logger.info("Messages: Replied with ping call.")
+            # Format the message to send to the requester.
+            status_message = (
+                "You're subscribed to notifications on r/translator for:\n\n* {}"
+            )
+            status_component = status_message.format("\n* ".join(final_match_names))
 
-            elif "status" in msubject:
-                logger.info(f"Messages: New status request from u/{mauthor}.")
+        # Get the commands the user may have used before.
+        user_commands_statistics_data = self.__messaging_user_statistics_loader()
+        if user_commands_statistics_data is not None:
+            commands_component = (
+                "\n\n### User Commands Statistics\n\n" + user_commands_statistics_data
+            )
+        else:
+            commands_component = ""
 
-                # We try to retrieve the languages the user is subscribed to.
-                self.config.cursor_main.execute(
-                    "SELECT language_code FROM notify_users WHERE username = ?",
-                    (mauthor,),
-                )
-                # Returns a list of lists w/ the language code & the username
-                all_subscriptions = self.config.cursor_main.fetchall()
-                final_match_codes = [
-                    subscription["language_code"] for subscription in all_subscriptions
-                ]
+        # Compile the components together
+        compilation = "### Notifications\n\n" + status_component + commands_component
 
-                # User is not subscribed to anything.
-                if len(final_match_codes) == 0:
-                    status_component = MSG_NO_SUBSCRIPTIONS.format(MSG_SUBSCRIBE_LINK)
-                else:
-                    final_match_names = []
-                    for code in final_match_codes:  # Convert the codes into names
-                        converted_result = convert(code)  # This will return a tuple.
-                        # Should get the name from each
-                        match_name = converted_result.language_name
-                        if code == "meta":
-                            match_name = "Meta"
-                        elif code == "community":
-                            match_name = "Community"
-                        elif "unknown-" in code:  # For scripts
-                            match_name += " (Script)"
-                        final_match_names.append(match_name)
+        action_counter(1, "Status checks")
+        self.message.reply(compilation + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
 
-                    # De-dupe and sort the returned languages.
-                    # Alphabetize
-                    final_match_names = sorted(set(final_match_names), key=str.lower)
+    def process_add(self):
+        if not self.config.is_mod(self.mauthor):
+            return
+        # Mod manually adding people to the notifications database.
+        logger.info(
+            f"Messages: New username addition message from moderator u/{self.mauthor}."
+        )
 
-                    # Format the message to send to the requester.
-                    status_message = "You're subscribed to notifications on r/translator for:\n\n* {}"
-                    status_component = status_message.format(
-                        "\n* ".join(final_match_names)
-                    )
+        # Get the username of the user we want to add to the database.
+        add_username = self.mbody.split("USERNAME:", 1)[1]
+        # Get the username (no u/)
+        add_username = add_username.split("LANGUAGES", 1)[0].strip()
 
-                # Get the commands the user may have used before.
-                user_commands_statistics_data = self.__messaging_user_statistics_loader(
-                    mauthor
-                )
-                if user_commands_statistics_data is not None:
-                    commands_component = (
-                        "\n\n### User Commands Statistics\n\n"
-                        + user_commands_statistics_data
-                    )
-                else:
-                    commands_component = ""
+        # Split off the languages part.
+        language_component = self.mbody.rpartition("LANGUAGES:")[-1].strip()
 
-                # Compile the components together
-                compilation = (
-                    "### Notifications\n\n" + status_component + commands_component
-                )
+        # This gets a list of language codes from the message body.
+        language_matches = language_list_splitter(language_component)
 
-                action_counter(1, "Status checks")
-                message.reply(compilation + BOT_DISCLAIMER + MSG_UNSUBSCRIBE_BUTTON)
+        if language_matches is not None:
+            # In case the moderators' addition string is incomprehensible.
+            # Insert the relevant codes.
+            notifier_language_list_editor(
+                language_matches, add_username, self.config, "insert"
+            )
 
-            elif "add" in msubject and self.config.is_mod(mauthor):
-                # Mod manually adding people to the notifications database.
-                logger.info(
-                    f"Messages: New username addition message from moderator u/{mauthor}."
-                )
+            # Reply to moderator.
+            match_codes_print = ", ".join(language_matches)
+            addition_message = f"Added the language codes **{match_codes_print}** for u/{add_username} into the notifications database."
+            self.message.reply(addition_message)
 
-                # Get the username of the user we want to add to the database.
-                add_username = mbody.split("USERNAME:", 1)[1]
-                # Get the username (no u/)
-                add_username = add_username.split("LANGUAGES", 1)[0].strip()
+    def process_remove(self):
+        if not self.config.is_mod(self.mauthor):
+            return
+        # Mod manually removing people from the notifications database.
+        logger.info(
+            f"Messages: New username removal message from moderator u/{self.mauthor}."
+        )
 
-                # Split off the languages part.
-                language_component = mbody.rpartition("LANGUAGES:")[-1].strip()
+        # Get the username of the user we want to add to the database.
+        remove_username = self.mbody.split("USERNAME:", 1)[1].strip()
 
-                # This gets a list of language codes from the message body.
-                language_matches = language_list_splitter(language_component)
+        # We try to retrieve the languages the user is subscribed to.
+        self.config.cursor_main.execute(
+            "SELECT language_code FROM notify_users WHERE username = ?",
+            (remove_username,),
+        )
+        all_subscriptions = (
+            self.config.cursor_main.fetchall()
+        )  # Returns a list of lists with both the code and the username.
+        subscribed_codes = [
+            subscription["language_code"] for subscription in all_subscriptions
+        ]
 
-                if language_matches is not None:
-                    # In case the moderators' addition string is incomprehensible.
-                    # Insert the relevant codes.
-                    notifier_language_list_editor(
-                        language_matches, add_username, self.config, "insert"
-                    )
+        # Actually delete the username from database.
+        notifier_language_list_editor([], remove_username, self.config, "purge")
 
-                    # Reply to moderator.
-                    match_codes_print = ", ".join(language_matches)
-                    addition_message = f"Added the language codes **{match_codes_print}** for u/{add_username} into the notifications database."
-                    message.reply(addition_message)
+        # Send a message back to the moderator confirming this.
+        final_match_codes_print = ", ".join(subscribed_codes)
+        removal_message = f"Removed the subscriptions for u/{remove_username} from the notifications database. (**{final_match_codes_print}**)"
+        self.message.reply(removal_message)
 
-            elif "remove" in msubject and self.config.is_mod(mauthor):
-                # Mod manually removing people from the notifications database.
-                logger.info(
-                    f"Messages: New username removal message from moderator u/{mauthor}."
-                )
+    def process_points(self):
+        logger.info(f"Messages: New points status request from u/{self.mauthor}.")
+        # Get the user's points
+        user_points_output = (
+            "### Points on r/translator\n\n" + self.__points_retreiver()
+        )
 
-                # Get the username of the user we want to add to the database.
-                remove_username = mbody.split("USERNAME:", 1)[1].strip()
+        # Get the commands the user may have used before.
+        user_commands_statistics_data = self.__messaging_user_statistics_loader()
+        commands_component = (
+            ""
+            if user_commands_statistics_data is None
+            else ("\n\n### Commands Statistics\n\n" + user_commands_statistics_data)
+        )
 
-                # We try to retrieve the languages the user is subscribed to.
-                self.config.cursor_main.execute(
-                    "SELECT language_code FROM notify_users WHERE username = ?",
-                    (remove_username,),
-                )
-                subscribed_codes = [
-                    subscription["language_code"] for subscription in all_subscriptions
-                ]
-
-                # Actually delete the username from database.
-                notifier_language_list_editor([], remove_username, self.config, "purge")
-
-                # Send a message back to the moderator confirming this.
-                final_match_codes_print = ", ".join(subscribed_codes)
-                removal_message = f"Removed the subscriptions for u/{remove_username} from the notifications database. (**{final_match_codes_print}**)"
-                message.reply(removal_message)
-
-            elif "points" in msubject:
-                logger.info(f"Messages: New points status request from u/{mauthor}.")
-
-                # Get the user's points
-                user_points_output = (
-                    "### Points on r/translator\n\n" + self.__points_retreiver(mauthor)
-                )
-
-                # Get the commands the user may have used before.
-                user_commands_statistics_data = self.__messaging_user_statistics_loader(
-                    mauthor
-                )
-                commands_component = (
-                    ""
-                    if user_commands_statistics_data is None
-                    else (
-                        "\n\n### Commands Statistics\n\n"
-                        + user_commands_statistics_data
-                    )
-                )
-
-                message.reply(user_points_output + commands_component + BOT_DISCLAIMER)
-                action_counter(1, "Points checks")
+        self.message.reply(user_points_output + commands_component + BOT_DISCLAIMER)
+        action_counter(1, "Points checks")
 
 
-def ziwen_messages(config):
-    return ZiwenMessages(config).ziwen_messages()
+def ziwen_messages(config: ZiwenConfig):
+    """
+    A top-level system to process commands via the messaging system of Reddit. This system acts upon keywords included
+    in the message's subject field, including the following.
+
+    * `subscribe`
+    * `unsubscribe`
+    * `ping`
+    * `status`
+    * `points`
+    * `add`
+    * `remove`
+
+    The function will mark any incoming messages/mentions as read, even if they aren't actable. That's going to depend
+    on the operator of this script to check the account itself.
+
+    :param: Nothing.
+    :return: Nothing.
+    """
+    messages = list(config.reddit.inbox.unread(limit=5))
+    for message in messages:
+        processor = ZiwenMessageProcessor(config, message)
+        message.mark_read()  # Mark the message as read.
+        # not dictionary since unsubscribe must come before subscribe
+        keyword_mapping = [
+            ("unsubscribe", processor.process_unsubscribe),
+            ("subscribe", processor.process_subscribe),
+            ("ping", processor.process_ping),
+            ("status", processor.process_status),
+            ("add", processor.process_add),
+            ("remove", processor.process_remove),
+            ("points", processor.process_points),
+        ]
+        msubject = message.subject.lower()  # Convert to lowercase
+        for keyword, func in keyword_mapping:
+            if keyword in msubject:
+                func()
+                break

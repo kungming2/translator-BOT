@@ -98,7 +98,7 @@ def is_mod(username: str) -> bool:
     return username in mod_list
 
 
-"""CLOSEOUT ROUTINE"""
+# CLOSEOUT ROUTINE
 
 
 def wiki_access(post_ids: None | List[str], retrieve: bool = False) -> None | List[str]:
@@ -214,7 +214,7 @@ def closeout(list_posts: List[praw.reddit.models.Submission]) -> None:
         logger.debug("[ZF]: > Saved post IDs to the wikipage.")
 
 
-"""DUPLICATE DETECTOR"""
+# DUPLICATE DETECTOR
 
 
 def fetch_removal_reasons(subreddit: str) -> Dict[int, tuple] | None:
@@ -376,7 +376,7 @@ def duplicate_detector(
         return actionable_posts
 
 
-"""WIKIPEDIA DETECTOR (COMMENTS"""
+# WIKIPEDIA DETECTOR (COMMENTS)
 
 
 def extract_text_within_curly_braces(text: str) -> List[str]:
@@ -449,7 +449,7 @@ def wikipedia_lookup(terms: List[str], language: str = "English") -> str | None:
         return body_text
 
 
-"""MAIN RUNTIME"""
+# MAIN RUNTIME
 
 
 def zifang_posts(removal_reasons: Dict[int, tuple] | None) -> None:

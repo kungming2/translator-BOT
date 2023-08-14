@@ -16,7 +16,7 @@ class functions.
 """
 
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 from code._config import STATUS_KEYWORDS, logger
 from code._language_consts import MAIN_LANGUAGES
@@ -375,33 +375,30 @@ class Ajo:
         Example of an output for flair is German (Identified/Script) (Long)
     """
 
-    id: str
-    created_utc: int
-    post_templates: Dict[str, str]
-    recorded_translators: List[str]
-    notified: List[str]
-    author: str
-    direction: str
-    original_source_language_name: str
-    original_target_language_name: str
-    title: str
-    title_original: str
-    is_bot_crosspost: bool
-    is_identified: bool
-    is_long: bool
-    is_script: bool
-    parent_crosspost: Any
-    author_messaged: bool
-    status: str | Dict[str, str]
-    script_name: str
-    script_code: str
-    time_delta: Dict[str, int]
-    ajo_language_info: AjoLanguageInfo
-
-    # noinspection PyUnboundLocalVariable
-    def __init__(self):
-        self.output_oflair_css = None
-        self.output_oflair_text = None
+    id: str = ""
+    created_utc: int = 0
+    post_templates: Dict[str, str] = field(default_factory=lambda: {})
+    recorded_translators: List[str] = field(default_factory=lambda: [])
+    notified: List[str] = field(default_factory=lambda: [])
+    author: str = ""
+    direction: str = ""
+    original_source_language_name: str = ""
+    original_target_language_name: str = ""
+    title: str = ""
+    title_original: str = ""
+    is_bot_crosspost: bool = False
+    is_identified: bool = False
+    is_long: bool = False
+    is_script: bool = False
+    parent_crosspost: Any = None
+    author_messaged: bool = False
+    status: str | Dict[str, str] = ""
+    script_name: str = ""
+    script_code: str = ""
+    time_delta: Dict[str, int] = field(default_factory=lambda: {})
+    ajo_language_info: AjoLanguageInfo = None
+    output_oflair_css: str | None = None
+    output_oflair_text: str | None = None
 
     @classmethod
     def init_from_values(cls, ajo_dict: Dict[Any, Any]):
@@ -883,7 +880,7 @@ class Ajo:
                     and lang_info.language_code_1[0] is not None
                 ):
                     code_tag = f"[{lang_info.language_code_1[0].upper()}]"
-                    self.output_oflair_css = lang_info.language_code_1
+                    self.output_oflair_css = lang_info.language_code_1[0]
                 elif len(lang_info.language_code_3) == 1:
                     # Supported three letter code
                     code_tag = f"[{lang_info.language_code_3[0].upper()}]"
