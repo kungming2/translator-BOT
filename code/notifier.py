@@ -729,9 +729,8 @@ class ZiwenNotifier:
             try:
                 # Load the history of languages this post has been in
                 language_history = majo.language_history
-                contacted = (
-                    majo.notified
-                )  # Load the people who have been contacted before.
+                # Load the people who have been contacted before.
+                contacted = majo.notified
                 logger.debug(f"Ziwen Notifier: Already contacted {contacted}")
 
                 language_name = convert(suggested_css_text).language_name
@@ -759,15 +758,15 @@ class ZiwenNotifier:
                 language_code = "multiple"
                 language_name = "Multiple Languages"
             elif suggested_css_text in ["meta", "community"]:
-                # Debug fix for the meta & community ones.
-                language_code = suggested_css_text
-                language_name = suggested_css_text.title()
-                post_type = "post"  # Since these are technically not language requests
-
                 # Here we have code to make sure that only mods and the bot send notifications for meta/community posts.
                 if not self.config.is_mod(oauthor):
                     # This OP is not a mod. Don't send notifications.
                     return []  # Exit.
+
+                # Debug fix for the meta & community ones.
+                language_code = suggested_css_text
+                language_name = suggested_css_text.title()
+                post_type = "post"  # Since these are technically not language requests
         else:  # This is a specific code, we want to add the people only signed up for them.
             # Note, this only gets people who are specifically signed up for them, not
             # We get the broader category here. (ar, unknown)
@@ -796,10 +795,8 @@ class ZiwenNotifier:
 
         notify_users_list.extend(target["username"] for target in notify_targets)
 
-        notify_users_list = set(notify_users_list)  # Eliminate duplicates
         # Remove the usernames of users already contacted about this post.
-        # TODO do set subtraction instead
-        notify_users_list = [x for x in notify_users_list if x not in contacted]
+        notify_users_list = list(set(notify_users_list) - set(contacted))
 
         # Code here to equalize data (see function above)
         notify_users_list = self.__notifier_equalizer(notify_users_list, language_name)

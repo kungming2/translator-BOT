@@ -38,8 +38,7 @@ MAXPOSTS = 100
 CLAIM_PERIOD = 28800
 
 if len(sys.argv) > 1:  # This is a new startup with additional parameters for modes.
-    specific_mode = sys.argv[1].lower()
-    if specific_mode == "test":
+    if sys.argv[1].lower() == "test":
         TESTING_MODE = True
         CORRECTED_SUBREDDIT = "trntest"
         MESSAGES_OKAY = False

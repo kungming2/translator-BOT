@@ -921,9 +921,8 @@ class ZhProcessor:
             try:
                 eth_page = requests.get(actual_link, timeout=15, headers=headers)
                 eth_page.encoding = "gb2312"
-                tree = html.fromstring(
-                    eth_page.text
-                )  # now contains the whole HTML page
+                # now contains the whole HTML page
+                tree = html.fromstring(eth_page.text)
             except (
                 requests.exceptions.ChunkedEncodingError,
                 requests.exceptions.ConnectionError,
