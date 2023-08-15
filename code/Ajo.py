@@ -559,11 +559,9 @@ class Ajo:
             # Check to see if this is a bot crosspost.
             original_post_id = reddit_submission.crosspost_parent
             crossposter = reddit_submission.author.name
+            self.is_bot_crosspost = crossposter == "translator-BOT"
             if crossposter == "translator-BOT":
-                self.is_bot_crosspost = True
                 self.parent_crosspost = original_post_id[3:]
-            else:
-                self.is_bot_crosspost = False
         except AttributeError:  # It's not a crosspost.
             self.is_bot_crosspost = False
         return self
@@ -748,18 +746,9 @@ class Ajo:
         :return:
         """
 
-        try:
-            # We check here to make sure the dictionary exists.
-            working_dictionary = self.time_delta
-        except (AttributeError, NameError):
-            # There was no time_delta defined... Let's create it.
-            working_dictionary = {}
-
-        if status not in working_dictionary:
+        if status not in self.time_delta:
             # This status hasn't been recorded. Create it as a key in the dictionary.
-            working_dictionary[status] = moment
-
-        self.time_delta = working_dictionary
+            self.time_delta[status] = moment
 
     def add_translators(self, translator_name: str) -> None:
         """

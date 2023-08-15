@@ -200,9 +200,7 @@ class ZhProcessor:
                 character_data = multi_character_dict[key]
                 if tradify(key) == simplify(key):  # Same character in both sets.
                     duo_header += (
-                        " | [{0}](https://en.wiktionary.org/wiki/{0}#Chinese)".format(
-                            key
-                        )
+                        f" | [{key}](https://en.wiktionary.org/wiki/{key}#Chinese)"
                     )
                 else:
                     duo_header += " | [{0} ({1})](https://en.wiktionary.org/wiki/{0}#Chinese)".format(
@@ -380,9 +378,8 @@ class ZhProcessor:
 
         # Format the header appropriately.
         if tradify(word) == simplify(word):
-            lookup_line_1 = str(
-                "# [{0}](https://en.wiktionary.org/wiki/{0}#Chinese)".format(word)
-            )
+            lookup_line_1 = f"# [{word}](https://en.wiktionary.org/wiki/{word}#Chinese)"
+
         else:
             lookup_line_1 = (
                 "# [{0} ({1})](https://en.wiktionary.org/wiki/{0}#Chinese)".format(
@@ -564,10 +561,8 @@ class ZhProcessor:
 
                 # Recombine the readings
                 ja_total = ja_kun + ja_on
-                ja_total = ja_total.strip().split(" ")
-                ja_total = ", ".join(ja_total)
-                ja_string = f"**Japanese** | *{ja_total}*"
-                to_post.append(ja_string)
+                ja_total = ja_total.strip().replace(" ", ", ")
+                to_post.append(f"**Japanese** | *{ja_total}*")
         if "kHangul" in unicode_rep_jdict and "kKorean" in unicode_rep_jdict:
             ko_hangul = unicode_rep_jdict["kHangul"]
             # We apply RR romanization to this.
@@ -699,9 +694,8 @@ class ZhProcessor:
             if len(keywords["meanings"]) > 2:  # Truncate if too long.
                 keywords["meanings"] = keywords["meanings"][:2]
                 keywords["meanings"][-1] += "."  # Add a period.
-            formatted_line = '\n\n**Buddhist Meanings**: "{}"'.format(
-                "; ".join(keywords["meanings"])
-            )
+            buddhist_meanings = "; ".join(keywords["meanings"])
+            formatted_line = f'\n\n**Buddhist Meanings**: "{buddhist_meanings}"'
             formatted_line += (
                 " ([Soothill-Hodous]"
                 "(https://mahajana.net/en/library/texts/a-dictionary-of-chinese-buddhist-terms))"
@@ -798,9 +792,8 @@ class ZhProcessor:
                 "raw_line": relevant_line,
             }
 
-            formatted_line = '\n\n**Cantonese Meanings**: "{}."'.format(
-                "; ".join(keywords["meanings"])
-            )
+            canto_meanings = "; ".join(keywords["meanings"])
+            formatted_line = f'\n\n**Cantonese Meanings**: "{canto_meanings}."'
             formatted_line += (
                 f" ([CC-Canto](https://cantonese.org/search.php?q={cantonese_word}))"
             )
@@ -886,9 +879,7 @@ class ZhProcessor:
 
         try:
             # We run a search on the site and see if there are results.
-            results = requests.get(
-                search_link.format(chengyu), headers=headers, timeout=15
-            )
+            results = requests.get(search_link, headers=headers, timeout=15)
             results.encoding = "gb2312"
             r_tree = html.fromstring(results.text)  # now contains the whole HTML page
             chengyu_exists = r_tree.xpath('//td[contains(@bgcolor,"#B4D8F5")]/text()')
@@ -907,14 +898,14 @@ class ZhProcessor:
 
         if "找到 0 个成语" in chengyu_exists[1]:  # There are no results...
             logger.info(f"ZH-Chengyu: No chengyu results found for {chengyu}.")
-            return None
+            return
         if r_tree is not None:  # There are results.
             # Look through the results page.
             link_results = r_tree.xpath('//tr[contains(@bgcolor,"#ffffff")]/td/a')
             try:
                 actual_link = link_results[0].attrib["href"]
             except IndexError:
-                return None
+                return
             logger.info(f"> ZH-Chengyu: Found a chengyu. Actual link at: {actual_link}")
 
             # Get the data from the actual link

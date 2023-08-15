@@ -12,6 +12,7 @@ For Chinese and Japanese, the main functions are `xx_character` and `xx_word`, w
 More general ones are prefixed by `lookup`.
 """
 
+from collections import defaultdict
 import re
 from code._config import logger
 from code.zh_processing import zh_character_calligraphy_search
@@ -26,7 +27,13 @@ class JapaneseProcessor:
     def __init__(self, zw_useragent: Dict[str, str]) -> None:
         self.zw_useragent = zw_useragent
 
-    def ja_character(self, character) -> str:
+    def __format_readings(self, readings) -> str:
+        reading_list = [
+            f"{reading} (*{romkan.to_hepburn(reading)}*)" for reading in readings
+        ]
+        return ", ".join(reading_list)
+
+    def ja_character(self, character: str) -> str:
         """
         This function looks up a Japanese kanji's pronunciations and meanings
 
@@ -34,19 +41,19 @@ class JapaneseProcessor:
         :return to_post: A formatted string
         """
 
-        is_kana = False
-        multi_mode = False
-        multi_character_dict = {}  # Dictionary to store the info we get.
+        multi_mode = len(character) > 1
+        multi_character_dict = defaultdict(dict)  # Dictionary to store the info we get.
         total_data = ""
         # Check to see if it's hiragana. Will return none if kanji.
         kana_test = re.search("[\u3040-\u309f]", character)
 
-        multi_character_list = list(character)
-
-        if len(multi_character_list) > 1:
-            multi_mode = True
-
         if kana_test is not None:
+            ja_to_post = "\n\n^Information ^from [^(Jisho)](https://jisho.org/search/{0}%20%23particle) ^| "
+            ja_to_post += (
+                "[^(Tangorin)](https://tangorin.com/general/{0}%20particle) ^| "
+            )
+            ja_to_post += "[^(Weblio EJJE)](https://ejje.weblio.jp/content/{0})"
+            lookup_line_3 = ja_to_post.format(character)
             kana = kana_test.group(0)
             eth_page = requests.get(
                 f"http://jisho.org/search/{character}%20%23particle",
@@ -56,13 +63,16 @@ class JapaneseProcessor:
             tree = html.fromstring(eth_page.content)  # now contains the whole HTML page
             meaning = tree.xpath('//span[contains(@class,"meaning-meaning")]/text()')
             meaning = " / ".join(meaning)
-            is_kana = True
-            total_data = "# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)".format(
-                kana
-            )
+            total_data = f"# [{kana}](https://en.wiktionary.org/wiki/{kana}#Japanese)"
             total_data += f" (*{romkan.to_hepburn(kana)}*)"
             total_data += f'\n\n**Meanings**: "{meaning}."'
         else:
+            ja_to_post = "\n\n^Information ^from [^(Jisho)](https://jisho.org/search/{0}%20%23kanji) ^| "
+            ja_to_post += (
+                "[^(Goo Dictionary)](https://dictionary.goo.ne.jp/word/en/{0}) ^| "
+            )
+            ja_to_post += "[^(Tangorin)](https://tangorin.com/kanji/{0}) ^| [^(Weblio EJJE)](https://ejje.weblio.jp/content/{0})"
+            lookup_line_3 = ja_to_post.format(character)
             if not multi_mode:
                 # Regular old-school one character search.
                 eth_page = requests.get(
@@ -82,12 +92,11 @@ class JapaneseProcessor:
                 meaning = meaning.strip()
                 # Check to not return anything if the entry is invalid
                 if len(meaning) == 0:
-                    to_post = (
+                    logger.info(f"JA-Character: No results for {character}")
+                    return (
                         f"There were no results for {character}. Please check to make sure it is a valid Japanese "
                         "character or word."
                     )
-                    logger.info(f"JA-Character: No results for {character}")
-                    return to_post
                 if len(kun_reading) == 0:
                     on_reading = tree.xpath(
                         '//*[@id="result_area"]/div/div[1]/div[2]/div/div[1]/div[2]/dl/dd/a/text()'
@@ -96,24 +105,12 @@ class JapaneseProcessor:
                     on_reading = tree.xpath(
                         '//div[contains(@class,"kanji-details__main-readings")]/dl[2]/dd/a/text()'
                     )
-                kun_chunk = ""
-                for reading in kun_reading:
-                    kun_chunk_new = reading + " (*" + romkan.to_hepburn(reading) + "*)"
-                    kun_chunk = kun_chunk + ", " + kun_chunk_new
-                on_chunk = ""
-                for reading in on_reading:
-                    on_chunk_new = reading + " (*" + romkan.to_hepburn(reading) + "*)"
-                    on_chunk = on_chunk + ", " + on_chunk_new
-                lookup_line_1 = (
-                    "# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n".format(
-                        character
-                    )
-                )
+                lookup_line_1 = f"# [{character}](https://en.wiktionary.org/wiki/{character}#Japanese)\n\n"
                 lookup_line_1 += (
                     "**Kun-readings:** "
-                    + kun_chunk[2:]
+                    + self.__format_readings(kun_reading)
                     + "\n\n**On-readings:** "
-                    + on_chunk[2:]
+                    + self.__format_readings(on_reading)
                 )
 
                 # Try to get a Chinese calligraphic image
@@ -131,9 +128,7 @@ class JapaneseProcessor:
                 ooi_on = "\n**On-readings** "
                 ooi_meaning = "\n**Meanings** "
 
-                for moji in multi_character_list:
-                    multi_character_dict[moji] = {}  # Create a new null dictionary
-
+                for moji in character:
                     eth_page = requests.get(
                         f"http://jisho.org/search/{moji}%20%23kanji",
                         timeout=15,
@@ -156,34 +151,24 @@ class JapaneseProcessor:
                         )
 
                     # Process and format the kun readings
-                    kun_chunk = []
-                    for reading in kun_reading:
-                        kun_chunk_new = (
-                            reading + " (*" + romkan.to_hepburn(reading) + "*)"
-                        )
-                        kun_chunk.append(kun_chunk_new)
-                    kun_chunk = ", ".join(kun_chunk)
-                    multi_character_dict[moji]["kun"] = kun_chunk
+                    multi_character_dict[moji]["kun"] = self.__format_readings(
+                        kun_reading
+                    )
 
                     # Process and format the on readings
-                    on_chunk = []
-                    for reading in on_reading:
-                        on_chunk_new = (
-                            reading + " (*" + romkan.to_hepburn(reading) + "*)"
-                        )
-                        on_chunk.append(on_chunk_new)
-                    on_chunk = ", ".join(on_chunk)
-                    multi_character_dict[moji]["on"] = on_chunk
+                    multi_character_dict[moji]["on"] = self.__format_readings(
+                        on_reading
+                    )
 
                     meaning = tree.xpath(
                         '//div[contains(@class,"kanji-details__main-meanings")]/text()'
                     )
                     meaning = "/ ".join(meaning)
-                    meaning = '"' + meaning.strip() + '."'
+                    meaning = f'"{meaning.strip()}."'
                     multi_character_dict[moji]["meaning"] = meaning
 
                 # Now let's construct our table based on the data we have.
-                for key in multi_character_list:
+                for key in sorted(set(character)):
                     character_data = multi_character_dict[key]
                     ooi_header += (
                         " | [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)".format(
@@ -205,29 +190,11 @@ class JapaneseProcessor:
                     + ooi_meaning
                 )
 
-        if not is_kana:
-            ja_to_post = "\n\n^Information ^from [^(Jisho)](https://jisho.org/search/{0}%20%23kanji) ^| "
-            ja_to_post += (
-                "[^(Goo Dictionary)](https://dictionary.goo.ne.jp/word/en/{0}) ^| "
-            )
-            ja_to_post += "[^(Tangorin)](https://tangorin.com/kanji/{0}) ^| [^(Weblio EJJE)](https://ejje.weblio.jp/content/{0})"
-            ja_to_post = ja_to_post.format(character)
-            lookup_line_3 = ja_to_post
-        else:
-            ja_to_post = "\n\n^Information ^from [^(Jisho)](https://jisho.org/search/{0}%20%23particle) ^| "
-            ja_to_post += (
-                "[^(Tangorin)](https://tangorin.com/general/{0}%20particle) ^| "
-            )
-            ja_to_post += "[^(Weblio EJJE)](https://ejje.weblio.jp/content/{0})"
-            ja_to_post = ja_to_post.format(character)
-            lookup_line_3 = ja_to_post
-
-        to_post = total_data + lookup_line_3
         logger.info(
             f"JA-Character: Received lookup command for {character} in Japanese. Returned results."
         )
 
-        return to_post
+        return total_data + lookup_line_3
 
     def ja_word(self, japanese_word: str) -> str:
         """
@@ -288,7 +255,7 @@ class JapaneseProcessor:
             return to_post
 
         # Jisho data is good, format the data from the returned JSON.
-        word_reading_chunk = f"{word_reading} (*{romkan.to_hepburn(word_reading)}*)"
+        word_reading_chunk = self.__format_readings([word_reading])
         word_meaning = main_data["senses"][0]["english_definitions"]
         word_meaning = f'"{", ".join(word_meaning)}."'
         word_type = main_data["senses"][0]["parts_of_speech"]
@@ -371,9 +338,7 @@ class JapaneseProcessor:
                 return None
 
             # Parse data, assign variables.
-            katakana_reading = (
-                f"{katakana_string} (*{romkan.to_hepburn(katakana_string)}*)"
-            )
+            katakana_reading = self.__format_readings([katakana_string])
             sound_effect = sound_data[7].replace("*", r"\*")
             sound_explanation = sound_data[8].strip().replace("*", r"\*")
 
@@ -416,7 +381,6 @@ class JapaneseProcessor:
         name_content = [x for x in name_content if x != "\xa0\xa0"]
         if name_content:
             name_content = name_content[0].split()
-            print(name_content)
 
         # Create the readings list.
         for name in hiragana_content:
@@ -456,21 +420,14 @@ class JapaneseProcessor:
         if len(str(ja_reading)) <= 4 or len(name) < 2:
             # This indicates that it's blank. No results.
             return None
-        furigana_chunk = ""
-        for reading in ja_reading:
-            furigana_chunk_new = (
-                reading.strip() + " (*" + romkan.to_hepburn(reading).title() + "*)"
-            )
-            furigana_chunk += f", {furigana_chunk_new}"
+        furigana_chunk = self.__format_readings([r.strip() for r in ja_reading])
         lookup_line_1 = (
-            "# [{0}](https://en.wiktionary.org/wiki/{0}#Japanese)\n\n".format(name)
+            f"# [{name}](https://en.wiktionary.org/wiki/{name}#Japanese)\n\n"
         )
         # We return the formatted readings of this name
-        lookup_line_1 += f"**Readings:** {furigana_chunk[2:]}"
+        lookup_line_1 += f"**Readings:** {furigana_chunk}"
         lookup_line_2 = "\n\n**Meanings**: A Japanese surname."
-        lookup_line_3 = "\n\n\n^Information ^from [^Myoji](https://myoji-yurai.net/searchResult.htm?myojiKanji={0}) "
-        lookup_line_3 += "^| [^Weblio ^EJJE](https://ejje.weblio.jp/content/{0})"
-        lookup_line_3 = lookup_line_3.format(name)
-        to_post = lookup_line_1 + lookup_line_2 + "\n" + lookup_line_3
+        lookup_line_3 = f"\n\n\n^Information ^from [^Myoji](https://myoji-yurai.net/searchResult.htm?myojiKanji={name}) "
+        lookup_line_3 += f"^| [^Weblio ^EJJE](https://ejje.weblio.jp/content/{name})"
         logger.info(f"JA-Name: '{name}' is a Japanese name. Returned search results.")
-        return to_post
+        return lookup_line_1 + lookup_line_2 + "\n" + lookup_line_3

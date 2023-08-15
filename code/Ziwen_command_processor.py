@@ -414,11 +414,10 @@ class ZiwenCommandProcessor:
             )
             self.comment.reply(MSG_RESTORE_NOT_ELIGIBLE + BOT_DISCLAIMER)
             return
-        # Format a search query to Pushshift.
-        search_query = (
-            f"https://api.pushshift.io/reddit/search/submission/?ids={self.oid}"
-        )
-        retrieved_data = requests.get(search_query, timeout=15).json()
+        retrieved_data = requests.get(
+            f"https://api.pushshift.io/reddit/search/submission/?ids={self.oid}",
+            timeout=15,
+        ).json()
 
         if "data" in retrieved_data:  # We've got some data.
             returned_submission = retrieved_data["data"][0]
@@ -431,10 +430,9 @@ class ZiwenCommandProcessor:
             original_text = original_title + original_text
         else:
             # Tell them we were not able to get any proper data.
-            subject_line = "[Notification] About your !restore request"
             try:
                 self.reddit.redditor(self.pauthor).message(
-                    subject=subject_line,
+                    subject="[Notification] About your !restore request",
                     message=MSG_RESTORE_TEXT_FAIL.format(self.opermalink),
                 )
             except praw.exceptions.APIException:
@@ -447,10 +445,9 @@ class ZiwenCommandProcessor:
             return
 
         # Actually send them the message, including the original text.
-        subject_line = "[Notification] Restored text for your !restore request"
         try:
             self.reddit.redditor(self.pauthor).message(
-                subject=subject_line,
+                subject="[Notification] Restored text for your !restore request",
                 message=MSG_RESTORE_TEXT_TEMPLATE.format(self.opermalink, original_text)
                 + BOT_DISCLAIMER,
             )

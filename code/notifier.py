@@ -893,11 +893,10 @@ class ZiwenMessageProcessor:
                     formatted_line = f"| {command_type} | {value} |"
                     commands_lines_to_post.append(formatted_line)
 
-        notifications_lines_to_post = []
+        notifications_lines_to_post = None
         # Iterate over notifications data. Get the dictionary of notifications that were sent.
-        if notifications_commands_data is None:
-            notifications_lines_to_post = None
-        else:  # There's data
+        if notifications_commands_data is not None:
+            notifications_lines_to_post = []
             notification_dict = eval(notifications_commands_data["received"])
             for language_code, notification_num in sorted(notification_dict.items()):
                 formatted_line = (
@@ -1212,7 +1211,11 @@ class ZiwenMessageProcessor:
 
             # Reply to moderator.
             match_codes_print = ", ".join(language_matches)
-            addition_message = f"Added the language codes **{match_codes_print}** for u/{add_username} into the notifications database."
+            addition_message = (
+                f"Added the language codes **{match_codes_print}** for u/{add_username}"
+                " into the notifications database."
+            )
+
             self.message.reply(addition_message)
 
     def process_remove(self):

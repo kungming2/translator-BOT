@@ -46,5 +46,5 @@ def test_ja_sound():
 def test_surname():
     assert (
         JapaneseProcessor(headers).ja_word("穂村")
-        == "# [穂村](https://en.wiktionary.org/wiki/穂村#Japanese)\n\n**Readings:** ほむら (*Homura*)\n\n**Meanings**: A Japanese surname.\n\n\n\n^Information ^from [^Myoji](https://myoji-yurai.net/searchResult.htm?myojiKanji=穂村) ^| [^Weblio ^EJJE](https://ejje.weblio.jp/content/穂村)"
+        == "# [穂村](https://en.wiktionary.org/wiki/穂村#Japanese)\n\n**Readings:** ほむら (*homura*)\n\n**Meanings**: A Japanese surname.\n\n\n\n^Information ^from [^Myoji](https://myoji-yurai.net/searchResult.htm?myojiKanji=穂村) ^| [^Weblio ^EJJE](https://ejje.weblio.jp/content/穂村)"
     )

@@ -10,7 +10,8 @@ import os
 import re
 import sys
 import time
-import traceback  # For documenting errors that are encountered.
+import traceback
+from urllib.parse import quote  # For documenting errors that are encountered.
 from code._config import (
     BOT_DISCLAIMER,
     FILE_ADDRESS_ERROR,
@@ -725,12 +726,8 @@ def bad_title_commenter(title_text: str, author: str) -> str:
     :return: A formatted comment that `ziwen_posts` can reply to the post with.
     """
 
-    # Retrieve the reformed title from the routine in _languages
-    new_title = bad_title_reformat(title_text)
-    new_url = new_title.replace(" ", "%20")  # replace spaces
-    new_url = new_url.replace(")", r"\)")  # replace closing parentheses
-    new_url = new_url.replace(">", "%3E")  # replace caret with HTML code
-    new_title = "`" + new_title + "`"  # add code marks
+    new_title = f"`{bad_title_reformat(title_text)}`"  # add code marks
+    new_url = quote(new_title)  # escape special characters
 
     # If the new title is for Unknown, let's add a text reminder
     if "[Unknown" in new_title:

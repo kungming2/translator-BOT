@@ -814,11 +814,6 @@ class TitleFormat:
         :return: If something is found, returns tuple (lang-COUNTRY, ISO 639-3 code).
         """
 
-        # Set default values
-        detected_word = {}
-        all_detected_countries = []
-        final_word_list = []
-
         if len(word_list) > 0:  # There are actually words to process.
             if " " in word_list[-1]:
                 # There's a space in the last word list from additive function in the title routine
@@ -827,12 +822,11 @@ class TitleFormat:
         else:
             return None  # There's nothing we can process.
 
-        if (
-            2 < len(word_list) <= 4
-        ):  # There's more than two words. [Swiss, German, Geneva]
-            for position in range(
-                2, len(word_list) + 1
-            ):  # Get all possible combinations.
+        final_word_list = []
+        if 2 < len(word_list) <= 4:
+            # There's more than two words. [Swiss, German, Geneva]
+            for position in range(2, len(word_list) + 1):
+                # Get all possible combinations.
                 for subset in itertools.combinations(word_list, position):
                     # This is useful for getting countries that have more than one word (Costa Rica)
                     # Join the words together as a string for searching.
@@ -840,6 +834,8 @@ class TitleFormat:
 
         final_word_list += word_list
 
+        detected_word = {}
+        all_detected_countries = []
         for word in final_word_list:
             results = country_converter(word, abbreviations_okay=False)
             if results[0] != "":  # The converter got nothing
@@ -867,34 +863,7 @@ class TitleFormat:
                             if relevant_iso_code:
                                 return lang_country_combined, relevant_iso_code
 
-    def title_format(self, title: str, display_process: bool = False) -> TitleTuple:
-        """
-        This is the main function to help format a title and to determine information from it.
-        The creation of Ajos relies on this process, and the flair and flair text that's assigned to an incoming post is
-        also determined by this central function.
-
-        This is also a rather unruly function because it's probably the function that been added to and extended the most.
-
-        :param display_process: is a boolean that allows us to see the steps taken (a sort of debug mode, Wenyuan uses it).
-        :param title: The title of the r/translator post to evaluate.
-        :return: d_source_languages: A list of languages that the function determines are the source.
-                d_target_languages: A list of languages that the function determines are the target.
-                final_css: The determination of what CSS code the title should get (usually the language's code).
-                final_css_text: The determination of what CSS text the title should get (usually the language name).
-                actual_title: The title of the post minus its language tag.
-                processed_title: The title of the post as processed by the routine (including modifications by other
-                                functions listed above).
-                notify_languages: (optional) If there are more languages to notify for than just the main one.
-                language_country: (optional) A country specified for the language, e.g. Brazil for Portuguese.
-                direction: What translation direction (relative to English) the post is for.
-        """
-
-        source_language = target_language = country_suffix_code = ""  # Set defaults
-        final_css = "generic"
-        final_code_tag = final_css.title()
-
-        has_country = False
-
+    def __normalize_title(self, title):
         # Strip cross-post formatting, which happens at the end.
         if "(x-post" in title:
             title = title.split("(x-post")[0].strip()
@@ -929,33 +898,26 @@ class TitleFormat:
             for keyword in WRONG_BRACKETS_RIGHT:
                 title = title.replace(keyword, "] ")
 
-        if ">" not in title and " to " in title.lower():
-            title = title.replace(" To ", " to ")
-            title = title.replace(" TO ", " to ")
-            title = title.replace(" tO ", " to ")
+        bracket_not_in_title = not ("]" in title or "[" in title)
 
-        if (
-            "]" not in title
-            and "[" not in title
-            and re.match(r"\((.+(>| to ).+)\)", title)
-        ):
+        if ">" not in title:
+            # make any tos lower case
+            title = re.sub(r"\bto\b", "to", title, flags=re.IGNORECASE)
+
+        if bracket_not_in_title and re.match(r"\((.+(>| to ).+)\)", title):
             # This is for cases where we have no square brackets but we have a > or " to " between parantheses instead.
             # logger.info("Replacing parantheses...")
             # We only want to replace the first occurence.
             title = title.replace("(", "[", 1)
             title = title.replace(")", "]", 1)
-        elif (
-            "]" not in title
-            and "[" not in title
-            and re.match(r"{(.+(>| to ).+)}", title)
-        ):
+        elif bracket_not_in_title and re.match(r"{(.+(>| to ).+)}", title):
             # This is for cases where we have no square brackets but we have a > or " to " between curly braces instead.
-            # logger.info("Replacing braces...")
+            logger.info("Replacing braces...")
             # We only want to replace the first occurence.
             title = title.replace("{", "[", 1)
             title = title.replace("}", "]", 1)
 
-        if "]" not in title and "[" not in title:
+        if bracket_not_in_title:
             # Otherwise try to salvage it and reformat it.
             reformat_example = self.__detect_languages_reformat(title)
             if reformat_example is not None:
@@ -963,24 +925,6 @@ class TitleFormat:
 
         # Some regex magic, replace things like [Language] >/- [language]
         title = re.sub(r"(\]\s*[>\\-]\s*\[)", " > ", title)
-
-        # Code for taking out the country (most likely from cross-posts)
-        if all(char in title for char in "{}["):
-            # Probably has a country name in it.
-            has_country = True
-            country_suffix_name = re.search(r"{(\D+)}", title)
-            # Get the Country name only
-            country_suffix_name = country_suffix_name.group(1)
-            country_suffix_code = country_converter(country_suffix_name)[0]
-            if len(country_suffix_code) != 0:  # There was a good country code.
-                # Now we want to take out the country from the title.
-                title_first = title.split("{", 1)[0].strip()
-                title_second = title.split("}", 1)[1]
-                title = title_first + title_second
-        elif "{" in title and "[" not in title:
-            # Probably a malformed tag. let's fix it.
-            title = title.replace("{", "[")
-            title = title.replace("}", "]")
 
         # Adapting for "English -" type situations
         if "-" in title[0:20] and any(
@@ -1012,7 +956,7 @@ class TitleFormat:
                     # No language match found, let's replace the dash with a space.
                     title = title.replace("-", " ")
 
-        for character in "&+/\\|":
+        for character in r"&+/\|":
             if character in title:  # Straighten out punctuation.
                 title = title.replace(character, f" {character} ")
 
@@ -1041,38 +985,10 @@ class TitleFormat:
             # KR is technically Kanuri but no one actually means it to be Kanuri.
             title = title.replace("KR ", "Korean ")
 
-        # If all people write is [Unknown], account for that, and just send it back right away.
-        if "[Unknown]" in title.title():
-            actual_title = title.split("]", 1)[1]
-            return TitleTuple(
-                ["Unknown"],
-                ["English"],
-                "unknown",
-                "Unknown",
-                actual_title,
-                title,
-                None,
-                None,
-                "english_to",
-            )
-        if "???" in title[0:5] or "??" in title[0:4] or "?" in title[0:3]:
-            # This is if the first few characters are just question marks...
-            return TitleTuple(
-                ["Unknown"],
-                ["English"],
-                "unknown",
-                "Unknown",
-                title.split("]")[1] if "]" in title else "",
-                title,
-                None,
-                None,
-                "english_to",
-            )
+        return title
 
-        if display_process:
-            logger.info("\n## Title as Processed:")
-            logger.info(title)
-
+    def __process_source_languages(self, title):
+        source_language = ""
         if ">" in title:
             source_language = title.split(">")[0]
         elif " to " in title.lower()[0:50] and ">" not in title:
@@ -1100,11 +1016,7 @@ class TitleFormat:
             if x not in ENGLISH_2_WORDS and x not in ENGLISH_3_WORDS
         ]
 
-        if display_process:
-            logger.info("\n## Source Language Strings:")
-            logger.info(source_language)
-
-        d_source_languages = []  # Account for misspellings
+        d_source_languages = set()  # Account for misspellings
         for language in source_language:
             if "Eng" in language.title() and len(language) <= 8:
                 # If it's just English, we can assign it already.
@@ -1112,27 +1024,26 @@ class TitleFormat:
             converter_search = convert(language).language_name
             if converter_search != "":
                 # Try to get only the valid languages. Delete anything that isn't a language.
-                d_source_languages.append(converter_search)
-        d_source_languages = list(set(d_source_languages))  # Remove duplicates
+                d_source_languages.add(converter_search)
+        d_source_languages = sorted(d_source_languages)  # Remove duplicates
         if len(d_source_languages) == 0:
             # If we are unable to find a source language, leave it blank
             d_source_languages = ["Generic"]
+        return source_language, source_language_original, d_source_languages
 
-        processed_title = title
-
-        if display_process:
-            logger.info("\n## Final Determined Source Languages:")
-            logger.info(d_source_languages)
-
+    def __process_target_languages(self, title):
         # Start processing TARGET languages
-        replace_chars = ",/+]).:"
+        split_title = title
+        target_language = ""
         for split_char in [">", " to ", "-", "<"]:
-            if split_char in title.lower():
-                title = title[title.find(split_char) + len(split_char) :]
+            if split_char in split_title.lower():
+                split_title = split_title[
+                    split_title.find(split_char) + len(split_char) :
+                ]
                 # Split it at the tag boundary and take the first part.
-                target_language = title.split("]", 1)[0]
+                target_language = split_title.split("]", 1)[0]
                 for character in target_language:
-                    if character in replace_chars:
+                    if character in r",/+]).:":
                         target_language = target_language.replace(character, " ")
                 break
 
@@ -1157,24 +1068,20 @@ class TitleFormat:
             if x not in ENGLISH_2_WORDS and x not in ENGLISH_3_WORDS
         ]
 
-        if display_process:
-            logger.info("\n## Target Language Strings:")
-            logger.info(target_language)
-
-        d_target_languages = []  # Account for misspellings
+        d_target_languages = set()  # Account for misspellings
 
         for language in target_language:
             converter_target_search = convert(language).language_name
             if converter_target_search != "":
                 # Try to get only the valid languages. Delete anything that isn't a language.
-                d_target_languages.append(converter_target_search)
+                d_target_languages.add(converter_target_search)
         # Remove duplicates (Like "Mandarin Chinese")
-        d_target_languages = sorted(set(d_target_languages))
+        d_target_languages = sorted(d_target_languages)
         if len(d_target_languages) == 0:
             # If we are unable to find a target language, leave it blank
             d_target_languages = ["Generic"]
 
-        # If there's more than 1, and english is in both of them, then take out english!
+        # If english is in all of them, then take out english!
         if (
             all("English" in item for item in d_target_languages)
             and len(d_target_languages) >= 2
@@ -1182,20 +1089,16 @@ class TitleFormat:
         ):
             d_target_languages.remove("English")
 
-        if display_process:
-            logger.info("\n## Final Determined Target Languages:")
-            logger.info(d_target_languages)
+        return target_language, target_language_original, d_target_languages
 
-        both_test_languages = self.__both_non_english_detector(
-            d_source_languages, d_target_languages
-        )
-        notify_languages = None
-        if both_test_languages is not None:
-            # Check to see if there are two non-English things
-            notify_languages = both_test_languages
+    def __process_css(
+        self, d_source_languages, d_target_languages, source_language, target_language
+    ):
         # By this point, we have the source and target languages broken up into two separate lists.
         # Now we determine what CSS class to give this post.
 
+        final_css = "generic"
+        final_code_tag = final_css.title()
         if "English" in d_target_languages and "English" not in d_source_languages:
             # If the target language is English, we want to give it a source language CSS.
             if len(d_source_languages) >= 2:
@@ -1238,8 +1141,7 @@ class TitleFormat:
             final_css = convert(str(d_target_languages[0])).language_code
             if len(d_target_languages) > 1:
                 # We do a test to see if there's a specific target, e.g. Egyptian Arabic
-                joined_target = target_language[-1]  # Get the last full string.
-                joined_target_data = convert(joined_target)
+                joined_target_data = convert(target_language[-1])
                 if len(joined_target_data.language_code) != 0:
                     # The converter actually found a specific language code for this.
                     final_css = joined_target_data.language_code
@@ -1252,39 +1154,18 @@ class TitleFormat:
                 final_css = convert(combined_total[0]).language_code
             else:
                 final_css = "en"  # Obviously it was just English
+        return final_css, final_code_tag, d_target_languages
 
-        # Check to see if there is an "or" in the target languages
-        # Split it at the tag boundary and take the first part.
-        test_chunk = title.split("]", 1)[0]
-        # See if there are languages considered optional
-        # Type O means that in this sort of case we should really be taking the default
-        type_o = " or " in test_chunk.lower() and len(d_target_languages) < 6
-
-        # Check for the direction.
-        direction = self.__determine_title_direction(
-            d_source_languages, d_target_languages
-        )
-
-        if len(d_target_languages) >= 2:
-            # Test to see if it has multiple target languages
-            is_multiple_test = list(d_target_languages)
-            for name in ["English", "Multiple Languages"]:
-                # We want to remove these to see if there really is many targets
-                if name in d_target_languages:
-                    is_multiple_test.remove(name)
-
-            # Check to see if there's a script here (len == 4)
-            is_multiple_test = [
-                language
-                for language in is_multiple_test
-                if len(convert(language).language_code) != 4
-            ]
-
-            if len(is_multiple_test) >= 2 and "English" not in d_target_languages:
-                # Looks like it really does have more than two non-English target languages.
-                final_css = "multiple"  # Then we assign it the "multiple" CSS
-                notify_languages = d_target_languages
-
+    def __process_language_country(
+        self,
+        final_css,
+        has_country,
+        source_language_original,
+        target_language_original,
+        country_suffix_code,
+        d_source_languages,
+        d_target_languages,
+    ):
         language_country = None
 
         if not has_country:
@@ -1316,8 +1197,6 @@ class TitleFormat:
                         final_css = (
                             language_country_code  # Change it to the ISO 639-3 code
                         )
-                        # final_css_text = d_source_languages[0]
-                        # logger.info(d_source_languages)
                     elif (
                         "English" not in d_target_languages
                         and language_country is not None
@@ -1364,11 +1243,156 @@ class TitleFormat:
             ):
                 # There is a country suffix to include, let's add it to the flair. Not if it's its own langauge code though
                 # Add the country code to the output flair
-                final_css_text += " {{{}}}".format(language_country[-2:])
+                final_css_text += f" {{{language_country[-2:]}}}"
         else:  # This is a script
             final_css_text = f"{lang_code_search(final_css, True)[0]} (Script)"
             # Returns a category like unknown-cyrl for notifications
             language_country = f"unknown-{final_css}"
+        return d_target_languages, language_country, final_css, final_css_text
+
+    def title_format(self, title: str, display_process: bool = False) -> TitleTuple:
+        """
+        This is the main function to help format a title and to determine information from it.
+        The creation of Ajos relies on this process, and the flair and flair text that's assigned to an incoming post is
+        also determined by this central function.
+
+        This is also a rather unruly function because it's probably the function that been added to and extended the most.
+
+        :param display_process: is a boolean that allows us to see the steps taken (a sort of debug mode, Wenyuan uses it).
+        :param title: The title of the r/translator post to evaluate.
+        :return: d_source_languages: A list of languages that the function determines are the source.
+                d_target_languages: A list of languages that the function determines are the target.
+                final_css: The determination of what CSS code the title should get (usually the language's code).
+                final_css_text: The determination of what CSS text the title should get (usually the language name).
+                actual_title: The title of the post minus its language tag.
+                processed_title: The title of the post as processed by the routine (including modifications by other
+                                functions listed above).
+                notify_languages: (optional) If there are more languages to notify for than just the main one.
+                language_country: (optional) A country specified for the language, e.g. Brazil for Portuguese.
+                direction: What translation direction (relative to English) the post is for.
+        """
+        country_suffix_code = ""
+
+        has_country = False
+        # Code for taking out the country (most likely from cross-posts)
+        if all(char in title for char in "{}["):
+            # Probably has a country name in it.
+            has_country = True
+            country_suffix_name = re.search(r"{(\D+)}", title)
+            # Get the Country name only
+            country_suffix_name = country_suffix_name.group(1)
+            country_suffix_code = country_converter(country_suffix_name)[0]
+            if len(country_suffix_code) != 0:  # There was a good country code.
+                # Now we want to take out the country from the title.
+                title_first = title.split("{", 1)[0].strip()
+                title_second = title.split("}", 1)[1]
+                title = title_first + title_second
+        elif "{" in title and "[" not in title:
+            # Probably a malformed tag. let's fix it.
+            title = title.replace("{", "[")
+            title = title.replace("}", "]")
+
+        title = self.__normalize_title(title)
+
+        # If all people write is [Unknown], account for that, and just send it back right away.
+        if "[Unknown]" in title.title() or "?" in title[0:3]:
+            actual_title = title.split("]")[1] if "]" in title else ""
+            return TitleTuple(
+                ["Unknown"],
+                ["English"],
+                "unknown",
+                "Unknown",
+                actual_title,
+                title,
+                None,
+                None,
+                "english_to",
+            )
+
+        if display_process:
+            logger.info("\n## Title as Processed:")
+            logger.info(title)
+
+        (
+            source_language,
+            source_language_original,
+            d_source_languages,
+        ) = self.__process_source_languages(title)
+
+        if display_process:
+            logger.info("\n## Source Language Strings:")
+            logger.info(source_language)
+            logger.info("\n## Final Determined Source Languages:")
+            logger.info(d_source_languages)
+
+        (
+            target_language,
+            target_language_original,
+            d_target_languages,
+        ) = self.__process_target_languages(title)
+
+        if display_process:
+            logger.info("\n## Target Language Strings:")
+            logger.info(target_language)
+            logger.info("\n## Final Determined Target Languages:")
+            logger.info(d_target_languages)
+
+        notify_languages = self.__both_non_english_detector(
+            d_source_languages, d_target_languages
+        )
+        final_css, final_code_tag, d_target_languages = self.__process_css(
+            d_source_languages,
+            d_target_languages,
+            source_language,
+            target_language,
+        )
+
+        # Check to see if there is an "or" in the target languages
+        # Split it at the tag boundary and take the first part.
+        test_chunk = title.split("]", 1)[0]
+        # See if there are languages considered optional
+        # Type O means that in this sort of case we should really be taking the default
+        type_o = " or " in test_chunk.lower() and len(d_target_languages) < 6
+
+        # Check for the direction.
+        direction = self.__determine_title_direction(
+            d_source_languages, d_target_languages
+        )
+
+        if len(d_target_languages) >= 2:
+            # Test to see if it has multiple target languages
+            is_multiple_test = list(d_target_languages)
+            for name in ["English", "Multiple Languages"]:
+                # We want to remove these to see if there really is many targets
+                if name in d_target_languages:
+                    is_multiple_test.remove(name)
+
+            # Check to see if there's a script here (len == 4)
+            is_multiple_test = [
+                language
+                for language in is_multiple_test
+                if len(convert(language).language_code) != 4
+            ]
+
+            if len(is_multiple_test) >= 2 and "English" not in d_target_languages:
+                # Looks like it really does have more than two non-English target languages.
+                final_css = "multiple"  # Then we assign it the "multiple" CSS
+                notify_languages = d_target_languages
+
+        (
+            d_target_languages,
+            language_country,
+            final_css,
+            final_css_text,
+        ) = self.__process_language_country(
+            final_css,
+            has_country,
+            source_language_original,
+            target_language_original,
+            country_suffix_code,
+            d_source_languages,
+            d_target_languages,
+        )
 
         if (
             notify_languages is not None
@@ -1381,10 +1405,11 @@ class TitleFormat:
                 # Get the code from the name
                 multiple_code_tag.append(convert(language).language_code.upper())
                 multiple_code_tag = sorted(multiple_code_tag)  # Alphabetize
-                if "MULTIPLE" in multiple_code_tag:
-                    multiple_code_tag.remove("MULTIPLE")
-                if "UNKNOWN" in multiple_code_tag:
-                    multiple_code_tag.remove("UNKNOWN")
+                multiple_code_tag = [
+                    tag
+                    for tag in multiple_code_tag
+                    if tag not in ["MULTIPLE", "UNKNOWN"]
+                ]
                 # This gives us the string without brackets.
                 multiple_code_tag_string = ", ".join(multiple_code_tag)
                 # The limit for link flair text is 64 characters. we need to trim.
@@ -1394,7 +1419,8 @@ class TitleFormat:
                         if len(", ".join(multiple_code_tag_short)) <= 30:
                             multiple_code_tag_short.append(tag)
                     multiple_code_tag = multiple_code_tag_short
-                final_code_tag = " [" + ", ".join(multiple_code_tag) + "]"
+                code_tag_str = ", ".join(multiple_code_tag)
+                final_code_tag = f" [{code_tag_str}]"
             final_css_text = final_css_text + final_code_tag
 
         if type_o and final_css == "multiple":
@@ -1425,18 +1451,16 @@ class TitleFormat:
         elif "English" in title and "]" not in title:
             actual_title = str(title.split("English", 1)[1]).strip()
 
-        if actual_title != "" and actual_title[0] in ["])>,.:"]:
+        if actual_title != "" and actual_title[0] in r"])>,.:":
             # Try to properly format the "real title"
             actual_title = actual_title[1:].strip()
 
         # We calculate whether or not this is an app. This is only applicable to Multiple posts
-        if final_css == "multiple":
-            app_yes = app_multiple_definer(actual_title)
-            if app_yes:  # It looks like it's an app.
-                final_css = "app"
-                final_css_text = final_css_text.replace("Multiple Languages", "App")
-                if d_target_languages == ["Multiple Languages"]:
-                    d_target_languages = ["App"]
+        if final_css == "multiple" and app_multiple_definer(actual_title):
+            final_css = "app"
+            final_css_text = final_css_text.replace("Multiple Languages", "App")
+            if d_target_languages == ["Multiple Languages"]:
+                d_target_languages = ["App"]
 
         # Our final attempt to wring something proper out of something that is all generic
         if final_css == "generic" and final_css_text == "Generic":
@@ -1453,7 +1477,7 @@ class TitleFormat:
             final_css,
             final_css_text,
             actual_title,
-            processed_title,
+            title,
             notify_languages,
             language_country,
             direction,

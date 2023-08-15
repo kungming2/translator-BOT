@@ -680,11 +680,11 @@ def lookup_zhja_tokenizer(phrase: str, language: str):
             segmenter = tinysegmenter.TinySegmenter()
             word_list = segmenter.tokenize(phrase)
         else:  # Mac/Linux
-            '''
-            if sys.platform == "darwin":  # Different location of the dictionary files,
-                mecab_directory = "/usr/local/lib/mecab/dic/mecab-ipadic-neologd"
-            else:
-                mecab_directory = "/usr/lib/mecab/dic/mecab-ipadic-neologd"'''
+            #
+            # if sys.platform == "darwin":  # Different location of the dictionary files,
+            #     mecab_directory = "/usr/local/lib/mecab/dic/mecab-ipadic-neologd"
+            # else:
+            #     mecab_directory = "/usr/lib/mecab/dic/mecab-ipadic-neologd"
             mecab_tagger = MeCab.Tagger(f"r'-d {FILE_ADDRESS_MECAB}'")
             # Per https://github.com/SamuraiT/mecab-python3/issues/3 to fix Unicode issue
             mecab_tagger.parse(phrase)
