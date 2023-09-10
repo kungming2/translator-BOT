@@ -8165,7 +8165,7 @@ bamu,,Bamum,
 bass,,Bassa Vah,
 batk,,Batak,
 beng,,Bengali,
-bhks,,Bhaiksuki,Aboriginal Syllabics
+bhks,,Bhaiksuki,
 blis,,Blissymbols,
 bopo,,Bopomofo,
 brah,,Brahmi,
@@ -8173,38 +8173,38 @@ brai,,Braille,
 bugi,,Buginese,
 buhd,,Buhid,
 cakm,,Chakma,
-cans,,Unified Canadian Aboriginal Syllabics,Cryllic; Kyrillic
+cans,,Unified Canadian Aboriginal Syllabics,Aboriginal Syllabics
 cari,,Carian,
-cham,,Cham,Nagari; Nandinagari
+cham,,Cham,
 cher,,Cherokee,
 cirt,,Cirth,
 copt,,Coptic,
-cpmn,,Cypro-Minoan,Demotic
-cprt,,Cypriot Syllabary,Hieratic
-cyrl,,Cyrillic,Hieroglyph
+cpmn,,Cypro-Minoan,
+cprt,,Cypriot Syllabary,
+cyrl,,Cyrillic,Cryllic; Kyrillic
 cyrs,,Old Church Slavonic Cyrillic,
-deva,,Devanagari,
+deva,,Devanagari,Nagari; Nandinagari
 dogr,,Dogra,
 dsrt,,Deseret,
 dupl,,Duployan,
-egyd,,Demotic Egyptian,
-egyh,,Hieratic Egyptian,
-egyp,,Egyptian Hieroglyphs,Blackletter; Schwabacher
+egyd,,Demotic Egyptian,Demotic
+egyh,,Hieratic Egyptian,Hieratic
+egyp,,Egyptian Hieroglyphs,Hieroglyph
 elba,,Elbasan,
 ethi,,Ethiopic,
 geok,,Khutsuri,
 geor,,Georgian,
-glag,,Glagolitic,Zhuyin; Zhuyinfuhao
+glag,,Glagolitic,
 gong,,Gunjala Gondi,
-gonm,,Masaram Gondi,Hanzi
-goth,,Gothic,
+gonm,,Masaram Gondi,
+goth,,Gothic,Blackletter; Schwabacher
 gran,,Grantha,
 grek,,Greek,
 gujr,,Gujarati,
 guru,,Gurmukhi,
-hanb,,Han with Bopomofo,
+hanb,,Han with Bopomofo,Zhuyin; Zhuyinfuhao
 hang,,Hangul,
-hani,,Han Characters,
+hani,,Han Characters,Hanzi
 hano,,Hanunoo,
 hans,,Simplified Han,
 hant,,Traditional Han,
@@ -8216,7 +8216,7 @@ hmng,,Pahawh Hmong,
 hmnp,,Nyiakeng Puachue Hmong,
 hrkt,,Japanese Syllabaries,
 hung,,Old Hungarian,
-inds,,Indus,Kharosthi
+inds,,Indus,
 ital,,Old Italic,
 jamo,,Jamo,
 java,,Javanese,
@@ -8224,11 +8224,11 @@ jpan,,Japanese Mixed Script,
 jurc,,Jurchen,
 kali,,Kayah Li,
 kana,,Katakana,
-khar,,Kharoshthi,
+khar,,Kharoshthi,Kharosthi
 khmr,,Khmer,
 khoj,,Khojki,
 kitl,,Khitan Large Script,
-kits,,Khitan Small Script,Latin Gaelic
+kits,,Khitan Small Script,
 knda,,Kannada,
 kore,,Korean Mixed Script,
 kpel,,Kpelle,
@@ -8236,7 +8236,7 @@ kthi,,Kaithi,
 lana,,Tai Tham,
 laoo,,Lao,
 latf,,Fraktur,
-latg,,Gaelic Latin,
+latg,,Gaelic Latin,Latin Gaelic
 latn,,Latin,
 leke,,Leke,
 lepc,,Lepcha,
@@ -8283,7 +8283,7 @@ pauc,,Pau Cin Hau,
 perm,,Old Permic,
 phag,,Phags-pa,
 phli,,Inscriptional Pahlavi,
-phlp,,Psalter Pahlavi,Runes
+phlp,,Psalter Pahlavi,
 phlv,,Book Pahlavi,
 phnx,,Phoenician,
 piqd,,Klingon,
@@ -8291,7 +8291,7 @@ plrd,,Miao,
 prti,,Inscriptional Parthian,
 rjng,,Rejang,
 roro,,Rongorongo,
-runr,,Runic,
+runr,,Runic,Runes
 samr,,Samaritan,
 sara,,Sarati,
 sarb,,Old South Arabian,
